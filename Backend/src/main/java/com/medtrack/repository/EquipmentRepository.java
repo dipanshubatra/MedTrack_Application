@@ -46,17 +46,6 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
             Long hospitalId,
             EquipmentStatus status
     );
-    List<Equipment> findByHospitalIdAndWarrantyExpiryBetween(
-            Long hospitalId,
-            LocalDate start,
-            LocalDate end
-    );
-    List<Equipment> findByHospitalId(Long hospitalId);
-
-    List<Equipment> findByHospitalIdAndStatus(
-            Long hospitalId,
-            EquipmentStatus status
-    );
 
     // Low stock inventory
     @Query("""
@@ -90,11 +79,9 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
+    // Overloaded on purpose: the Pageable variant is a distinct signature, not a duplicate of the
+    // unpaged findByHospitalId(Long) declared at the top of this interface.
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
-
-    List<Equipment> findByHospitalId(Long hospitalId);
-
-    long countByHospitalId(Long hospitalId);
 
     @Query("""
             SELECT e
@@ -118,19 +105,16 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     // countByHospitalId and countByHospitalIdAndStatus are declared above as @Query methods.
     // They were also declared here as derived queries, which is a duplicate method signature
     // and is rejected by javac, so only the @Query declarations are kept.
+    //
+    // The same applies to findByHospitalId(Long) and findByIdAndHospitalId(Long, Long): both are
+    // declared once at the top of this interface and every feature added since reuses those
+    // declarations rather than restating them next to its own queries.
     long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
 
     List<Equipment> findByHospitalIdAndPurchaseDateBetween(
             Long hospitalId,
             LocalDate startDate,
             LocalDate endDate
-    );
-
-    List<Equipment> findByHospitalId(Long hospitalId);
-
-    Optional<Equipment> findByIdAndHospitalId(
-            Long id,
-            Long hospitalId
     );
 
     /**
