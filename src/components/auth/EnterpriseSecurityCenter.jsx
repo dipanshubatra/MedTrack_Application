@@ -60,7 +60,7 @@ import {
   SlidersHorizontal,
   Target,
   Bot,
-  KeyRound,
+  Cpu,
   HardDrive,
   ClipboardCheck
 } from "lucide-react";

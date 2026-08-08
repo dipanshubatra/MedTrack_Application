@@ -25,6 +25,15 @@ vi.mock("recharts", () => ({
   Bar: () => null,
 }));
 
+// The due-date assertions below are relative to when the test runs. Hard-coding a calendar date
+// makes them pass on the day they are written and fail every day after, so the fixtures are built
+// from today instead.
+const isoDaysFromNow = (days) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
 describe("Dashboard equipment watchlist", () => {
   beforeEach(() => {
     mockGetAllEquipment.mockReset();
@@ -43,8 +52,8 @@ describe("Dashboard equipment watchlist", () => {
           category: "INFUSION",
           status: "NEEDS_MAINTENANCE",
           warrantyStatus: "EXPIRING_SOON",
-          warrantyExpiry: "2026-09-01",
-          lastMaintenanceDate: "2026-07-16",
+          warrantyExpiry: isoDaysFromNow(24),
+          lastMaintenanceDate: isoDaysFromNow(-23),
         },
       ],
     });
@@ -58,7 +67,7 @@ describe("Dashboard equipment watchlist", () => {
           equipment: "Infusion Pump",
           assignedTechnician: "Alex Singh",
           status: "Scheduled",
-          deadline: "2026-08-08",
+          deadline: isoDaysFromNow(1),
           priority: "High",
         },
       ],
@@ -141,7 +150,7 @@ describe("Dashboard equipment watchlist", () => {
           equipment: "Ventilator Pro",
           assignedTechnician: "Nisha Kapoor",
           status: "In Progress",
-          deadline: "2026-08-08",
+          deadline: isoDaysFromNow(1),
           priority: "Critical",
         },
       ],

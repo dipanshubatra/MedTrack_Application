@@ -1,19 +1,438 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getAllEquipment } from '../../services/EquipmentService';
 import { getAllTasks } from '../../services/MaintenanceService';
 import { computeEquipmentHealthScore } from '../../services/AnalyticsService';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { 
-  Home, LayoutGrid, CheckSquare, Users, Settings, HelpCircle, LogOut,
-  ThumbsUp, Clock, Activity, Calendar, ChevronDown, MoreHorizontal,
-  Phone, Video, Paperclip, Smile, Mic, CheckCircle2, CircleDashed, Download,
-  Box, ClipboardList, MessageSquare, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown, Diamond,
-  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award, Package
+import {
+  LayoutGrid, Users, Settings, HelpCircle, Clock3, CheckCircle2, Download,
+  Box, ClipboardList, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown,
+  Bot, Bell, Search, Share2, RefreshCw, Award, Wrench, AlertTriangle, MoreHorizontal
 } from 'lucide-react';
 import MedTrackLogo from '../../components/common/MedTrackLogo';
+
+// ---------------------------------------------------------------------------
+// Presentation metadata
+//
+// Status strings arrive from the API in several shapes (OPERATIONAL, "Needs
+// Maintenance", under_maintenance, ...). Everything below keys off a normalised
+// statusKey instead, so one lookup table drives the badge, the filter and the chart.
+// ---------------------------------------------------------------------------
+
+const EQUIPMENT_FILTERS = [
+  { id: "all", label: "All Assets" },
+  { id: "operational", label: "Operational" },
+  { id: "attention", label: "Needs Attention" },
+  { id: "maintenance", label: "In Maintenance" },
+  { id: "retired", label: "Retired" },
+];
+
+const EQUIPMENT_STATUS_META = {
+  operational: {
+    label: "Operational",
+    badgeClass: "bg-emerald-100 text-emerald-700",
+    className: "bg-emerald-100 text-emerald-700",
+  },
+  attention: {
+    label: "Needs Attention",
+    badgeClass: "bg-amber-100 text-amber-700",
+    className: "bg-amber-100 text-amber-700",
+  },
+  maintenance: {
+    label: "In Maintenance",
+    badgeClass: "bg-blue-100 text-blue-700",
+    className: "bg-blue-100 text-blue-700",
+  },
+  retired: {
+    label: "Retired",
+    badgeClass: "bg-slate-200 text-slate-600",
+    className: "bg-slate-200 text-slate-600",
+  },
+};
+
+const WARRANTY_META = {
+  active: { label: "Warranty Active", className: "text-emerald-600" },
+  expiring: { label: "Warranty Expiring Soon", className: "text-amber-600" },
+  expired: { label: "Warranty Expired", className: "text-rose-600" },
+  none: { label: "No Warranty On Record", className: "text-slate-500" },
+};
+
+const TASK_STATUS_META = {
+  scheduled: { label: "Scheduled", className: "bg-slate-200 text-slate-700" },
+  in_progress: { label: "In Progress", className: "bg-blue-100 text-blue-700" },
+  blocked: { label: "Blocked", className: "bg-amber-100 text-amber-700" },
+  completed: { label: "Completed", className: "bg-emerald-100 text-emerald-700" },
+};
+
+// Seeded rows for the demo workspace, so a reviewer signing in with a demo account sees a
+// populated dashboard rather than four empty panels.
+const DASHBOARD_DEMO_EQUIPMENT = [
+  {
+    id: "demo-eq-1",
+    equipmentCode: "EQ-1043",
+    name: "Ventilator V60",
+    model: "Philips V60",
+    department: "ICU",
+    status: "OPERATIONAL",
+    warrantyExpiry: "2027-04-18",
+    lastMaintenanceDate: "2026-06-02",
+  },
+  {
+    id: "demo-eq-2",
+    equipmentCode: "EQ-2210",
+    name: "Infusion Pump",
+    model: "BD Alaris 8100",
+    department: "Oncology",
+    status: "NEEDS_MAINTENANCE",
+    warrantyExpiry: "2026-09-30",
+    lastMaintenanceDate: "2026-01-19",
+  },
+  {
+    id: "demo-eq-3",
+    equipmentCode: "EQ-3387",
+    name: "Portable X-Ray",
+    model: "GE AMX 240",
+    department: "Radiology",
+    status: "UNDER_MAINTENANCE",
+    warrantyExpiry: "2026-08-11",
+    lastMaintenanceDate: "2026-07-21",
+  },
+  {
+    id: "demo-eq-4",
+    equipmentCode: "EQ-4512",
+    name: "Patient Monitor",
+    model: "Mindray uMEC12",
+    department: "Emergency",
+    status: "OPERATIONAL",
+    warrantyExpiry: "2028-02-05",
+    lastMaintenanceDate: "2026-05-14",
+  },
+  {
+    id: "demo-eq-5",
+    equipmentCode: "EQ-5560",
+    name: "Defibrillator",
+    model: "Zoll R Series",
+    department: "Emergency",
+    status: "RETIRED",
+    warrantyExpiry: "2024-03-01",
+    lastMaintenanceDate: "2025-11-08",
+  },
+];
+
+const DASHBOARD_DEMO_TASKS = [
+  {
+    id: "demo-task-1",
+    taskCode: "MNT-7781",
+    maintenanceType: "Calibration",
+    equipment: "Infusion Pump",
+    assignedTechnician: "rita@medtrack.com",
+    priority: "High",
+    status: "SCHEDULED",
+    deadline: "2026-08-04",
+  },
+  {
+    id: "demo-task-2",
+    taskCode: "MNT-7782",
+    maintenanceType: "Preventive service",
+    equipment: "Portable X-Ray",
+    assignedTechnician: "dev@medtrack.com",
+    priority: "Critical",
+    status: "IN_PROGRESS",
+    deadline: "2026-08-12",
+  },
+  {
+    id: "demo-task-3",
+    taskCode: "MNT-7783",
+    maintenanceType: "Battery replacement",
+    equipment: "Patient Monitor",
+    assignedTechnician: "sam@medtrack.com",
+    priority: "Medium",
+    status: "COMPLETED",
+    deadline: "2026-07-28",
+  },
+];
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const WARRANTY_EXPIRING_WINDOW_DAYS = 60;
+const TASK_DUE_SOON_WINDOW_DAYS = 7;
+
+/**
+ * Pulls the rows out of whatever the API returned.
+ *
+ * The equipment and maintenance endpoints were paginated at different times, so depending on the
+ * deployment a caller sees a bare array, a Spring `Page` ({content: [...]}) or an envelope
+ * ({data: [...]}, {items: [...]}). Reading `.length` off the wrong one silently renders an empty
+ * dashboard, so every shape is unwrapped here in one place.
+ */
+function unwrapCollection(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload.content)) return payload.content;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.results)) return payload.results;
+  return [];
+}
+
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Parses a value the API may send as a date-only string or a full timestamp.
+ *
+ * `new Date("2026-08-09")` is midnight *UTC*, which is the previous calendar day everywhere west
+ * of Greenwich and shifts the whole day forward east of it. A deadline has no time of day, so a
+ * date-only string is anchored to local midnight and compared as a calendar date.
+ */
+function toDate(value) {
+  if (!value) return null;
+
+  if (typeof value === "string" && DATE_ONLY_PATTERN.test(value.trim())) {
+    const [year, month, day] = value.trim().split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Whole calendar days between two dates. Both ends are floored to local midnight first, so "due
+ * tomorrow" does not become "due today" simply because the page was opened in the evening.
+ */
+function daysBetween(from, to) {
+  if (!from || !to) return null;
+
+  const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return Math.round((startOfDay(to) - startOfDay(from)) / DAY_IN_MS);
+}
+
+const RETIRED_STATUSES = new Set(["RETIRED", "DISPOSED", "DECOMMISSIONED"]);
+const MAINTENANCE_STATUSES = new Set(["UNDER_MAINTENANCE", "MAINTENANCE", "IN_MAINTENANCE", "SERVICING"]);
+const ATTENTION_STATUSES = new Set([
+  "NEEDS_MAINTENANCE",
+  "NEEDS_ATTENTION",
+  "OUT_OF_SERVICE",
+  "FAULTY",
+  "BROKEN",
+]);
+
+function normalizeStatusKey(rawStatus) {
+  const status = String(rawStatus || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+
+  if (RETIRED_STATUSES.has(status)) return "retired";
+  if (MAINTENANCE_STATUSES.has(status)) return "maintenance";
+  if (ATTENTION_STATUSES.has(status)) return "attention";
+  return "operational";
+}
+
+/**
+ * Warranty band for an asset.
+ *
+ * The API sends `warrantyStatus` on some payloads and only a `warrantyExpiry` date on others, so
+ * an explicit status is trusted when present and the date is used to derive one when it is not.
+ */
+function normalizeWarrantyKey(warrantyStatus, warrantyExpiry, today) {
+  const declared = String(warrantyStatus || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (declared === "EXPIRED") return "expired";
+  if (declared === "EXPIRING_SOON" || declared === "EXPIRING") return "expiring";
+  if (declared === "ACTIVE" || declared === "VALID") return "active";
+
+  const expiry = toDate(warrantyExpiry);
+  if (!expiry) return "none";
+
+  const remaining = daysBetween(today, expiry);
+  if (remaining === null) return "none";
+  if (remaining < 0) return "expired";
+  if (remaining <= WARRANTY_EXPIRING_WINDOW_DAYS) return "expiring";
+  return "active";
+}
+
+/**
+ * Maps one equipment row onto the shape the dashboard renders. Returns null for a row with no
+ * identity so a malformed record drops out instead of rendering a blank card.
+ */
+function normalizeEquipmentItem(raw, index = 0) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const id = raw.id ?? raw.equipmentId ?? raw.equipmentCode ?? null;
+  if (id === null || id === undefined) return null;
+
+  const today = new Date();
+  const statusKey = normalizeStatusKey(raw.status);
+  const warrantyKey = normalizeWarrantyKey(
+    raw.warrantyStatus,
+    raw.warrantyExpiry ?? raw.warrantyExpiryDate,
+    today,
+  );
+  const health = computeEquipmentHealthScore(raw);
+
+  return {
+    id: String(id),
+    key: `${id}-${index}`,
+    name: raw.name || "Unnamed asset",
+    code: raw.equipmentCode || raw.code || "-",
+    model: raw.model || raw.manufacturer || "-",
+    department: raw.department || "Unassigned",
+    statusKey,
+    statusLabel: EQUIPMENT_STATUS_META[statusKey].label,
+    warrantyKey,
+    warrantyLabel: WARRANTY_META[warrantyKey].label,
+    lastMaintenanceDate: raw.lastMaintenanceDate || raw.lastServicedAt || null,
+    healthScore: health ? health.score : null,
+    healthColor: health ? health.color : null,
+  };
+}
+
+function normalizeTaskStatusKey(rawStatus) {
+  const status = String(rawStatus || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+
+  if (status === "COMPLETED") return "completed";
+  if (status === "IN_PROGRESS") return "in_progress";
+  if (status === "NEEDS_PART" || status === "ON_HOLD" || status === "BLOCKED") return "blocked";
+  return "scheduled";
+}
+
+/**
+ * Maps one maintenance task onto the queue row. `dueState` is derived here rather than at render
+ * time so the sort and the colour of the due date always agree.
+ */
+function normalizeTaskItem(raw, index = 0) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const id = raw.id ?? raw.taskId ?? raw.taskCode ?? null;
+  if (id === null || id === undefined) return null;
+
+  const statusKey = normalizeTaskStatusKey(raw.status);
+  const dueDate = raw.deadline || raw.dueDate || raw.scheduledDate || null;
+  const remaining = daysBetween(new Date(), toDate(dueDate));
+
+  let dueState = "normal";
+  if (statusKey !== "completed" && remaining !== null) {
+    if (remaining < 0) {
+      dueState = "overdue";
+    } else if (remaining <= TASK_DUE_SOON_WINDOW_DAYS) {
+      dueState = "soon";
+    }
+  }
+
+  return {
+    id: String(id),
+    key: `${id}-${index}`,
+    taskCode: raw.taskCode || `TASK-${id}`,
+    // The queue heading is the human description of the work; the maintenance type is the
+    // fallback for rows that only carry a category.
+    title: raw.title || raw.description || raw.maintenanceType || "Maintenance task",
+    equipmentName: raw.equipment || raw.equipmentName || "Unassigned equipment",
+    assignedTechnician: raw.assignedTechnician || "Unassigned",
+    priority: raw.priority || "Normal",
+    statusKey,
+    statusLabel: TASK_STATUS_META[statusKey].label,
+    dueDate,
+    dueState,
+  };
+}
+
+/** Operational / attention / maintenance counts per department, busiest department first. */
+function buildDepartmentChartData(equipmentList) {
+  const byDepartment = new Map();
+
+  equipmentList.forEach((item) => {
+    const department = item.department || "Unassigned";
+    if (!byDepartment.has(department)) {
+      byDepartment.set(department, { department, operational: 0, attention: 0, maintenance: 0, total: 0 });
+    }
+
+    const bucket = byDepartment.get(department);
+    // Retired assets are counted in the department total but are not a readiness signal.
+    if (item.statusKey === "operational") bucket.operational += 1;
+    if (item.statusKey === "attention") bucket.attention += 1;
+    if (item.statusKey === "maintenance") bucket.maintenance += 1;
+    bucket.total += 1;
+  });
+
+  return Array.from(byDepartment.values())
+    .sort((left, right) => right.total - left.total)
+    .slice(0, 6);
+}
+
+function formatDateLabel(value) {
+  const parsed = toDate(value);
+  if (!parsed) return "No service on record";
+  return `Serviced ${parsed.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+}
+
+function formatRelativeLabel(value) {
+  const parsed = toDate(value);
+  if (!parsed) return "No due date";
+
+  const remaining = daysBetween(new Date(), parsed);
+  if (remaining === null) return "No due date";
+  if (remaining === 0) return "Due today";
+  if (remaining === 1) return "Due tomorrow";
+  if (remaining > 0) return `Due in ${remaining} days`;
+  if (remaining === -1) return "1 day overdue";
+  return `${Math.abs(remaining)} days overdue`;
+}
+
+// ---------------------------------------------------------------------------
+// Presentational building blocks
+// ---------------------------------------------------------------------------
+
+function SidebarNavButton({ icon: Icon, label, onClick, active = false }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-4 px-4 py-2.5 text-sm rounded-xl transition-colors ${
+        active
+          ? "font-bold text-gray-900 bg-white shadow-sm border border-gray-100"
+          : "font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+      }`}
+    >
+      <Icon size={18} className={active ? "text-gray-900" : ""} />
+      {label}
+    </button>
+  );
+}
+
+const STAT_CARD_TONES = {
+  blue: "bg-blue-50 text-blue-600",
+  amber: "bg-amber-50 text-amber-600",
+  rose: "bg-rose-50 text-rose-600",
+  emerald: "bg-emerald-50 text-emerald-600",
+};
+
+function StatCard({ title, value, subtitle, delta, tone = "blue", icon: Icon }) {
+  return (
+    <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{title}</p>
+        <span className={`w-9 h-9 rounded-2xl flex items-center justify-center ${STAT_CARD_TONES[tone] || STAT_CARD_TONES.blue}`}>
+          <Icon size={18} />
+        </span>
+      </div>
+      <p className="mt-4 text-3xl font-bold text-slate-900">{value}</p>
+      <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+      {delta ? <p className="mt-3 text-xs font-semibold text-slate-400">{delta}</p> : null}
+    </div>
+  );
+}
+
+function Panel({ title, subtitle, actions, children }) {
+  return (
+    <section className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-5">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">{title}</h2>
+          {subtitle ? <p className="mt-1 text-sm text-slate-500 max-w-2xl">{subtitle}</p> : null}
+        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default function Dashboard({ onNavigate }) {
   const { user, logout } = useAuth();
@@ -161,48 +580,15 @@ export default function Dashboard({ onNavigate }) {
 
   return (
     <div className="flex h-screen w-full bg-white font-sans text-gray-900 overflow-hidden">
-        
-        {/* COLUMN 1: LEFT SIDEBAR */}
-        <aside className="w-[260px] flex flex-col justify-between p-6 border-r border-gray-100 shrink-0 bg-[#fbfbfb]">
-          <div className="flex-1 overflow-y-auto pr-2">
-            
-            {/* Logo */}
-            <div className="mb-10 px-2 pt-2">
-              <MedTrackLogo size="text-2xl" />
-            </div>
 
-            <nav className="space-y-1">
-              {/* Main Menu */}
-              <button onClick={() => onNavigate && onNavigate("dashboard")} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-gray-900 bg-white rounded-xl shadow-sm border border-gray-100 mb-1 hover:bg-gray-50 transition-colors">
-                <LayoutGrid size={18} className="text-gray-900" /> Dashboard
-              </button>
-              <button onClick={() => onNavigate && onNavigate("equipment")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Box size={18} /> Equipment
-              </button>
-              <button onClick={() => onNavigate && onNavigate("retired-assets")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Diamond size={18} /> Retired Assets
-              </button>
-              <button onClick={() => onNavigate && onNavigate("maintenance")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <ClipboardList size={18} /> Maintenance
-              </button>
-              <button onClick={() => onNavigate && onNavigate("calibration")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Award size={18} /> Calibration & Compliance
-              </button>
-              <button onClick={() => onNavigate && onNavigate("lifecycle-predictor")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <TrendingDown size={18} /> Lifecycle & EOL Risk
-              </button>
-              <button onClick={() => onNavigate && onNavigate("scim-provisioning")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Users size={18} /> Staff (SCIM)
-              </button>
-              <button onClick={() => onNavigate && onNavigate("siem-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <MessageSquare size={18} /> Messages (SIEM)
-              </button>
-              <button onClick={() => onNavigate && onNavigate("analytics")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <LineChart size={18} /> Analytics
-              </button>
-              <button onClick={() => onNavigate && onNavigate("tenders")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Award size={18} /> Tenders &amp; E-Auction
-              </button>
+      {/* COLUMN 1: LEFT SIDEBAR */}
+      <aside className="w-[260px] flex flex-col justify-between p-6 border-r border-gray-100 shrink-0 bg-[#fbfbfb]">
+        <div className="flex-1 overflow-y-auto pr-2">
+
+          {/* Logo */}
+          <div className="mb-10 px-2 pt-2">
+            <MedTrackLogo size="text-2xl" />
+          </div>
 
           <nav className="space-y-1">
             <SidebarNavButton active icon={LayoutGrid} label="Dashboard" onClick={() => onNavigate?.("dashboard")} />
@@ -376,63 +762,58 @@ export default function Dashboard({ onNavigate }) {
               {featuredEquipment.map((item) => {
                 const statusMeta = EQUIPMENT_STATUS_META[item.statusKey] || EQUIPMENT_STATUS_META.operational;
                 const warrantyMeta = WARRANTY_META[item.warrantyKey] || WARRANTY_META.none;
+                const healthClass =
+                  item.healthColor === "red"
+                    ? "bg-rose-500"
+                    : item.healthColor === "amber"
+                      ? "bg-amber-500"
+                      : "bg-emerald-500";
 
-            <div className="space-y-3">
-              {equipmentList.slice(0, 5).map((equipment, idx) => {
-                const health = computeEquipmentHealthScore(equipment);
-                const healthColorClass = health?.color === 'red' ? 'bg-red-500' : health?.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500';
                 return (
-                <div key={idx} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-xl transition-colors group">
-                  <div className="flex items-center gap-4 w-1/2">
-                    <div className="w-10 h-10 rounded-full bg-[#f4f3ef] flex items-center justify-center text-gray-700">
-                      <Box size={18} />
-                    </div>
-                    <span className="font-bold text-sm text-gray-900">{equipment.name}</span>
-                  </div>
-                  
-                  <div className="w-1/4 flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${equipment.status === 'OPERATIONAL' || equipment.status === 'ACTIVE' || equipment.status === 'Operational' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
-                    <span className="text-[11px] font-bold text-gray-700">{equipment.status}</span>
-                  </div>
+                  <div key={item.key} className="rounded-3xl border border-slate-100 bg-slate-50/70 px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+                          <Box size={18} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-900 truncate">{item.name}</p>
+                          <p className="mt-0.5 text-xs text-slate-500 truncate">
+                            {item.code} • {item.model}
+                          </p>
+                        </div>
+                      </div>
 
-                  <div className="w-1/4 flex items-center justify-end gap-6 text-gray-400">
-                    {health && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Health:</span>
-                        <span className={`px-2 py-0.5 rounded-full text-white text-[10px] font-bold ${healthColorClass}`}>
-                          {health.score}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {item.healthScore !== null ? (
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${healthClass}`}>
+                            {item.healthScore}
+                          </span>
+                        ) : null}
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.badgeClass}`}>
+                          {item.statusLabel}
                         </span>
                       </div>
-                    )}
-                    <button className="p-1 hover:bg-gray-200 rounded-md transition-colors"><MoreHorizontal size={14} /></button>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between gap-3 text-xs font-medium">
+                      <span className="text-slate-500">{item.department}</span>
+                      <span className={warrantyMeta.className}>{warrantyMeta.label}</span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="text-xs text-slate-400">{formatDateLabel(item.lastMaintenanceDate)}</span>
+                      <button
+                        onClick={() => onNavigate?.("equipment")}
+                        className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md transition-colors"
+                        aria-label={`Open ${item.name}`}
+                      >
+                        <MoreHorizontal size={14} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )})}
-            </div>
-          </div>
-        </main>
-
-        {/* COLUMN 3: RIGHT SIDEBAR */}
-        {isBotOpen && (
-          <aside className="w-[360px] flex flex-col p-8 border-l border-gray-100 shrink-0 bg-white relative animate-in slide-in-from-right duration-300">
-            
-            <button onClick={() => setIsBotOpen(false)} className="absolute top-4 left-4 p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors z-10">
-              <X size={16} />
-            </button>
-
-            <div className="bg-[#f4f3ef] rounded-[32px] p-8 flex flex-col items-center text-center mb-8 shrink-0 relative mt-4">
-              <div className="relative mb-4">
-                <div className="w-[72px] h-[72px] rounded-full flex items-center justify-center border-4 border-[#f4f3ef] bg-blue-600 text-white shadow-sm">
-                  <Bot size={36} />
-                </div>
-                <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-emerald-400 border-2 border-[#f4f3ef] rounded-full"></div>
-              </div>
-              <h3 className="font-bold text-lg mb-1">MedTrack Assistant</h3>
-              <p className="text-xs text-gray-500 font-medium mb-6">@medtrackbot</p>
-            <div className="flex gap-4">
-              <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><Phone size={16}/></button>
-              <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><Video size={16}/></button>
-              <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><MoreHorizontal size={16}/></button>
+                );
+              })}
             </div>
           )}
         </Panel>
@@ -468,7 +849,7 @@ export default function Dashboard({ onNavigate }) {
 
                   return (
                     <div
-                      key={task.id}
+                      key={task.key}
                       className="rounded-3xl border border-slate-100 bg-slate-50/70 px-4 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
                     >
                       <div>
@@ -541,7 +922,7 @@ export default function Dashboard({ onNavigate }) {
               ) : (
                 <div className="space-y-3">
                   {topAttentionAssets.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                    <div key={item.key} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-bold text-slate-900">{item.name}</p>
@@ -567,7 +948,7 @@ export default function Dashboard({ onNavigate }) {
       </main>
 
       {isBotOpen ? (
-        <aside className="w-[340px] flex flex-col p-7 border-l border-gray-100 shrink-0 bg-white relative">
+        <aside className="w-[340px] flex flex-col p-7 border-l border-gray-100 shrink-0 bg-white relative overflow-y-auto">
           <button
             onClick={() => setIsBotOpen(false)}
             className="absolute top-4 right-4 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
@@ -613,7 +994,7 @@ export default function Dashboard({ onNavigate }) {
             <h4 className="text-sm font-bold text-slate-900">Live queue snapshot</h4>
             <div className="mt-4 space-y-3">
               {prioritizedTasks.slice(0, 3).map((task) => (
-                <div key={task.id} className="rounded-2xl bg-slate-50 p-4">
+                <div key={task.key} className="rounded-2xl bg-slate-50 p-4">
                   <p className="text-sm font-bold text-slate-900">{task.equipmentName}</p>
                   <p className="mt-1 text-xs text-slate-500">{task.title}</p>
                   <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
