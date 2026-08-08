@@ -153,23 +153,45 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("equipmentId") Long equipmentId,
             @Param("hospitalId") Long hospitalId);
 
-    List<MaintenanceTask> findByEquipmentHospitalId(Long hospitalId);
+    // ---------------------------------------------------------------------
+    // Calendar queries
+    //
+    // These replace four derived queries named findByEquipmentHospitalId... . Spring Data resolves
+    // that name as the path `equipment.hospitalId`, and MaintenanceTask.equipment is the denormalised
+    // equipment *name* - a String, with no hospitalId on it - so the repository could not be built
+    // and the context failed to start. There is no scheduledDate property either; the date a task is
+    // due is `deadline`.
+    //
+    // Written as native queries for the same reason as the ownership-scoped queries above: the join
+    // on equipment keeps the dual-hospital invariant, and both ownership keys are checked so the
+    // calendar cannot read another tenant's schedule.
+    // ---------------------------------------------------------------------
 
-    List<MaintenanceTask> findByEquipmentHospitalIdAndStatus(
-            Long hospitalId,
-            MaintenanceStatus status
-    );
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId "
+            + "AND mt.deadline BETWEEN :start AND :end "
+            + "ORDER BY mt.deadline ASC, mt.id ASC",
+            nativeQuery = true)
+    List<MaintenanceTask> findByHospitalIdAndDeadlineBetween(
+            @Param("hospitalId") Long hospitalId,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end);
 
-    List<MaintenanceTask> findByEquipmentHospitalIdAndScheduledDateBetween(
-            Long hospitalId,
-            LocalDate start,
-            LocalDate end
-    );
-
-    List<MaintenanceTask> findByEquipmentHospitalIdAndScheduledDateBefore(
-            Long hospitalId,
-            LocalDate date
-    );
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId "
+            + "AND mt.deadline < :date "
+            + "AND mt.status <> 'COMPLETED' "
+            + "ORDER BY mt.deadline ASC, mt.id ASC",
+            nativeQuery = true)
+    List<MaintenanceTask> findOverdueByHospitalId(
+            @Param("hospitalId") Long hospitalId,
+            @Param("date") LocalDate date);
 
     @Query("SELECT CASE WHEN COUNT(mt) > 0 THEN TRUE ELSE FALSE END FROM MaintenanceTask mt "
             + "WHERE mt.deleted = FALSE "
