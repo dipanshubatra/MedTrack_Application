@@ -12,11 +12,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/supplier")
 @RequiredArgsConstructor
@@ -50,6 +52,9 @@ public class SupplierController {
                         @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime startDate,
                         @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime endDate) {
 
+                log.info("Incoming request to get supplier orders: page={}, size={}, status={}, supplierId={}", page,
+                                size, status, supplierId);
+
                 Page<EquipmentOrder> orders = supplierOrderService.getSupplierOrders(
                                 page, size, sortBy, sortDir, status, shippingStatus, supplierId, search,
                                 deliveryStatus, isDelayed, trackingNumber, startDate, endDate);
@@ -73,7 +78,9 @@ public class SupplierController {
                         @PathVariable Long orderId,
                         @RequestParam String newStatus) {
 
+                log.info("Incoming request to update order status: orderId={}, newStatus={}", orderId, newStatus);
                 EquipmentOrder updatedOrder = supplierOrderService.updateOrderStatus(orderId, newStatus);
+                log.info("Successfully updated order status: orderId={}, newStatus={}", orderId, newStatus);
                 return ResponseEntity.ok(updatedOrder);
         }
 
@@ -86,7 +93,11 @@ public class SupplierController {
         })
         public ResponseEntity<java.util.List<EquipmentOrder>> bulkUpdateOrderStatus(
                         @jakarta.validation.Valid @RequestBody BulkStatusUpdateRequest request) {
+
+                log.info("Incoming request for bulk status update: orders={}, newStatus={}", request.getOrderIds(),
+                                request.getStatus());
                 java.util.List<EquipmentOrder> updatedOrders = supplierOrderService.bulkUpdateOrderStatus(request);
+                log.info("Successfully performed bulk status update for {} orders", updatedOrders.size());
                 return ResponseEntity.ok(updatedOrders);
         }
 
@@ -103,7 +114,9 @@ public class SupplierController {
         })
         public ResponseEntity<SupplierPerformanceResponse> getSupplierPerformance(
                         @PathVariable Long supplierId) {
+                log.info("Incoming request to get performance for supplierId={}", supplierId);
                 SupplierPerformanceResponse response = supplierPerformanceService.getPerformance(supplierId);
+                log.info("Successfully retrieved performance for supplierId={}", supplierId);
                 return ResponseEntity.ok(response);
         }
 }

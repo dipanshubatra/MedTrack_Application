@@ -28,242 +28,259 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 public class ShipmentTrackingServiceTest {
 
-    @Mock
-    private ShipmentTrackingRepository shipmentTrackingRepository;
+        @Mock
+        private ShipmentTrackingRepository shipmentTrackingRepository;
 
-    @Mock
-    private EquipmentOrderRepository orderRepository;
+        @Mock
+        private EquipmentOrderRepository orderRepository;
 
-    @InjectMocks
-    private ShipmentTrackingService shipmentTrackingService;
+        @Mock
+        private com.medtrack.supplier.workflow.ShipmentWorkflowOrchestrator orchestrator;
 
-    @Test
-    void createShipment_Success() {
-        CreateShipmentRequest request = CreateShipmentRequest.builder()
-                .orderId(1L)
-                .shipmentTrackingNumber("TRK123456")
-                .carrier("FedEx")
-                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
-                .supplierId(10L)
-                .build();
+        private ShipmentTrackingService shipmentTrackingService;
 
-        EquipmentOrder order = EquipmentOrder.builder()
-                .id(1L)
-                .status("PENDING")
-                .build();
+        @org.junit.jupiter.api.BeforeEach
+        void setUp() {
+                shipmentTrackingService = new ShipmentTrackingService(shipmentTrackingRepository, orderRepository,
+                                orchestrator);
+        }
 
-        ShipmentTracking shipment = ShipmentTracking.builder()
-                .id(5L)
-                .orderId(1L)
-                .shipmentTrackingNumber("TRK123456")
-                .shipmentStatus(ShipmentStatus.PENDING)
-                .supplierId(10L)
-                .createdAt(LocalDateTime.now())
-                .build();
+        @Test
+        void createShipment_Success() {
+                CreateShipmentRequest request = CreateShipmentRequest.builder()
+                                .orderId(1L)
+                                .shipmentTrackingNumber("TRK123456")
+                                .carrier("FedEx")
+                                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
+                                .supplierId(10L)
+                                .build();
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
-        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
-        when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
+                EquipmentOrder order = EquipmentOrder.builder()
+                                .id(1L)
+                                .status("PENDING")
+                                .build();
 
-        ShipmentTrackingResponse response = shipmentTrackingService.createShipment(request);
+                ShipmentTracking shipment = ShipmentTracking.builder()
+                                .id(5L)
+                                .orderId(1L)
+                                .shipmentTrackingNumber("TRK123456")
+                                .shipmentStatus(ShipmentStatus.PENDING)
+                                .supplierId(10L)
+                                .createdAt(LocalDateTime.now())
+                                .build();
 
-        assertNotNull(response);
-        assertEquals(5L, response.getId());
-        assertEquals("TRK123456", response.getShipmentTrackingNumber());
-        assertEquals("PENDING", response.getShipmentStatus());
-        assertEquals("CONFIRMED", order.getStatus());
-        assertEquals("TRK123456", order.getTrackingNo());
-        assertEquals("FedEx", order.getCarrier());
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+                when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
+                when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
 
-        verify(orderRepository).save(order);
-        verify(shipmentTrackingRepository).save(any(ShipmentTracking.class));
-    }
+                ShipmentTrackingResponse response = shipmentTrackingService.createShipment(request);
 
-    @Test
-    void createShipment_OrderNotFound_ThrowsException() {
-        CreateShipmentRequest request = CreateShipmentRequest.builder()
-                .orderId(1L)
-                .shipmentTrackingNumber("TRK123456")
-                .build();
+                assertNotNull(response);
+                assertEquals(5L, response.getId());
+                assertEquals("TRK123456", response.getShipmentTrackingNumber());
+                assertEquals("PENDING", response.getShipmentStatus());
+                assertEquals("CONFIRMED", order.getStatus());
+                assertEquals("TRK123456", order.getTrackingNo());
+                assertEquals("FedEx", order.getCarrier());
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.empty());
+                verify(orderRepository).save(order);
+                verify(shipmentTrackingRepository).save(any(ShipmentTracking.class));
+        }
 
-        assertThrows(ResourceNotFoundException.class, () -> shipmentTrackingService.createShipment(request));
-        verify(shipmentTrackingRepository, never()).save(any());
-    }
+        @Test
+        void createShipment_OrderNotFound_ThrowsException() {
+                CreateShipmentRequest request = CreateShipmentRequest.builder()
+                                .orderId(1L)
+                                .shipmentTrackingNumber("TRK123456")
+                                .build();
 
-    @Test
-    void createShipment_DuplicateShipmentForOrder_ThrowsException() {
-        CreateShipmentRequest request = CreateShipmentRequest.builder()
-                .orderId(1L)
-                .shipmentTrackingNumber("TRK123456")
-                .build();
+                when(orderRepository.findById(1L)).thenReturn(Optional.empty());
 
-        EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
-        ShipmentTracking existingShipment = ShipmentTracking.builder().id(5L).orderId(1L).build();
+                assertThrows(ResourceNotFoundException.class, () -> shipmentTrackingService.createShipment(request));
+                verify(shipmentTrackingRepository, never()).save(any());
+        }
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.of(existingShipment));
+        @Test
+        void createShipment_DuplicateShipmentForOrder_ThrowsException() {
+                CreateShipmentRequest request = CreateShipmentRequest.builder()
+                                .orderId(1L)
+                                .shipmentTrackingNumber("TRK123456")
+                                .build();
 
-        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
-        verify(shipmentTrackingRepository, never()).save(any());
-    }
+                EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
+                ShipmentTracking existingShipment = ShipmentTracking.builder().id(5L).orderId(1L).build();
 
-    @Test
-    void createShipment_DuplicateTrackingNumber_ThrowsException() {
-        CreateShipmentRequest request = CreateShipmentRequest.builder()
-                .orderId(1L)
-                .shipmentTrackingNumber("TRK123456")
-                .build();
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.of(existingShipment));
 
-        EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
-        ShipmentTracking existingShipment = ShipmentTracking.builder().id(6L).shipmentTrackingNumber("TRK123456").build();
+                assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
+                verify(shipmentTrackingRepository, never()).save(any());
+        }
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
-        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.of(existingShipment));
+        @Test
+        void createShipment_DuplicateTrackingNumber_ThrowsException() {
+                CreateShipmentRequest request = CreateShipmentRequest.builder()
+                                .orderId(1L)
+                                .shipmentTrackingNumber("TRK123456")
+                                .build();
 
-        assertThrows(DuplicateTrackingNumberException.class, () -> shipmentTrackingService.createShipment(request));
-        verify(shipmentTrackingRepository, never()).save(any());
-    }
+                EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
+                ShipmentTracking existingShipment = ShipmentTracking.builder().id(6L)
+                                .shipmentTrackingNumber("TRK123456").build();
 
-    @Test
-    void createShipment_PastDeliveryDate_ThrowsException() {
-        CreateShipmentRequest request = CreateShipmentRequest.builder()
-                .orderId(1L)
-                .shipmentTrackingNumber("TRK123456")
-                .estimatedDeliveryDate(LocalDateTime.now().minusDays(1)) // Past date
-                .build();
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+                when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456"))
+                                .thenReturn(Optional.of(existingShipment));
 
-        EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
+                assertThrows(DuplicateTrackingNumberException.class,
+                                () -> shipmentTrackingService.createShipment(request));
+                verify(shipmentTrackingRepository, never()).save(any());
+        }
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
-        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
+        @Test
+        void createShipment_PastDeliveryDate_ThrowsException() {
+                CreateShipmentRequest request = CreateShipmentRequest.builder()
+                                .orderId(1L)
+                                .shipmentTrackingNumber("TRK123456")
+                                .estimatedDeliveryDate(LocalDateTime.now().minusDays(1)) // Past date
+                                .build();
 
-        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
-        verify(shipmentTrackingRepository, never()).save(any());
-    }
+                EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
 
-    @Test
-    void updateShipmentStatus_ToShipped_Success() {
-        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                .shipmentStatus("SHIPPED")
-                .supplierNotes("Handed to carrier")
-                .build();
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+                when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
 
-        ShipmentTracking shipment = ShipmentTracking.builder()
-                .id(5L)
-                .orderId(1L)
-                .shipmentStatus(ShipmentStatus.PENDING)
-                .build();
+                assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
+                verify(shipmentTrackingRepository, never()).save(any());
+        }
 
-        EquipmentOrder order = EquipmentOrder.builder()
-                .id(1L)
-                .status("CONFIRMED")
-                .build();
+        @Test
+        void updateShipmentStatus_ToShipped_Success() {
+                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                                .shipmentStatus("SHIPPED")
+                                .supplierNotes("Handed to carrier")
+                                .build();
 
-        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
-        when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                ShipmentTracking shipment = ShipmentTracking.builder()
+                                .id(5L)
+                                .orderId(1L)
+                                .shipmentStatus(ShipmentStatus.PENDING)
+                                .build();
 
-        ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request);
+                EquipmentOrder order = EquipmentOrder.builder()
+                                .id(1L)
+                                .status("CONFIRMED")
+                                .build();
 
-        assertNotNull(response);
-        assertEquals("SHIPPED", response.getShipmentStatus());
-        assertEquals("IN_TRANSIT", order.getStatus());
-        assertEquals("Shipped", order.getShippingStatus());
-        assertEquals("Handed to carrier", order.getSupplierNotes());
-        assertNotNull(order.getDispatchedAt());
+                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+                when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
 
-        verify(shipmentTrackingRepository).save(shipment);
-        verify(orderRepository).save(order);
-    }
+                ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request);
 
-    @Test
-    void updateShipmentStatus_ToDelivered_Success() {
-        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                .shipmentStatus("DELIVERED")
-                .build();
+                assertNotNull(response);
+                assertEquals("SHIPPED", response.getShipmentStatus());
+                assertEquals("IN_TRANSIT", order.getStatus());
+                assertEquals("Shipped", order.getShippingStatus());
+                assertEquals("Handed to carrier", order.getSupplierNotes());
+                assertNotNull(order.getDispatchedAt());
 
-        ShipmentTracking shipment = ShipmentTracking.builder()
-                .id(5L)
-                .orderId(1L)
-                .shipmentStatus(ShipmentStatus.SHIPPED)
-                .build();
+                verify(shipmentTrackingRepository).save(shipment);
+                verify(orderRepository).save(order);
+        }
 
-        EquipmentOrder order = EquipmentOrder.builder()
-                .id(1L)
-                .status("IN_TRANSIT")
-                .build();
+        @Test
+        void updateShipmentStatus_ToDelivered_Success() {
+                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                                .shipmentStatus("DELIVERED")
+                                .build();
 
-        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
-        when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                ShipmentTracking shipment = ShipmentTracking.builder()
+                                .id(5L)
+                                .orderId(1L)
+                                .shipmentStatus(ShipmentStatus.SHIPPED)
+                                .build();
 
-        ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request);
+                EquipmentOrder order = EquipmentOrder.builder()
+                                .id(1L)
+                                .status("IN_TRANSIT")
+                                .build();
 
-        assertNotNull(response);
-        assertEquals("DELIVERED", response.getShipmentStatus());
-        assertEquals("DELIVERED", order.getStatus());
-        assertEquals("Delivered", order.getShippingStatus());
-        assertNotNull(order.getDeliveredAt());
-        assertNotNull(shipment.getActualDeliveryDate());
+                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+                when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
 
-        verify(shipmentTrackingRepository).save(shipment);
-        verify(orderRepository).save(order);
-    }
+                ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request);
 
-    @Test
-    void updateShipmentStatus_InvalidTransition_ThrowsException() {
-        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                .shipmentStatus("PENDING") // Cannot transition back from SHIPPED to PENDING
-                .build();
+                assertNotNull(response);
+                assertEquals("DELIVERED", response.getShipmentStatus());
+                assertEquals("DELIVERED", order.getStatus());
+                assertEquals("Delivered", order.getShippingStatus());
+                assertNotNull(order.getDeliveredAt());
+                assertNotNull(shipment.getActualDeliveryDate());
 
-        ShipmentTracking shipment = ShipmentTracking.builder()
-                .id(5L)
-                .shipmentStatus(ShipmentStatus.SHIPPED)
-                .build();
+                verify(shipmentTrackingRepository).save(shipment);
+                verify(orderRepository).save(order);
+        }
 
-        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+        @Test
+        void updateShipmentStatus_InvalidTransition_ThrowsException() {
+                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                                .shipmentStatus("PENDING") // Cannot transition back from SHIPPED to PENDING
+                                .build();
 
-        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request));
-        verify(shipmentTrackingRepository, never()).save(any());
-    }
+                ShipmentTracking shipment = ShipmentTracking.builder()
+                                .id(5L)
+                                .shipmentStatus(ShipmentStatus.SHIPPED)
+                                .build();
 
-    @Test
-    void updateShipmentStatus_SameStatus_ThrowsException() {
-        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                .shipmentStatus("SHIPPED") // Same state
-                .build();
+                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+                doThrow(new InvalidStatusTransitionException("msg")).when(orchestrator).validateStateTransition(any(),
+                                any());
 
-        ShipmentTracking shipment = ShipmentTracking.builder()
-                .id(5L)
-                .shipmentStatus(ShipmentStatus.SHIPPED)
-                .build();
+                assertThrows(InvalidStatusTransitionException.class,
+                                () -> shipmentTrackingService.updateShipmentStatus(5L, request));
+                verify(shipmentTrackingRepository, never()).save(any());
+        }
 
-        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+        @Test
+        void updateShipmentStatus_SameStatus_ThrowsException() {
+                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                                .shipmentStatus("SHIPPED") // Same state
+                                .build();
 
-        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request));
-        verify(shipmentTrackingRepository, never()).save(any());
-    }
+                ShipmentTracking shipment = ShipmentTracking.builder()
+                                .id(5L)
+                                .shipmentStatus(ShipmentStatus.SHIPPED)
+                                .build();
 
-    @Test
-    void getShipmentById_Success() {
-        ShipmentTracking shipment = ShipmentTracking.builder()
-                .id(5L)
-                .orderId(1L)
-                .shipmentTrackingNumber("TRK123")
-                .shipmentStatus(ShipmentStatus.PENDING)
-                .build();
+                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+                doThrow(new InvalidStatusTransitionException("msg")).when(orchestrator).validateStateTransition(any(),
+                                any());
 
-        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+                assertThrows(InvalidStatusTransitionException.class,
+                                () -> shipmentTrackingService.updateShipmentStatus(5L, request));
+                verify(shipmentTrackingRepository, never()).save(any());
+        }
 
-        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentById(5L);
+        @Test
+        void getShipmentById_Success() {
+                ShipmentTracking shipment = ShipmentTracking.builder()
+                                .id(5L)
+                                .orderId(1L)
+                                .shipmentTrackingNumber("TRK123")
+                                .shipmentStatus(ShipmentStatus.PENDING)
+                                .build();
 
-        assertNotNull(response);
-        assertEquals(5L, response.getId());
-        assertEquals("TRK123", response.getShipmentTrackingNumber());
-    }
+                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+
+                ShipmentTrackingResponse response = shipmentTrackingService.getShipmentById(5L);
+
+                assertNotNull(response);
+                assertEquals(5L, response.getId());
+                assertEquals("TRK123", response.getShipmentTrackingNumber());
+        }
 }

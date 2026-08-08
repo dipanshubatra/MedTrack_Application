@@ -6,8 +6,10 @@ import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.workflow.ShipmentWorkflowOrchestrator;
+import com.medtrack.supplier.metrics.MetricsService;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +46,7 @@ public class SupplierOrderService {
     private final SupplierPerformanceService supplierPerformanceService;
     private final SupplierAuditLogService auditLogService;
     private final ShipmentWorkflowOrchestrator orchestrator;
+    private final MetricsService metricsService;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -114,98 +117,114 @@ public class SupplierOrderService {
 
     @Transactional
     public EquipmentOrder updateOrderStatus(Long orderId, String newStatus) {
-        Set<String> publishedEvents = new HashSet<>();
-        if (orderId == null || orderId <= 0) {
-            throw new IllegalArgumentException("Invalid resource ID.");
-        }
-        if (newStatus == null || newStatus.isEmpty()) {
-            throw new IllegalArgumentException("Status cannot be blank");
-        }
-
-        ShipmentStatus requestedStatus;
         try {
-            requestedStatus = ShipmentStatus.valueOf(newStatus.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid status: " + newStatus);
-        }
+            return metricsService.recordProcessingLatency("updateOrderStatus", () -> {
+                Set<String> publishedEvents = new HashSet<>();
+                if (orderId == null || orderId <= 0) {
+                    throw new IllegalArgumentException("Invalid resource ID.");
+                }
+                if (newStatus == null || newStatus.isEmpty()) {
+                    throw new IllegalArgumentException("Status cannot be blank");
+                }
 
-        EquipmentOrder order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                ShipmentStatus requestedStatus;
+                try {
+                    requestedStatus = ShipmentStatus.valueOf(newStatus.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid status: " + newStatus);
+                }
 
-        String currentStatusStr = order.getStatus();
-        ShipmentStatus currentStatus;
-        try {
-            currentStatus = ShipmentStatus.valueOf(currentStatusStr.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new InvalidStatusTransitionException(
-                    "Legacy order status is not valid for transitions: " + currentStatusStr);
-        }
+                EquipmentOrder order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        orchestrator.validateStateTransition(currentStatus, requestedStatus);
+                String currentStatusStr = order.getStatus();
+                ShipmentStatus currentStatus;
+                try {
+                    currentStatus = ShipmentStatus.valueOf(currentStatusStr.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new InvalidStatusTransitionException(
+                            "Legacy order status is not valid for transitions: " + currentStatusStr);
+                }
 
-        // Process Shipment state additions
-        if (requestedStatus == ShipmentStatus.SHIPPED) {
-            ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
-                    .orElseGet(() -> {
-                        Long supplierId = resolveSupplierId();
-                        return ShipmentTracking.builder()
-                                .orderId(orderId)
-                                .supplierId(supplierId)
-                                .createdAt(LocalDateTime.now())
-                                .shipmentStatus(ShipmentStatus.PENDING)
-                                .build();
-                    });
+                log.info("Attempting to update order status for orderId={} from {} to {}", orderId, currentStatus,
+                        requestedStatus);
+                orchestrator.validateStateTransition(currentStatus, requestedStatus);
 
-            if (shipment.getShipmentTrackingNumber() == null || shipment.getShipmentTrackingNumber().isEmpty()) {
-                shipment.setShipmentTrackingNumber(generateUniqueTrackingNumber());
+                // Process Shipment state additions
+                if (requestedStatus == ShipmentStatus.SHIPPED) {
+                    ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
+                            .orElseGet(() -> {
+                                Long supplierId = resolveSupplierId();
+                                return ShipmentTracking.builder()
+                                        .orderId(orderId)
+                                        .supplierId(supplierId)
+                                        .createdAt(LocalDateTime.now())
+                                        .shipmentStatus(ShipmentStatus.PENDING)
+                                        .build();
+                            });
+
+                    if (shipment.getShipmentTrackingNumber() == null
+                            || shipment.getShipmentTrackingNumber().isEmpty()) {
+                        shipment.setShipmentTrackingNumber(generateUniqueTrackingNumber());
+                    }
+
+                    if (shipment.getEstimatedDeliveryDate() == null) {
+                        shipment.setEstimatedDeliveryDate(LocalDateTime.now().plusDays(3));
+                    }
+
+                    shipment.setShipmentStatus(ShipmentStatus.SHIPPED);
+                    shipment.setUpdatedAt(LocalDateTime.now());
+                    shipmentTrackingRepository.save(shipment);
+
+                    order.setTrackingNo(shipment.getShipmentTrackingNumber());
+                    order.setCarrier(order.getCarrier() != null ? order.getCarrier() : "Standard Carrier");
+                    order.setShippingStatus("Shipped");
+                    order.setDispatchedAt(LocalDateTime.now());
+                    order.setEstimatedDelivery(shipment.getEstimatedDeliveryDate().toString());
+
+                    scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
+
+                } else if (requestedStatus == ShipmentStatus.DELIVERED) {
+                    ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
+                            .orElseGet(() -> {
+                                Long supplierId = resolveSupplierId();
+                                return ShipmentTracking.builder()
+                                        .orderId(orderId)
+                                        .supplierId(supplierId)
+                                        .createdAt(LocalDateTime.now())
+                                        .shipmentStatus(ShipmentStatus.SHIPPED)
+                                        .build();
+                            });
+
+                    shipment.setShipmentStatus(ShipmentStatus.DELIVERED);
+                    shipment.setActualDeliveryDate(LocalDateTime.now());
+                    shipment.setUpdatedAt(LocalDateTime.now());
+                    shipmentTrackingRepository.save(shipment);
+
+                    order.setShippingStatus("Delivered");
+                    order.setDeliveredAt(LocalDateTime.now());
+
+                    scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
+                }
+
+                order.setStatus(requestedStatus.name());
+                order.setUpdatedAt(LocalDateTime.now());
+
+                auditLogService.logAction(orderId, resolveSupplierId(), "STATUS_UPDATE",
+                        "Order status transitioned to " + requestedStatus.name(), resolveCurrentUsername());
+
+                metricsService.incrementOrdersProcessed();
+                log.info("Successfully completed status update for orderId={} to {}", orderId, requestedStatus);
+                return orderRepository.save(order);
+            });
+        } catch (Exception e) {
+            log.error("Failed to update order status for orderId={}: {}", orderId, e.getMessage(), e);
+            metricsService.incrementFailedRequests();
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
             }
-
-            if (shipment.getEstimatedDeliveryDate() == null) {
-                shipment.setEstimatedDeliveryDate(LocalDateTime.now().plusDays(3));
-            }
-
-            shipment.setShipmentStatus(ShipmentStatus.SHIPPED);
-            shipment.setUpdatedAt(LocalDateTime.now());
-            shipmentTrackingRepository.save(shipment);
-
-            order.setTrackingNo(shipment.getShipmentTrackingNumber());
-            order.setCarrier(order.getCarrier() != null ? order.getCarrier() : "Standard Carrier");
-            order.setShippingStatus("Shipped");
-            order.setDispatchedAt(LocalDateTime.now());
-            order.setEstimatedDelivery(shipment.getEstimatedDeliveryDate().toString());
-
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
-
-        } else if (requestedStatus == ShipmentStatus.DELIVERED) {
-            ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
-                    .orElseGet(() -> {
-                        Long supplierId = resolveSupplierId();
-                        return ShipmentTracking.builder()
-                                .orderId(orderId)
-                                .supplierId(supplierId)
-                                .createdAt(LocalDateTime.now())
-                                .shipmentStatus(ShipmentStatus.SHIPPED)
-                                .build();
-                    });
-
-            shipment.setShipmentStatus(ShipmentStatus.DELIVERED);
-            shipment.setActualDeliveryDate(LocalDateTime.now());
-            shipment.setUpdatedAt(LocalDateTime.now());
-            shipmentTrackingRepository.save(shipment);
-
-            order.setShippingStatus("Delivered");
-            order.setDeliveredAt(LocalDateTime.now());
-
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
+            throw new RuntimeException(e);
         }
-
-        order.setStatus(requestedStatus.name());
-        order.setUpdatedAt(LocalDateTime.now());
-
-        auditLogService.logAction(orderId, resolveSupplierId(), "STATUS_UPDATE",
-                "Order status transitioned to " + requestedStatus.name(), resolveCurrentUsername());
-
-        return orderRepository.save(order);
     }
 
     @Transactional
@@ -295,6 +314,7 @@ public class SupplierOrderService {
                         .build();
                 log.info("Publishing OrderShippedEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
+                metricsService.incrementKafkaPublish();
             } else if (status == ShipmentStatus.DELIVERED) {
                 com.medtrack.supplier.event.OrderDeliveredEvent event = com.medtrack.supplier.event.OrderDeliveredEvent
                         .builder()
@@ -309,10 +329,12 @@ public class SupplierOrderService {
                         .build();
                 log.info("Publishing OrderDeliveredEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
+                metricsService.incrementKafkaPublish();
                 supplierPerformanceService.publishPerformanceUpdate(shipment.getSupplierId());
             }
             orchestrator.markOperationSuccessful(orderId, "EVENT_PUBLISH");
         } catch (Exception e) {
+            metricsService.incrementFailedRequests();
             log.error("Failed to publish Kafka event for order ID: [{}], status: [{}] due to error: {}",
                     orderId, status, e.getMessage(), e);
             orchestrator.registerPendingOperation(orderId, "EVENT_PUBLISH", "{}", e.getMessage());
