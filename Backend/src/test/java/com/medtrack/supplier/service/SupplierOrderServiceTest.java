@@ -5,7 +5,7 @@ import com.medtrack.repository.EquipmentOrderRepository;
 import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
-import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +19,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -41,13 +43,15 @@ public class SupplierOrderServiceTest {
         private ShipmentTrackingRepository shipmentTrackingRepository;
 
         @Mock
-        private UserRepository userRepository;
+        private SupplierAccessGuard supplierAccessGuard;
 
         @Mock
         private SupplierPerformanceService supplierPerformanceService;
 
         @Mock
         private KafkaTemplate<String, Object> kafkaTemplate;
+
+        private final Authentication authentication = mock(Authentication.class);
 
         private SupplierOrderService supplierOrderService;
 
@@ -64,8 +68,7 @@ public class SupplierOrderServiceTest {
         void setUp() throws Exception {
                 MockitoAnnotations.openMocks(this);
                 supplierOrderService = new SupplierOrderService(orderRepository, shipmentTrackingRepository,
-                                userRepository, supplierPerformanceService, auditLogService, orchestrator,
-                                metricsService);
+                                supplierAccessGuard, supplierPerformanceService);
                 ReflectionTestUtils.setField(supplierOrderService, "kafkaTemplate", kafkaTemplate);
                 ReflectionTestUtils.setField(supplierOrderService, "orderEventsTopic", "order-events");
 
@@ -138,13 +141,70 @@ public class SupplierOrderServiceTest {
         }
 
         @Test
+        void getSupplierOrders_InvalidDeliveryStatus_ThrowsIllegalArgumentException() {
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                () -> supplierOrderService.getSupplierOrders(
+                                                0, 10, "orderDate", "desc", null, null, 5L, null,
+                                                "LOST", null, null, null, null));
+
+                assertEquals("Invalid delivery status: LOST", exception.getMessage());
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_ReversedDateRange_ThrowsIllegalArgumentException() {
+                LocalDateTime start = LocalDateTime.of(2026, 8, 2, 12, 0);
+                LocalDateTime end = start.minusDays(1);
+
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                () -> supplierOrderService.getSupplierOrders(
+                                                0, 10, "orderDate", "desc", null, null, 5L, null,
+                                                null, null, null, start, end));
+
+                assertEquals("Start date must not be after end date", exception.getMessage());
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_UnsupportedSortField_ThrowsIllegalArgumentException() {
+                assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
+                                0, 10, "supplierNotes.password", "desc", null, null, 5L, null,
+                                null, null, null, null, null));
+
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_OversizedPage_ThrowsIllegalArgumentException() {
+                assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
+                                0, 101, "orderDate", "desc", null, null, 5L, null,
+                                null, null, null, null, null));
+        }
+
+        @Test
+        void getSupplierOrders_NormalizesOptionalTextFilters() {
+                when(orderRepository.findAdvancedSupplierOrders(
+                                isNull(), isNull(), eq(ShipmentStatus.SHIPPED), eq(true), eq("TRK-9"),
+                                isNull(), isNull(), eq(9L), isNull(), eq(true), any(Pageable.class)))
+                                .thenReturn(Page.empty());
+
+                supplierOrderService.getSupplierOrders(
+                                0, 20, "orderDate", "asc", " ", "  ", 9L, " ",
+                                " shipped ", true, " TRK-9 ", null, null);
+
+                verify(orderRepository).findAdvancedSupplierOrders(
+                                isNull(), isNull(), eq(ShipmentStatus.SHIPPED), eq(true), eq("TRK-9"),
+                                isNull(), isNull(), eq(9L), isNull(), eq(true), any(Pageable.class));
+        }
+
+        @Test
         void updateOrderStatus_PendingToConfirmed_Success() {
                 EquipmentOrder order = EquipmentOrder.builder().id(1L).status("PENDING").build();
                 when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
                 when(orderRepository.save(any(EquipmentOrder.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "CONFIRMED");
+                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "CONFIRMED", authentication);
 
                 assertNotNull(result);
                 assertEquals("CONFIRMED", result.getStatus());
@@ -171,7 +231,7 @@ public class SupplierOrderServiceTest {
                 when(kafkaTemplate.send(anyString(), anyString(), any()))
                                 .thenReturn(mock(CompletableFuture.class));
 
-                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "SHIPPED");
+                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "SHIPPED", authentication);
 
                 assertNotNull(result);
                 assertEquals("SHIPPED", result.getStatus());
@@ -197,7 +257,7 @@ public class SupplierOrderServiceTest {
                 when(kafkaTemplate.send(anyString(), anyString(), any()))
                                 .thenReturn(mock(CompletableFuture.class));
 
-                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "SHIPPED");
+                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "SHIPPED", authentication);
 
                 assertNotNull(result);
                 assertEquals("SHIPPED", result.getStatus());
@@ -230,7 +290,7 @@ public class SupplierOrderServiceTest {
                 when(kafkaTemplate.send(anyString(), anyString(), any()))
                                 .thenReturn(mock(CompletableFuture.class));
 
-                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "DELIVERED");
+                EquipmentOrder result = supplierOrderService.updateOrderStatus(1L, "DELIVERED", authentication);
 
                 assertNotNull(result);
                 assertEquals("DELIVERED", result.getStatus());
@@ -241,6 +301,7 @@ public class SupplierOrderServiceTest {
                 verify(shipmentTrackingRepository).save(shipment);
                 verify(orderRepository).save(order);
                 verify(kafkaTemplate).send(eq("order-events"), eq("1"), any());
+                verify(supplierPerformanceService).publishPerformanceUpdate(1L);
         }
 
         @Test
@@ -250,7 +311,7 @@ public class SupplierOrderServiceTest {
                 doThrow(new InvalidStatusTransitionException("msg")).when(orchestrator).validateStateTransition(any(), any());
 
                 assertThrows(InvalidStatusTransitionException.class,
-                                () -> supplierOrderService.updateOrderStatus(1L, "SHIPPED"));
+                                () -> supplierOrderService.updateOrderStatus(1L, "SHIPPED", authentication));
         }
 
         @Test
@@ -260,13 +321,13 @@ public class SupplierOrderServiceTest {
                 doThrow(new InvalidStatusTransitionException("msg")).when(orchestrator).validateStateTransition(any(), any());
 
                 assertThrows(InvalidStatusTransitionException.class,
-                                () -> supplierOrderService.updateOrderStatus(1L, "CONFIRMED"));
+                                () -> supplierOrderService.updateOrderStatus(1L, "CONFIRMED", authentication));
         }
 
         @Test
         void updateOrderStatus_UnknownStatus_ThrowsIllegalArgumentException() {
                 assertThrows(IllegalArgumentException.class,
-                                () -> supplierOrderService.updateOrderStatus(1L, "UNKNOWN"));
+                                () -> supplierOrderService.updateOrderStatus(1L, "UNKNOWN", authentication));
         }
 
         @Test
@@ -274,6 +335,29 @@ public class SupplierOrderServiceTest {
                 when(orderRepository.findById(1L)).thenReturn(Optional.empty());
 
                 assertThrows(ResourceNotFoundException.class,
-                                () -> supplierOrderService.updateOrderStatus(1L, "CONFIRMED"));
+                                () -> supplierOrderService.updateOrderStatus(1L, "CONFIRMED", authentication));
+        }
+
+        @Test
+        void updateOrderStatus_DeniedForSupplierNotAssignedToOrder() {
+                // A shipment already exists for this order, assigned to a different supplier
+                // than the caller. Regression guard for the bug where ANY authenticated
+                // supplier could advance ANY other supplier's order, since the order/shipment
+                // ownership was never checked before this fix.
+                EquipmentOrder order = EquipmentOrder.builder().id(1L).status("CONFIRMED").build();
+                ShipmentTracking shipment = ShipmentTracking.builder()
+                                .orderId(1L)
+                                .supplierId(20L)
+                                .build();
+
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.of(shipment));
+                when(supplierAccessGuard.resolveCallerId(authentication)).thenReturn(999L);
+                doThrow(new AccessDeniedException("Not authorized"))
+                                .when(supplierAccessGuard).assertSelfOrHospitalAdmin(authentication, 999L, 20L);
+
+                assertThrows(AccessDeniedException.class,
+                                () -> supplierOrderService.updateOrderStatus(1L, "SHIPPED", authentication));
+                verify(orderRepository, never()).save(any());
         }
 }

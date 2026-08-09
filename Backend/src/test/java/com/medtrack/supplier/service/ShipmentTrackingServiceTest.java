@@ -11,11 +11,13 @@ import com.medtrack.supplier.dto.UpdateShipmentStatusRequest;
 import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
+import com.medtrack.supplier.security.SupplierAccessGuard;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,259 +30,368 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 public class ShipmentTrackingServiceTest {
 
-        @Mock
-        private ShipmentTrackingRepository shipmentTrackingRepository;
+    @Mock
+    private ShipmentTrackingRepository shipmentTrackingRepository;
 
-        @Mock
-        private EquipmentOrderRepository orderRepository;
+    @Mock
+    private EquipmentOrderRepository orderRepository;
 
-        @Mock
-        private com.medtrack.supplier.workflow.ShipmentWorkflowOrchestrator orchestrator;
+    @Mock
+    private SupplierAccessGuard supplierAccessGuard;
 
-        private ShipmentTrackingService shipmentTrackingService;
+    @org.mockito.Spy
+    private com.medtrack.supplier.validation.ShipmentRequestValidator validator = new com.medtrack.supplier.validation.ShipmentRequestValidator();
 
-        @org.junit.jupiter.api.BeforeEach
-        void setUp() {
-                shipmentTrackingService = new ShipmentTrackingService(shipmentTrackingRepository, orderRepository,
-                                orchestrator);
-        }
+    @InjectMocks
+    private ShipmentTrackingService shipmentTrackingService;
 
-        @Test
-        void createShipment_Success() {
-                CreateShipmentRequest request = CreateShipmentRequest.builder()
-                                .orderId(1L)
-                                .shipmentTrackingNumber("TRK123456")
-                                .carrier("FedEx")
-                                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
-                                .supplierId(10L)
-                                .build();
+    private final Authentication authentication = mock(Authentication.class);
 
-                EquipmentOrder order = EquipmentOrder.builder()
-                                .id(1L)
-                                .status("PENDING")
-                                .build();
+    @Test
+    void createShipment_Success() {
+        CreateShipmentRequest request = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
+                .supplierId(10L)
+                .build();
 
-                ShipmentTracking shipment = ShipmentTracking.builder()
-                                .id(5L)
-                                .orderId(1L)
-                                .shipmentTrackingNumber("TRK123456")
-                                .shipmentStatus(ShipmentStatus.PENDING)
-                                .supplierId(10L)
-                                .createdAt(LocalDateTime.now())
-                                .build();
+        EquipmentOrder order = EquipmentOrder.builder()
+                .id(1L)
+                .status("PENDING")
+                .build();
 
-                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
-                when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
-                when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123456")
+                .shipmentStatus(ShipmentStatus.PENDING)
+                .supplierId(10L)
+                .createdAt(LocalDateTime.now())
+                .build();
 
-                ShipmentTrackingResponse response = shipmentTrackingService.createShipment(request);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
+        when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
 
-                assertNotNull(response);
-                assertEquals(5L, response.getId());
-                assertEquals("TRK123456", response.getShipmentTrackingNumber());
-                assertEquals("PENDING", response.getShipmentStatus());
-                assertEquals("CONFIRMED", order.getStatus());
-                assertEquals("TRK123456", order.getTrackingNo());
-                assertEquals("FedEx", order.getCarrier());
+        ShipmentTrackingResponse response = shipmentTrackingService.createShipment(request, authentication);
 
-                verify(orderRepository).save(order);
-                verify(shipmentTrackingRepository).save(any(ShipmentTracking.class));
-        }
+        assertNotNull(response);
+        assertEquals(5L, response.getId());
+        assertEquals("TRK123456", response.getShipmentTrackingNumber());
+        assertEquals("PENDING", response.getShipmentStatus());
+        assertEquals("CONFIRMED", order.getStatus());
+        assertEquals("TRK123456", order.getTrackingNo());
+        assertEquals("FedEx", order.getCarrier());
 
-        @Test
-        void createShipment_OrderNotFound_ThrowsException() {
-                CreateShipmentRequest request = CreateShipmentRequest.builder()
-                                .orderId(1L)
-                                .shipmentTrackingNumber("TRK123456")
-                                .build();
+        verify(orderRepository).save(order);
+        verify(shipmentTrackingRepository).save(any(ShipmentTracking.class));
+    }
 
-                when(orderRepository.findById(1L)).thenReturn(Optional.empty());
+    @Test
+    void createShipment_OrderNotFound_ThrowsException() {
+        CreateShipmentRequest request = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
+                .build();
 
-                assertThrows(ResourceNotFoundException.class, () -> shipmentTrackingService.createShipment(request));
-                verify(shipmentTrackingRepository, never()).save(any());
-        }
+        when(orderRepository.findById(1L)).thenReturn(Optional.empty());
 
-        @Test
-        void createShipment_DuplicateShipmentForOrder_ThrowsException() {
-                CreateShipmentRequest request = CreateShipmentRequest.builder()
-                                .orderId(1L)
-                                .shipmentTrackingNumber("TRK123456")
-                                .build();
+        assertThrows(ResourceNotFoundException.class, () -> shipmentTrackingService.createShipment(request, authentication));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
 
-                EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
-                ShipmentTracking existingShipment = ShipmentTracking.builder().id(5L).orderId(1L).build();
+    @Test
+    void createShipment_DuplicateShipmentForOrder_ThrowsException() {
+        CreateShipmentRequest request = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
+                .build();
 
-                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.of(existingShipment));
+        EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
+        ShipmentTracking existingShipment = ShipmentTracking.builder().id(5L).orderId(1L).build();
 
-                assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
-                verify(shipmentTrackingRepository, never()).save(any());
-        }
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.of(existingShipment));
 
-        @Test
-        void createShipment_DuplicateTrackingNumber_ThrowsException() {
-                CreateShipmentRequest request = CreateShipmentRequest.builder()
-                                .orderId(1L)
-                                .shipmentTrackingNumber("TRK123456")
-                                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request, authentication));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
 
-                EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
-                ShipmentTracking existingShipment = ShipmentTracking.builder().id(6L)
-                                .shipmentTrackingNumber("TRK123456").build();
+    @Test
+    void createShipment_DuplicateTrackingNumber_ThrowsException() {
+        CreateShipmentRequest request = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
+                .build();
 
-                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
-                when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456"))
-                                .thenReturn(Optional.of(existingShipment));
+        EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
+        ShipmentTracking existingShipment = ShipmentTracking.builder().id(6L).shipmentTrackingNumber("TRK123456").build();
 
-                assertThrows(DuplicateTrackingNumberException.class,
-                                () -> shipmentTrackingService.createShipment(request));
-                verify(shipmentTrackingRepository, never()).save(any());
-        }
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.of(existingShipment));
 
-        @Test
-        void createShipment_PastDeliveryDate_ThrowsException() {
-                CreateShipmentRequest request = CreateShipmentRequest.builder()
-                                .orderId(1L)
-                                .shipmentTrackingNumber("TRK123456")
-                                .estimatedDeliveryDate(LocalDateTime.now().minusDays(1)) // Past date
-                                .build();
+        assertThrows(DuplicateTrackingNumberException.class, () -> shipmentTrackingService.createShipment(request, authentication));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
 
-                EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
+    @Test
+    void createShipment_PastDeliveryDate_ThrowsException() {
+        CreateShipmentRequest request = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().minusDays(1)) // Past date
+                .build();
 
-                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-                when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
-                when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request, authentication));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
 
-                assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
-                verify(shipmentTrackingRepository, never()).save(any());
-        }
+    @Test
+    void createShipment_NullRequest_ThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(null, authentication));
+    }
 
-        @Test
-        void updateShipmentStatus_ToShipped_Success() {
-                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                                .shipmentStatus("SHIPPED")
-                                .supplierNotes("Handed to carrier")
-                                .build();
+    @Test
+    void createShipment_NullOrInvalidOrderId_ThrowsException() {
+        CreateShipmentRequest requestNullOrder = CreateShipmentRequest.builder()
+                .orderId(null)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestNullOrder, authentication));
 
-                ShipmentTracking shipment = ShipmentTracking.builder()
-                                .id(5L)
-                                .orderId(1L)
-                                .shipmentStatus(ShipmentStatus.PENDING)
-                                .build();
+        CreateShipmentRequest requestZeroOrder = CreateShipmentRequest.builder()
+                .orderId(0L)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestZeroOrder, authentication));
+    }
 
-                EquipmentOrder order = EquipmentOrder.builder()
-                                .id(1L)
-                                .status("CONFIRMED")
-                                .build();
+    @Test
+    void createShipment_BlankTrackingNumberOrCarrier_ThrowsException() {
+        CreateShipmentRequest requestBlankTracking = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("   ")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestBlankTracking, authentication));
 
-                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
-                when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
-                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        CreateShipmentRequest requestBlankCarrier = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("   ")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestBlankCarrier, authentication));
+    }
 
-                ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request);
+    @Test
+    void createShipment_NullEstimatedDeliveryDate_ThrowsException() {
+        CreateShipmentRequest requestNullDate = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(null)
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestNullDate, authentication));
+    }
 
-                assertNotNull(response);
-                assertEquals("SHIPPED", response.getShipmentStatus());
-                assertEquals("IN_TRANSIT", order.getStatus());
-                assertEquals("Shipped", order.getShippingStatus());
-                assertEquals("Handed to carrier", order.getSupplierNotes());
-                assertNotNull(order.getDispatchedAt());
+    @Test
+    void updateShipmentStatus_ToShipped_Success() {
+        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("SHIPPED")
+                .supplierNotes("Handed to carrier")
+                .build();
 
-                verify(shipmentTrackingRepository).save(shipment);
-                verify(orderRepository).save(order);
-        }
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .orderId(1L)
+                .shipmentStatus(ShipmentStatus.PENDING)
+                .build();
 
-        @Test
-        void updateShipmentStatus_ToDelivered_Success() {
-                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                                .shipmentStatus("DELIVERED")
-                                .build();
+        EquipmentOrder order = EquipmentOrder.builder()
+                .id(1L)
+                .status("CONFIRMED")
+                .build();
 
-                ShipmentTracking shipment = ShipmentTracking.builder()
-                                .id(5L)
-                                .orderId(1L)
-                                .shipmentStatus(ShipmentStatus.SHIPPED)
-                                .build();
+        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+        when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
 
-                EquipmentOrder order = EquipmentOrder.builder()
-                                .id(1L)
-                                .status("IN_TRANSIT")
-                                .build();
+        ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request, authentication);
 
-                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
-                when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
-                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        assertNotNull(response);
+        assertEquals("SHIPPED", response.getShipmentStatus());
+        assertEquals("IN_TRANSIT", order.getStatus());
+        assertEquals("Shipped", order.getShippingStatus());
+        assertEquals("Handed to carrier", order.getSupplierNotes());
+        assertNotNull(order.getDispatchedAt());
 
-                ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request);
+        verify(shipmentTrackingRepository).save(shipment);
+        verify(orderRepository).save(order);
+    }
 
-                assertNotNull(response);
-                assertEquals("DELIVERED", response.getShipmentStatus());
-                assertEquals("DELIVERED", order.getStatus());
-                assertEquals("Delivered", order.getShippingStatus());
-                assertNotNull(order.getDeliveredAt());
-                assertNotNull(shipment.getActualDeliveryDate());
+    @Test
+    void updateShipmentStatus_ToDelivered_Success() {
+        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("DELIVERED")
+                .build();
 
-                verify(shipmentTrackingRepository).save(shipment);
-                verify(orderRepository).save(order);
-        }
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .orderId(1L)
+                .shipmentStatus(ShipmentStatus.SHIPPED)
+                .build();
 
-        @Test
-        void updateShipmentStatus_InvalidTransition_ThrowsException() {
-                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                                .shipmentStatus("PENDING") // Cannot transition back from SHIPPED to PENDING
-                                .build();
+        EquipmentOrder order = EquipmentOrder.builder()
+                .id(1L)
+                .status("IN_TRANSIT")
+                .build();
 
-                ShipmentTracking shipment = ShipmentTracking.builder()
-                                .id(5L)
-                                .shipmentStatus(ShipmentStatus.SHIPPED)
-                                .build();
+        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+        when(shipmentTrackingRepository.save(any(ShipmentTracking.class))).thenReturn(shipment);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
 
-                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
-                doThrow(new InvalidStatusTransitionException("msg")).when(orchestrator).validateStateTransition(any(),
-                                any());
+        ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(5L, request, authentication);
 
-                assertThrows(InvalidStatusTransitionException.class,
-                                () -> shipmentTrackingService.updateShipmentStatus(5L, request));
-                verify(shipmentTrackingRepository, never()).save(any());
-        }
+        assertNotNull(response);
+        assertEquals("DELIVERED", response.getShipmentStatus());
+        assertEquals("DELIVERED", order.getStatus());
+        assertEquals("Delivered", order.getShippingStatus());
+        assertNotNull(order.getDeliveredAt());
+        assertNotNull(shipment.getActualDeliveryDate());
 
-        @Test
-        void updateShipmentStatus_SameStatus_ThrowsException() {
-                UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
-                                .shipmentStatus("SHIPPED") // Same state
-                                .build();
+        verify(shipmentTrackingRepository).save(shipment);
+        verify(orderRepository).save(order);
+    }
 
-                ShipmentTracking shipment = ShipmentTracking.builder()
-                                .id(5L)
-                                .shipmentStatus(ShipmentStatus.SHIPPED)
-                                .build();
+    @Test
+    void updateShipmentStatus_NullRequestOrBlankStatus_ThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.updateShipmentStatus(1L, null, authentication));
 
-                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
-                doThrow(new InvalidStatusTransitionException("msg")).when(orchestrator).validateStateTransition(any(),
-                                any());
+        UpdateShipmentStatusRequest requestBlankStatus = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("  ")
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.updateShipmentStatus(1L, requestBlankStatus, authentication));
+    }
 
-                assertThrows(InvalidStatusTransitionException.class,
-                                () -> shipmentTrackingService.updateShipmentStatus(5L, request));
-                verify(shipmentTrackingRepository, never()).save(any());
-        }
+    @Test
+    void updateShipmentStatus_InvalidTransition_ThrowsException() {
+        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("PENDING") // Cannot transition back from SHIPPED to PENDING
+                .build();
 
-        @Test
-        void getShipmentById_Success() {
-                ShipmentTracking shipment = ShipmentTracking.builder()
-                                .id(5L)
-                                .orderId(1L)
-                                .shipmentTrackingNumber("TRK123")
-                                .shipmentStatus(ShipmentStatus.PENDING)
-                                .build();
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .shipmentStatus(ShipmentStatus.SHIPPED)
+                .build();
 
-                when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
 
-                ShipmentTrackingResponse response = shipmentTrackingService.getShipmentById(5L);
+        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request, authentication));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
 
-                assertNotNull(response);
-                assertEquals(5L, response.getId());
-                assertEquals("TRK123", response.getShipmentTrackingNumber());
-        }
+    @Test
+    void updateShipmentStatus_SameStatus_ThrowsException() {
+        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("SHIPPED") // Same state
+                .build();
+
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .shipmentStatus(ShipmentStatus.SHIPPED)
+                .build();
+
+        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+
+        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request, authentication));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
+
+    @Test
+    void getShipmentById_Success() {
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123")
+                .shipmentStatus(ShipmentStatus.PENDING)
+                .build();
+
+        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+
+        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentById(5L, authentication);
+
+        assertNotNull(response);
+        assertEquals(5L, response.getId());
+        assertEquals("TRK123", response.getShipmentTrackingNumber());
+    }
+
+    @Test
+    void getShipmentById_DeniedForOtherSupplier() {
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .orderId(1L)
+                .supplierId(20L)
+                .shipmentStatus(ShipmentStatus.PENDING)
+                .build();
+
+        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+        when(supplierAccessGuard.resolveCallerId(authentication)).thenReturn(999L);
+        doThrow(new org.springframework.security.access.AccessDeniedException("Not authorized"))
+                .when(supplierAccessGuard).assertSelfOrHospitalAdmin(authentication, 999L, 20L);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> shipmentTrackingService.getShipmentById(5L, authentication));
+    }
+
+    @Test
+    void validateEntityIdsAndTrackingNumbers_InvalidInputs_ThrowException() {
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentById(null, authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentById(-1L, authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentByOrderId(0L, authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentByTrackingNumber("  ", authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentsBySupplier(-5L, null, authentication));
+    }
+
+    @Test
+    void createShipment_StampsResolvedCallerIdNotClientSuppliedSupplierId() {
+        CreateShipmentRequest request = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK999")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
+                .supplierId(999L) // client-supplied value must be ignored
+                .build();
+
+        EquipmentOrder order = EquipmentOrder.builder().id(1L).status("PENDING").build();
+
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK999")).thenReturn(Optional.empty());
+        when(supplierAccessGuard.resolveCallerId(authentication)).thenReturn(10L);
+        when(shipmentTrackingRepository.save(any(ShipmentTracking.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        shipmentTrackingService.createShipment(request, authentication);
+
+        org.mockito.ArgumentCaptor<ShipmentTracking> captor = org.mockito.ArgumentCaptor.forClass(ShipmentTracking.class);
+        verify(shipmentTrackingRepository).save(captor.capture());
+        assertEquals(10L, captor.getValue().getSupplierId());
+    }
 }
