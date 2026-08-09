@@ -10,14 +10,29 @@ import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
+/**
+ * Calendar view over the maintenance schedule of one hospital.
+ *
+ * <p>Every read resolves the hospital from the authenticated user first and every query is scoped
+ * to that hospital, so the calendar cannot surface another tenant's schedule.</p>
+ *
+ * <p>A task's scheduled date is its {@code deadline}: the date the work is due. Overdue and
+ * upcoming are decided against a single "today" captured once per request, so the counts and the
+ * per-row flags in one response can never disagree with each other.</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class MaintenanceCalendarService {
+
+    /** How far ahead {@code /upcoming} looks, in days. */
+    private static final int UPCOMING_WINDOW_DAYS = 30;
 
     private final EquipmentRepository equipmentRepository;
     private final MaintenanceTaskRepository maintenanceTaskRepository;
