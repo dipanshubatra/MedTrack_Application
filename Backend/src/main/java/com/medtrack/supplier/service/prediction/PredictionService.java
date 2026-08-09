@@ -107,7 +107,7 @@ public class PredictionService {
 
         if (shipment.getEstimatedDeliveryDate() != null) {
             long daysToDelivery = ChronoUnit.DAYS.between(LocalDateTime.now(), shipment.getEstimatedDeliveryDate());
-            if (daysToDelivery < 2 && shipment.getShipmentStatus() == ShipmentStatus.IN_TRANSIT) {
+            if (daysToDelivery < 2 && shipment.getShipmentStatus() == ShipmentStatus.SHIPPED) {
                 riskScore += 30.0;
                 riskFactor = "Close to delivery date but still in transit";
             }
