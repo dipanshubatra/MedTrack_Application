@@ -1,7 +1,9 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.SparePartCreateRequest;
+import com.medtrack.dto.SparePartResponse;
 import com.medtrack.dto.SparePartStockRequest;
-import com.medtrack.model.SparePart;
+import com.medtrack.dto.SparePartUpdateRequest;
 import com.medtrack.service.SparePartService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -53,14 +55,6 @@ public class SparePartController {
     @PostMapping("/deduct")
     @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
     public ResponseEntity<SparePartResponse> deductStock(
-            @Valid @RequestBody SparePartDeductRequest request,
-            Authentication authentication) {
-        return ResponseEntity.ok(sparePartService.deductStock(request, authentication.getName()));
-    }
-
-    @PostMapping("/deduct")
-    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
-    public ResponseEntity<SparePart> deductStock(
             @Valid @RequestBody SparePartStockRequest request,
             Authentication authentication) {
         return ResponseEntity.ok(sparePartService.deductStock(request, authentication.getName()));
@@ -68,7 +62,7 @@ public class SparePartController {
 
     @PostMapping("/restock")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<SparePart> restockSparePart(
+    public ResponseEntity<SparePartResponse> restockSparePart(
             @Valid @RequestBody SparePartStockRequest request,
             Authentication authentication) {
         return ResponseEntity.ok(sparePartService.restockSparePart(request, authentication.getName()));
@@ -81,23 +75,5 @@ public class SparePartController {
             Authentication authentication) {
         sparePartService.deleteSparePart(id, authentication.getName());
         return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/deduct")
-    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
-    public ResponseEntity<Void> deductStock(
-            @Valid @RequestBody SparePartDeductRequest request,
-            Authentication authentication) {
-        sparePartService.deductStock(request.getPartNumber(), request.getQuantity(), authentication.getName());
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/restock")
-    @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Void> restockStock(
-            @Valid @RequestBody SparePartDeductRequest request,
-            Authentication authentication) {
-        sparePartService.restockStock(request.getPartNumber(), request.getQuantity(), authentication.getName());
-        return ResponseEntity.ok().build();
     }
 }
