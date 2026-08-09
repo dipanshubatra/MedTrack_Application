@@ -45,160 +45,95 @@ public class EquipmentFinancialService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
 
-    /**
-     * Fleet-wide valuation for the caller's hospital: one row per asset plus the totals across
-     * them.
-     */
-    @Transactional(readOnly = true)
+    private Hospital getHospitalForUser(String usernameOrEmail) {
+        User user = userRepository.findByEmail(usernameOrEmail)
+                .orElseGet(() -> userRepository.findByUsername(usernameOrEmail)
+                        .orElseThrow(() -> new ResourceNotFoundException("User not found: " + usernameOrEmail)));
+
+        return hospitalRepository.findByUserId(user.getId())
+                .orElseGet(() -> hospitalRepository.findByEmail(usernameOrEmail)
+                        .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + usernameOrEmail)));
+    }
+
     public EquipmentFinancialDashboardResponse getFinancialDashboard(String username) {
-
         Hospital hospital = getHospitalForUser(username);
+        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
 
-        // One query for the whole fleet. Valuing each asset through the single-asset endpoint
-        // re-resolved the user, the hospital and the equipment row for every item, which is three
-        // extra queries per asset for data already in hand.
-        List<EquipmentFinancialResponse> equipment =
-                equipmentRepository.findByHospitalId(hospital.getId()).stream()
-                        .map(this::toFinancialResponse)
-                        .toList();
+        EquipmentFinancialSummary summary = new EquipmentFinancialSummary();
+        EquipmentFinancialDashboardResponse response = new EquipmentFinancialDashboardResponse();
+        response.setGeneratedAt(LocalDateTime.now());
+        response.setGeneratedBy(username);
 
-        double totalAssetValue = 0;
-        double currentAssetValue = 0;
-        double totalDepreciation = 0;
+        double totalAssetValue = 0, currentAssetValue = 0, totalDepreciation = 0;
         long replacementRecommended = 0;
+        List<EquipmentFinancialResponse> responses = new ArrayList<>();
 
-        for (EquipmentFinancialResponse item : equipment) {
+        for (Equipment equipment : equipmentList) {
+            EquipmentFinancialResponse item = getEquipmentFinancialAnalysis(equipment.getId(), username);
+            responses.add(item);
             totalAssetValue += item.getPurchaseCost();
             currentAssetValue += item.getCurrentValue();
             totalDepreciation += item.getDepreciationAmount();
-
-            if (DepreciationCalculator.needsReplacement(
-                    item.getRemainingUsefulLife(), item.getDepreciationPercentage())) {
-                replacementRecommended++;
-            }
+            if (item.getRemainingUsefulLife() <= 1) replacementRecommended++;
         }
 
-        EquipmentFinancialSummary summary = new EquipmentFinancialSummary();
-        summary.setTotalEquipment((long) equipment.size());
+        summary.setTotalEquipment((long) equipmentList.size());
         summary.setTotalAssetValue(totalAssetValue);
         summary.setCurrentAssetValue(currentAssetValue);
         summary.setTotalDepreciation(totalDepreciation);
-        summary.setAverageDepreciation(
-                equipment.isEmpty() ? 0 : totalDepreciation / equipment.size());
+        summary.setAverageDepreciation(equipmentList.isEmpty() ? 0 : totalDepreciation / equipmentList.size());
         summary.setReplacementRecommended(replacementRecommended);
 
         EquipmentFinancialDashboardResponse response = new EquipmentFinancialDashboardResponse();
         response.setGeneratedAt(LocalDateTime.now());
         response.setGeneratedBy(username);
         response.setSummary(summary);
-        response.setEquipment(equipment);
-
+        response.setEquipment(responses);
         return response;
     }
 
-    /** Valuation of a single asset, provided it belongs to the caller's hospital. */
-    @Transactional(readOnly = true)
-    public EquipmentFinancialResponse getEquipmentFinancialAnalysis(
-            Long equipmentId,
-            String username) {
-
+    public EquipmentFinancialResponse getEquipmentFinancialAnalysis(Long equipmentId, String username) {
         Hospital hospital = getHospitalForUser(username);
-
-        Equipment equipment = equipmentRepository
-                .findByIdAndHospitalId(equipmentId, hospital.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Equipment not found."));
-
-        return toFinancialResponse(equipment);
-    }
-
-    /**
-     * Assets that are within a year of end of life or almost fully written down, most urgent
-     * first. This is what {@code GET /api/equipment/replacement-recommendations} serves; the
-     * endpoint has been in the controller since the module was added but the method behind it was
-     * never written, so the mapping could not be dispatched.
-     */
-    @Transactional(readOnly = true)
-    public List<EquipmentFinancialResponse> getReplacementRecommendations(String username) {
-
-        Hospital hospital = getHospitalForUser(username);
-
-        return equipmentRepository.findByHospitalId(hospital.getId()).stream()
-                .map(this::toFinancialResponse)
-                .filter(item -> DepreciationCalculator.needsReplacement(
-                        item.getRemainingUsefulLife(), item.getDepreciationPercentage()))
-                .sorted(Comparator.comparingInt(
-                        (EquipmentFinancialResponse item) -> DepreciationCalculator.replacementScore(
-                                item.getRemainingUsefulLife(), item.getDepreciationPercentage()))
-                        .reversed()
-                        .thenComparing(EquipmentFinancialResponse::getEquipmentId))
-                .toList();
-    }
-
-    /**
-     * Maps one asset onto its valuation. Every financial field is populated here; the identity
-     * fields alone are not a financial analysis, and a response missing them reads to the client
-     * as an asset worth nothing.
-     */
-    private EquipmentFinancialResponse toFinancialResponse(Equipment equipment) {
-
-        double purchaseCost = toDouble(equipment.getPurchaseCost());
-
-        // Equipment has no salvage column. Assume a residual tenth of the purchase price and
-        // report the figure used, so the client is not left to guess at the assumption.
-        double salvageValue = purchaseCost * DEFAULT_SALVAGE_RATE;
-
-        Integer recordedLife = equipment.getUsefulLifeYears();
-        int usefulLife = (recordedLife == null || recordedLife <= 0)
-                ? DEFAULT_USEFUL_LIFE_YEARS
-                : recordedLife;
-
-        double currentValue = DepreciationCalculator.calculateCurrentValue(
-                purchaseCost, salvageValue, usefulLife, equipment.getPurchaseDate());
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(equipmentId, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Equipment not found with ID: " + equipmentId));
 
         EquipmentFinancialResponse response = new EquipmentFinancialResponse();
-
         response.setEquipmentId(equipment.getId());
         response.setEquipmentName(equipment.getName());
         response.setEquipmentCode(equipment.getEquipmentCode());
         response.setDepartment(equipment.getDepartment());
-        // Category is optional on the entity, so read the name defensively rather than dropping
-        // the whole request with a NullPointerException on an asset that was never categorised.
-        response.setCategory(equipment.getCategory() == null ? null : equipment.getCategory().name());
+        response.setCategory(equipment.getCategory() != null ? equipment.getCategory().name() : "OTHER");
         response.setPurchaseDate(equipment.getPurchaseDate());
+
+        double purchaseCost = equipment.getPurchaseCost() != null ? equipment.getPurchaseCost() : 100000.0;
+        double salvageValue = equipment.getSalvageValue() != null ? equipment.getSalvageValue() : purchaseCost * 0.10;
+        int usefulLife = equipment.getUsefulLifeYears() != null ? equipment.getUsefulLifeYears() : 10;
+
+        double currentValue = DepreciationCalculator.calculateCurrentValue(purchaseCost, salvageValue, usefulLife, equipment.getPurchaseDate());
+        double depreciation = DepreciationCalculator.calculateDepreciationAmount(purchaseCost, currentValue);
+        double depreciationPercentage = DepreciationCalculator.calculateDepreciationPercentage(purchaseCost, currentValue);
+        int remainingLife = DepreciationCalculator.calculateRemainingUsefulLife(usefulLife, equipment.getPurchaseDate());
 
         response.setPurchaseCost(purchaseCost);
         response.setCurrentValue(currentValue);
-        response.setDepreciationAmount(
-                DepreciationCalculator.calculateDepreciationAmount(purchaseCost, currentValue));
-        response.setDepreciationPercentage(
-                DepreciationCalculator.calculateDepreciationPercentage(purchaseCost, currentValue));
+        response.setDepreciationAmount(depreciation);
+        response.setDepreciationPercentage(depreciationPercentage);
         response.setUsefulLifeYears(usefulLife);
-        response.setRemainingUsefulLife(DepreciationCalculator.calculateRemainingUsefulLife(
-                usefulLife, equipment.getPurchaseDate()));
+        response.setRemainingUsefulLife(remainingLife);
         response.setSalvageValue(salvageValue);
-        response.setDepreciationMethod(methodName(equipment.getDepreciationMethod()));
-
+        response.setDepreciationMethod("STRAIGHT_LINE");
         return response;
     }
 
-    private Hospital getHospitalForUser(String username) {
+    public List<EquipmentFinancialResponse> getReplacementRecommendations(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
 
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
-
-        return hospitalRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found."));
-    }
-
-    /**
-     * Purchase cost is a nullable BigDecimal on the entity - null means the finance fields were
-     * never filled in, which is an asset with no cost tracked rather than an error.
-     */
-    private static double toDouble(BigDecimal value) {
-        return value == null ? 0.0 : value.doubleValue();
-    }
-
-    private static String methodName(DepreciationMethod method) {
-        return (method == null ? DepreciationMethod.STRAIGHT_LINE : method).name();
+        List<EquipmentFinancialResponse> recommendations = new ArrayList<>();
+        for (Equipment equipment : equipmentList) {
+            EquipmentFinancialResponse item = getEquipmentFinancialAnalysis(equipment.getId(), username);
+            if (item.getRemainingUsefulLife() <= 1) recommendations.add(item);
+        }
+        return recommendations;
     }
 }

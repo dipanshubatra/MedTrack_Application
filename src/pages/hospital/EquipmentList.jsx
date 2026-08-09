@@ -21,7 +21,13 @@ import {
   recordDataSanitization,
   completeDisposal,
   downloadDisposalCertificate,
+  // Facility locations (issue #745): the tree feeds the filter and the assign form, and the
+  // history/assign calls back the location panel on the detail drawer.
+  getLocationTree,
+  getEquipmentLocationHistory,
+  assignEquipmentToLocation,
 } from "../../services/EquipmentService";
+import { getBreadcrumbPath } from "../../components/hospital/LocationPicker";
 import {
   IMPORT_HEADERS,
   IMPORT_COLUMN_GUIDANCE,
