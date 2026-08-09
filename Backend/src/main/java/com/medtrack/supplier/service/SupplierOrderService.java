@@ -8,6 +8,7 @@ import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +43,9 @@ public class SupplierOrderService {
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final SupplierAccessGuard supplierAccessGuard;
     private final SupplierPerformanceService supplierPerformanceService;
+    private final SupplierAuditLogService auditLogService;
+    private final ShipmentWorkflowOrchestrator orchestrator;
+    private final MetricsService metricsService;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -145,13 +150,14 @@ public class SupplierOrderService {
 
         ShipmentStatus requestedStatus;
         try {
-            requestedStatus = ShipmentStatus.valueOf(newStatus.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid status: " + newStatus);
-        }
-
-        EquipmentOrder order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+            return metricsService.recordProcessingLatency("updateOrderStatus", () -> {
+                Set<String> publishedEvents = new HashSet<>();
+                if (orderId == null || orderId <= 0) {
+                    throw new IllegalArgumentException("Invalid resource ID.");
+                }
+                if (newStatus == null || newStatus.isEmpty()) {
+                    throw new IllegalArgumentException("Status cannot be blank");
+                }
 
         // If a supplier has already been assigned to this order (a shipment tracking record
         // exists), only that supplier - or a HOSPITAL admin - may advance its status. This
@@ -170,24 +176,7 @@ public class SupplierOrderService {
                     "Legacy order status is not valid for transitions: " + currentStatusStr);
         }
 
-        if (currentStatus == requestedStatus) {
-            throw new InvalidStatusTransitionException("State transition from " + currentStatus + " to "
-                    + requestedStatus + " is same-state and not allowed.");
-        }
-
-        boolean isValidTransition = false;
-        if (currentStatus == ShipmentStatus.PENDING && requestedStatus == ShipmentStatus.CONFIRMED) {
-            isValidTransition = true;
-        } else if (currentStatus == ShipmentStatus.CONFIRMED && requestedStatus == ShipmentStatus.SHIPPED) {
-            isValidTransition = true;
-        } else if (currentStatus == ShipmentStatus.SHIPPED && requestedStatus == ShipmentStatus.DELIVERED) {
-            isValidTransition = true;
-        }
-
-        if (!isValidTransition) {
-            throw new InvalidStatusTransitionException(
-                    "Invalid status transition from " + currentStatus + " to " + requestedStatus);
-        }
+        orchestrator.validateStateTransition(currentStatus, requestedStatus);
 
         // Process Shipment state additions
         if (requestedStatus == ShipmentStatus.SHIPPED) {
@@ -206,9 +195,14 @@ public class SupplierOrderService {
                 shipment.setShipmentTrackingNumber(generateUniqueTrackingNumber());
             }
 
-            if (shipment.getEstimatedDeliveryDate() == null) {
-                shipment.setEstimatedDeliveryDate(LocalDateTime.now().plusDays(3));
-            }
+                String currentStatusStr = order.getStatus();
+                ShipmentStatus currentStatus;
+                try {
+                    currentStatus = ShipmentStatus.valueOf(currentStatusStr.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new InvalidStatusTransitionException(
+                            "Legacy order status is not valid for transitions: " + currentStatusStr);
+                }
 
             shipment.setShipmentStatus(ShipmentStatus.SHIPPED);
             shipment.setUpdatedAt(LocalDateTime.now());
@@ -245,10 +239,24 @@ public class SupplierOrderService {
             scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
         }
 
-        order.setStatus(requestedStatus.name());
-        order.setUpdatedAt(LocalDateTime.now());
+                order.setStatus(requestedStatus.name());
+                order.setUpdatedAt(LocalDateTime.now());
 
-        return orderRepository.save(order);
+                auditLogService.logAction(orderId, resolveSupplierId(), "STATUS_UPDATE",
+                        "Order status transitioned to " + requestedStatus.name(), resolveCurrentUsername());
+
+                metricsService.incrementOrdersProcessed();
+                log.info("Successfully completed status update for orderId={} to {}", orderId, requestedStatus);
+                return orderRepository.save(order);
+            });
+        } catch (Exception e) {
+            log.error("Failed to update order status for orderId={}: {}", orderId, e.getMessage(), e);
+            metricsService.incrementFailedRequests();
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            }
+            throw new RuntimeException(e);
+        }
     }
 
     private String generateUniqueTrackingNumber() {
@@ -300,6 +308,7 @@ public class SupplierOrderService {
                         .build();
                 log.info("Publishing OrderShippedEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
+                metricsService.incrementKafkaPublish();
             } else if (status == ShipmentStatus.DELIVERED) {
                 com.medtrack.supplier.event.OrderDeliveredEvent event = com.medtrack.supplier.event.OrderDeliveredEvent
                         .builder()
@@ -314,11 +323,15 @@ public class SupplierOrderService {
                         .build();
                 log.info("Publishing OrderDeliveredEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
+                metricsService.incrementKafkaPublish();
                 supplierPerformanceService.publishPerformanceUpdate(shipment.getSupplierId());
             }
+            orchestrator.markOperationSuccessful(orderId, "EVENT_PUBLISH");
         } catch (Exception e) {
+            metricsService.incrementFailedRequests();
             log.error("Failed to publish Kafka event for order ID: [{}], status: [{}] due to error: {}",
                     orderId, status, e.getMessage(), e);
+            orchestrator.registerPendingOperation(orderId, "EVENT_PUBLISH", "{}", e.getMessage());
         }
     }
 }

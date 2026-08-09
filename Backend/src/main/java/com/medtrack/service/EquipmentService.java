@@ -93,7 +93,12 @@ public class EquipmentService {
     };
 
     private Hospital getHospitalForUser(String username) {
-        User user = userRepository.findByUsername(username)
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username or email is required");
+        }
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
@@ -1746,6 +1751,16 @@ public class EquipmentService {
         if (equipment.getDeletedAt() != null && equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
             throw new IllegalStateException("Equipment cannot be permanently deleted until 90 days after archival");
         }
+
+        equipmentAuditService.logAction(
+                equipment,
+                hospital,
+                username,
+                "DELETE",
+                "ALL",
+                "Equipment existed",
+                "Deleted"
+        );
 
         equipmentRepository.delete(equipment);
 
