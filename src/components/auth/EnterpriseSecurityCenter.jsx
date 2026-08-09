@@ -108,6 +108,7 @@ import BiomedicalDifferentialPrivacyPanel from "./BiomedicalDifferentialPrivacyP
 import BiomedicalBasPenetrationTestingPanel from "./BiomedicalBasPenetrationTestingPanel";
 import BiomedicalAiAgentGovernancePanel from "./BiomedicalAiAgentGovernancePanel";
 import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
+import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -473,7 +474,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal },
           { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target },
           { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot },
-          { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound }
+          { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound },
+          { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1054,6 +1056,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 44: BIOMEDICAL ZKP VERIFIABLE EHR & CREDENTIALS */}
       {selectedTab === "zkpehr" && (
         <BiomedicalZkpVerifiableEhrPanel />
+      )}
+
+      {/* TAB 45: BIOMEDICAL HSM KEY MANAGEMENT & FIPS ATTESTATION */}
+      {selectedTab === "hsmattest" && (
+        <BiomedicalHsmAttestationPanel />
       )}
 
       {/* 4. MODALS */}
