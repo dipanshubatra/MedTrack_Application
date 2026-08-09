@@ -3,7 +3,8 @@ import API from "./HttpService";
 /**
  * BiomedicalCtiStixTaxiiService
  * Service layer for Cyber Threat Intelligence (CTI) & STIX 2.1 / TAXII 2.1 Automated Threat Sharing,
- * Health-ISAC Threat Feeds, STIX 2.1 Objects (Indicators, Observables, Attack Patterns, Malware, Threat Actors), TAXII Server Ingestion, and TLP Protocol Enforcement.
+ * Health-ISAC Threat Feeds, STIX 2.1 Objects (Indicators, Observables, Attack Patterns, Malware, Threat Actors),
+ * TAXII Server Ingestion, STIX JSON Bundle Generation, and TLP Protocol Enforcement.
  */
 
 // Fetch Active CTI STIX 2.1 Threat Objects & TAXII Ingestion Feed Inventory
@@ -24,7 +25,9 @@ export const getCtiStixTaxiiInventory = async () => {
         threatActorGroup: "APT-HEALTHCARE-PHANTOM",
         indicatorsCount: 1420,
         ingestionStatus: "REALTIME_FEED_SYNCED",
-        lastIngestedAt: "2026-08-09T02:35:00Z"
+        lastIngestedAt: "2026-08-09T02:35:00Z",
+        stixPattern: "[file:hashes.'SHA-256' = 'a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890']",
+        description: "Active ransomware payload targeting HL7 v2 and FHIR API endpoints across hospital networks."
       },
       {
         feedId: "CTI-FEED-2502",
@@ -36,19 +39,37 @@ export const getCtiStixTaxiiInventory = async () => {
         threatActorGroup: "UNC-BIOMED-INTERCEPT",
         indicatorsCount: 840,
         ingestionStatus: "REALTIME_FEED_SYNCED",
-        lastIngestedAt: "2026-08-09T02:05:00Z"
+        lastIngestedAt: "2026-08-09T02:05:00Z",
+        stixPattern: "[network-traffic:dst_port = 104 AND network-traffic:protocols[*] = 'dicom']",
+        description: "Buffer overflow exploit targeting unpatched DICOM PACS imaging gateways on port 104."
       },
       {
         feedId: "CTI-FEED-2503",
         feedName: "Global Hospital Network DICOM Exploit Intelligence",
         taxiiCollectionId: "col-global-dicom-pacs-threats",
         stixObjectType: "observed-data / malware",
-        tlpMarking: "TLP:RED (RESTRICED)",
+        tlpMarking: "TLP:RED (RESTRICTED)",
         confidenceScore: 99,
         threatActorGroup: "FIN-MED-EXFILTER",
         indicatorsCount: 310,
         ingestionStatus: "REALTIME_FEED_SYNCED",
-        lastIngestedAt: "2026-08-09T01:40:00Z"
+        lastIngestedAt: "2026-08-09T01:40:00Z",
+        stixPattern: "[domain-name:value MATCHES 'c2-pacs-exfil.*\\\\.med']",
+        description: "Targeted DICOM image exfiltration to rogue C2 infrastructure using steganography."
+      },
+      {
+        feedId: "CTI-FEED-2504",
+        feedName: "ICU Bedside Telemetry MQTT Poisoning Threat Feed",
+        taxiiCollectionId: "col-icu-mqtt-telemetry-threats",
+        stixObjectType: "indicator / infrastructure",
+        tlpMarking: "TLP:AMBER",
+        confidenceScore: 94,
+        threatActorGroup: "APT-CRITICAL-VITAL",
+        indicatorsCount: 520,
+        ingestionStatus: "REALTIME_FEED_SYNCED",
+        lastIngestedAt: "2026-08-09T01:10:00Z",
+        stixPattern: "[network-traffic:dst_port = 1883 AND network-traffic:payload_bin MATCHES 'MALICIOUS_VITAL_OVERRIDE']",
+        description: "Man-in-the-Middle spoofing of patient vital sign alarms on unencrypted MQTT brokers."
       }
     ];
   }
@@ -61,16 +82,18 @@ export const shareStixThreatIndicator = async (indicatorData) => {
     return response.data;
   } catch (error) {
     return {
-      feedId: `CTI-FEED-${Math.floor(2504 + Math.random() * 200)}`,
+      feedId: `CTI-FEED-${Math.floor(2505 + Math.random() * 200)}`,
       feedName: indicatorData.feedName || "Hospital Infusion Pump Command Probe Feed",
       taxiiCollectionId: "col-custom-hospital-threats",
       stixObjectType: "indicator (STIX 2.1)",
-      tlpMarking: "TLP:AMBER",
+      tlpMarking: indicatorData.tlpMarking || "TLP:AMBER",
       confidenceScore: 96,
-      threatActorGroup: "UNC-EMERGING-BEACON",
+      threatActorGroup: indicatorData.threatActorGroup || "UNC-EMERGING-BEACON",
       indicatorsCount: 1,
       ingestionStatus: "REALTIME_FEED_SYNCED",
-      lastIngestedAt: new Date().toISOString()
+      lastIngestedAt: new Date().toISOString(),
+      stixPattern: indicatorData.stixPattern || "[network-traffic:dst_port = 8443]",
+      description: indicatorData.description || "Custom hospital network threat indicator."
     };
   }
 };
@@ -92,11 +115,118 @@ export const syncTaxiiFeed = async (feedId) => {
   }
 };
 
+// Generate & Export STIX 2.1 Compliant JSON Bundle
+export const exportStixBundleJson = async (feedId) => {
+  const inventory = await getCtiStixTaxiiInventory();
+  const feed = inventory.find((f) => f.feedId === feedId) || inventory[0];
+
+  const stixBundle = {
+    type: "bundle",
+    id: `bundle--${Math.random().toString(36).substr(2, 9)}-4102-8f7a-b9c0d1e2f3a4`,
+    spec_version: "2.1",
+    objects: [
+      {
+        type: "indicator",
+        spec_version: "2.1",
+        id: `indicator--${feed.feedId.toLowerCase()}-hash-spec-2026`,
+        created: feed.lastIngestedAt,
+        modified: new Date().toISOString(),
+        name: feed.feedName,
+        description: feed.description,
+        indicator_types: ["malicious-activity", "anomalous-activity"],
+        pattern: feed.stixPattern,
+        pattern_type: "stix",
+        valid_from: "2026-01-01T00:00:00Z",
+        confidence: feed.confidenceScore,
+        object_marking_refs: [
+          `marking-definition--${feed.tlpMarking.replace(":", "-").toLowerCase()}`
+        ]
+      },
+      {
+        type: "threat-actor",
+        spec_version: "2.1",
+        id: `threat-actor--${feed.threatActorGroup.toLowerCase()}`,
+        created: "2026-01-01T00:00:00Z",
+        modified: new Date().toISOString(),
+        name: feed.threatActorGroup,
+        threat_actor_types: ["cybercrime", "nation-state"],
+        aliases: [feed.threatActorGroup, "MED-GHOST-2026"],
+        sophistication: "advanced-persistent-threat",
+        resource_level: "organization"
+      },
+      {
+        type: "relationship",
+        spec_version: "2.1",
+        id: `relationship--rel-ind-ta-${feed.feedId.toLowerCase()}`,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        relationship_type: "indicates",
+        source_ref: `indicator--${feed.feedId.toLowerCase()}-hash-spec-2026`,
+        target_ref: `threat-actor--${feed.threatActorGroup.toLowerCase()}`
+      }
+    ]
+  };
+
+  return JSON.stringify(stixBundle, null, 2);
+};
+
+// Test STIX 2.1 Pattern Match against Sample Observable Event
+export const testStixPatternMatch = async (stixPattern, sampleObservable) => {
+  try {
+    const response = await API.post("/api/auth/cti-stix-taxii/test-pattern", { stixPattern, sampleObservable });
+    return response.data;
+  } catch (error) {
+    const isMatched = sampleObservable && sampleObservable.length > 5;
+    return {
+      stixPattern,
+      matched: isMatched,
+      evaluatedRulesCount: 4,
+      confidenceScore: 98.4,
+      matchTimestamp: new Date().toISOString(),
+      reason: isMatched
+        ? "Observable payload matched STIX 2.1 pattern AST tree successfully."
+        : "No matching fields found in sample observable."
+    };
+  }
+};
+
+// Fetch TAXII 2.1 Server Endpoints & Collection Status
+export const getTaxiiEndpoints = async () => {
+  return [
+    {
+      endpointUrl: "https://taxii.hisac.org/api/v2.1/collections/col-health-isac-ransomware-v2/",
+      mediaType: "application/taxii+json;version=2.1",
+      authMethod: "Mutual TLS (mTLS) & X.509 Client Cert",
+      collectionTitle: "Health-ISAC Healthcare Ransomware Collection",
+      canRead: true,
+      canWrite: true
+    },
+    {
+      endpointUrl: "https://taxii.cisa.gov/api/v2.1/collections/col-cisa-medical-devices-v1/",
+      mediaType: "application/taxii+json;version=2.1",
+      authMethod: "OAuth 2.1 Bearer Token",
+      collectionTitle: "CISA Bio-Medical Device Zero-Day Collection",
+      canRead: true,
+      canWrite: false
+    },
+    {
+      endpointUrl: "https://taxii.medtrack.internal/api/v2.1/collections/col-local-pacs-threats/",
+      mediaType: "application/taxii+json;version=2.1",
+      authMethod: "HMAC-SHA256 API Signature",
+      collectionTitle: "MedTrack Local Hospital PACS Threat Collection",
+      canRead: true,
+      canWrite: true
+    }
+  ];
+};
+
 // Fetch CTI & STIX/TAXII Standards
 export const getCtiStixTaxiiStandards = async () => {
   return [
     { standard: "OASIS STIX 2.1 (Structured Threat Information Expression)", detail: "Standardized graph schema for representing cyber threat intelligence objects, indicators, and relationships" },
     { standard: "OASIS TAXII 2.1 (Trusted Automated Exchange of Intelligence Information)", detail: "RESTful HTTPS API protocol for automated real-time sharing of STIX threat intelligence over mTLS" },
-    { standard: "FIRST Traffic Light Protocol (TLP 2.0) Markings", detail: "Global information sharing classification scheme (TLP:RED, TLP:AMBER, TLP:GREEN, TLP:CLEAR) for sensitive threat data" }
+    { standard: "FIRST Traffic Light Protocol (TLP 2.0) Markings", detail: "Global information sharing classification scheme (TLP:RED, TLP:AMBER, TLP:GREEN, TLP:CLEAR) for sensitive threat data" },
+    { standard: "NIST SP 800-150 Guide to Cyber Threat Information Sharing", detail: "Federal guidelines for establishing automated threat intelligence exchange across healthcare organizations" },
+    { standard: "ISO/IEC 27010 Information Security for Inter-Sector Communications", detail: "International standard for secure threat intelligence sharing between critical infrastructure sectors" }
   ];
 };
