@@ -14,6 +14,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.medtrack.model.EquipmentOrder;
+import com.medtrack.repository.EquipmentOrderRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -35,6 +37,9 @@ public class DeliveryDelayDetectionService {
     private static final Logger log = LoggerFactory.getLogger(DeliveryDelayDetectionService.class);
 
     private final ShipmentTrackingRepository shipmentTrackingRepository;
+    private final EquipmentOrderRepository orderRepository;
+    private final SupplierPerformanceService supplierPerformanceService;
+    private final SupplierAuditLogService auditLogService;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -95,6 +100,10 @@ public class DeliveryDelayDetectionService {
                 saved.getEstimatedDeliveryDate(), detectedAt);
 
         publishDelayEvent(saved, detectedAt);
+        supplierPerformanceService.publishPerformanceUpdate(saved.getSupplierId());
+
+        auditLogService.logAction(saved.getOrderId(), saved.getSupplierId(), "DELAY_DETECTED",
+                "System detected delivery delay for shipment " + saved.getShipmentTrackingNumber(), "SYSTEM");
     }
 
     private void publishDelayEvent(ShipmentTracking shipment, LocalDateTime detectedAt) {
@@ -103,6 +112,11 @@ public class DeliveryDelayDetectionService {
             return;
         }
         try {
+            EquipmentOrder order = orderRepository.findById(shipment.getOrderId()).orElse(null);
+            String hospital = order != null ? order.getHospital() : null;
+            String equipmentName = order != null ? order.getEquipmentName() : null;
+            Integer quantity = order != null ? order.getQuantity() : null;
+
             ShipmentDelayedEvent event = ShipmentDelayedEvent.builder()
                     .shipmentId(shipment.getId())
                     .orderId(shipment.getOrderId())
@@ -110,6 +124,9 @@ public class DeliveryDelayDetectionService {
                     .shipmentTrackingNumber(shipment.getShipmentTrackingNumber())
                     .estimatedDeliveryDate(shipment.getEstimatedDeliveryDate())
                     .detectedAt(detectedAt)
+                    .hospital(hospital)
+                    .equipmentName(equipmentName)
+                    .quantity(quantity)
                     .build();
             kafkaTemplate.send(delayEventsTopic, String.valueOf(shipment.getId()), event);
             log.info("Published ShipmentDelayedEvent for shipment ID: {}", shipment.getId());
