@@ -28,7 +28,7 @@ public class RecommendationService {
         // 1. Analyze high risk shipments
         List<ShipmentTracking> activeShipments = shipmentTrackingRepository.findBySupplierIdAndShipmentStatusIn(
                 supplierId,
-                List.of(ShipmentStatus.IN_TRANSIT, ShipmentStatus.SHIPPED, ShipmentStatus.PROCESSING));
+                List.of(ShipmentStatus.PENDING, ShipmentStatus.CONFIRMED, ShipmentStatus.SHIPPED));
 
         for (ShipmentTracking st : activeShipments) {
             ShipmentRiskDTO risk = predictionService.calculateShipmentRisk(supplierId, st.getOrderId());

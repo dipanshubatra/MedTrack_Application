@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -103,7 +104,11 @@ public class SupplierController {
         })
         public ResponseEntity<java.util.List<EquipmentOrder>> bulkUpdateOrderStatus(
                         @jakarta.validation.Valid @RequestBody BulkStatusUpdateRequest request) {
+
+                log.info("Incoming request for bulk status update: orders={}, newStatus={}", request.getOrderIds(),
+                                request.getStatus());
                 java.util.List<EquipmentOrder> updatedOrders = supplierOrderService.bulkUpdateOrderStatus(request);
+                log.info("Successfully performed bulk status update for {} orders", updatedOrders.size());
                 return ResponseEntity.ok(updatedOrders);
         }
 

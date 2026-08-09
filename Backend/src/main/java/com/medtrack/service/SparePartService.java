@@ -221,4 +221,20 @@ public class SparePartService {
             throw new IllegalArgumentException("Unit cost cannot be negative");
         }
     }
+
+    @Transactional
+    public void restockStock(String partNumber, int quantity, String username) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Restock quantity must be positive");
+        }
+        Hospital hospital = getHospitalForUser(username);
+        List<SparePart> parts = sparePartRepository.findByHospitalId(hospital.getId());
+        SparePart partToRestock = parts.stream()
+                .filter(p -> p.getPartNumber().equals(partNumber))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Spare part not found: " + partNumber));
+
+        partToRestock.setStockLevel(partToRestock.getStockLevel() + quantity);
+        sparePartRepository.save(partToRestock);
+    }
 }

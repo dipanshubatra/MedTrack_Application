@@ -82,4 +82,22 @@ public class SparePartController {
         sparePartService.deleteSparePart(id, authentication.getName());
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/deduct")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<Void> deductStock(
+            @Valid @RequestBody SparePartDeductRequest request,
+            Authentication authentication) {
+        sparePartService.deductStock(request.getPartNumber(), request.getQuantity(), authentication.getName());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/restock")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> restockStock(
+            @Valid @RequestBody SparePartDeductRequest request,
+            Authentication authentication) {
+        sparePartService.restockStock(request.getPartNumber(), request.getQuantity(), authentication.getName());
+        return ResponseEntity.ok().build();
+    }
 }

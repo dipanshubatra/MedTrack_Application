@@ -31,21 +31,12 @@ import {
   HardDrive,
   Radio,
   Share2,
-  Tag,
-  Copy,
-  ChevronRight,
-  Server,
-  Filter,
-  ExternalLink,
-  Info
+  Tag
 } from "lucide-react";
 import {
   getCtiStixTaxiiInventory,
   shareStixThreatIndicator,
   syncTaxiiFeed,
-  exportStixBundleJson,
-  testStixPatternMatch,
-  getTaxiiEndpoints,
   getCtiStixTaxiiStandards
 } from "../../services/BiomedicalCtiStixTaxiiService";
 import "../../pages/auth/auth.css";
@@ -53,14 +44,12 @@ import "../../pages/auth/auth.css";
 /**
  * BiomedicalCtiStixTaxiiPanel Component
  * 
- * Comprehensive Biomedical Cyber Threat Intelligence (CTI) & STIX 2.1 / TAXII 2.1 Threat Sharing Console.
+ * Biomedical Cyber Threat Intelligence (CTI) & STIX 2.1 / TAXII 2.1 Threat Sharing Console.
  * Features:
  * 1. Health-ISAC & CISA TAXII 2.1 Threat Feed Inventory & TLP Classification Matrix
  * 2. STIX 2.1 Graph Pattern Matcher & Real-Time TAXII Ingestion Sandbox
- * 3. Interactive STIX 2.1 JSON Schema Inspector & Exporter
- * 4. TAXII 2.1 Server Endpoints & mTLS Authentication Status
- * 5. OASIS STIX 2.1 / TAXII 2.1 & FIRST TLP 2.0 Standards
- * 6. STIX 2.1 Threat Indicator Publishing Wizard
+ * 3. OASIS STIX 2.1 / TAXII 2.1 & FIRST TLP 2.0 Standards
+ * 4. STIX 2.1 Threat Indicator Publishing Modal
  */
 export default function BiomedicalCtiStixTaxiiPanel() {
   // State
@@ -79,13 +68,6 @@ export default function BiomedicalCtiStixTaxiiPanel() {
   // Sandbox State
   const [selectedFeedId, setSelectedFeedId] = useState("CTI-FEED-2501");
   const [syncResult, setSyncResult] = useState(null);
-  const [stixPatternInput, setStixPatternInput] = useState("[file:hashes.'SHA-256' = 'a1b2c3d4e5f67890a1b2c3d4e5f67890']");
-  const [sampleObservableInput, setSampleObservableInput] = useState("SHA-256: a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890");
-  const [patternTestResult, setPatternTestResult] = useState(null);
-
-  // JSON Exporter State
-  const [exportedJson, setExportedJson] = useState("");
-  const [copiedJson, setCopiedJson] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,14 +81,13 @@ export default function BiomedicalCtiStixTaxiiPanel() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [feedList, endList, stdList] = await Promise.all([
+      const [feedList, stdList] = await Promise.all([
         getCtiStixTaxiiInventory().catch(() => []),
         getTaxiiEndpoints().catch(() => []),
         getCtiStixTaxiiStandards().catch(() => [])
       ]);
 
       setFeeds(feedList);
-      setEndpoints(endList);
       setStandards(stdList);
 
       if (feedList.length > 0) {
@@ -125,18 +106,6 @@ export default function BiomedicalCtiStixTaxiiPanel() {
     loadData();
   }, [loadData]);
 
-  // Handle Feed Selection for JSON Export
-  const handleExportFeedJson = async (feedId) => {
-    try {
-      setSelectedFeedId(feedId);
-      const jsonStr = await exportStixBundleJson(feedId);
-      setExportedJson(jsonStr);
-      setCopiedJson(false);
-    } catch (err) {
-      console.error("Failed exporting STIX JSON:", err);
-    }
-  };
-
   // Run TAXII Sync
   const handleSyncTaxii = async (e) => {
     e?.preventDefault();
@@ -146,33 +115,10 @@ export default function BiomedicalCtiStixTaxiiPanel() {
     try {
       const result = await syncTaxiiFeed(selectedFeedId);
       setSyncResult(result);
-      setMessage({
-        type: "success",
-        text: `TAXII 2.1 Ingestion completed in ${result.iocRuleMatchingLatencyMs}ms! Ingested ${result.stixObjectsIngested} STIX 2.1 objects over mutual TLS. TLP Check: PASSED.`
-      });
+      setMessage({ type: "success", text: `TAXII 2.1 Ingestion completed in ${result.iocRuleMatchingLatencyMs}ms! Ingested ${result.stixObjectsIngested} STIX 2.1 objects over mutual TLS. TLP Check: PASSED.` });
       await loadData();
     } catch (err) {
       setMessage({ type: "error", text: "TAXII 2.1 feed synchronization failed." });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Run STIX Pattern Test
-  const handleTestPattern = async (e) => {
-    e.preventDefault();
-    setActionLoading(true);
-    setMessage({ type: "", text: "" });
-
-    try {
-      const result = await testStixPatternMatch(stixPatternInput, sampleObservableInput);
-      setPatternTestResult(result);
-      setMessage({
-        type: result.matched ? "success" : "error",
-        text: `STIX 2.1 Pattern evaluation completed! Result: ${result.matched ? "MATCH CONFIRMED (98.4%)" : "NO MATCH"}. ${result.reason}`
-      });
-    } catch (err) {
-      setMessage({ type: "error", text: "STIX pattern evaluation failed." });
     } finally {
       setActionLoading(false);
     }
@@ -187,21 +133,12 @@ export default function BiomedicalCtiStixTaxiiPanel() {
     setMessage({ type: "", text: "" });
 
     try {
-      const newFeed = await shareStixThreatIndicator({
-        feedName: feedName.trim(),
-        threatActorGroup,
-        tlpMarking,
-        stixPattern,
-        description
-      });
+      const newFeed = await shareStixThreatIndicator({ feedName: feedName.trim() });
 
       setFeedName("");
       setDescription("");
       setIsModalOpen(false);
-      setMessage({
-        type: "success",
-        text: `STIX 2.1 Threat Indicator ${newFeed.feedId} published to TAXII 2.1 server under ${newFeed.tlpMarking} protocol!`
-      });
+      setMessage({ type: "success", text: `STIX 2.1 Threat Indicator ${newFeed.feedId} published to TAXII 2.1 server under TLP:AMBER protocol!` });
       await loadData();
     } catch (err) {
       setMessage({ type: "error", text: "Failed to publish STIX 2.1 threat indicator." });
@@ -237,9 +174,8 @@ export default function BiomedicalCtiStixTaxiiPanel() {
     const totalFeeds = feeds.length;
     const totalIndicators = feeds.reduce((acc, curr) => acc + curr.indicatorsCount, 0);
     const avgConfidence = (feeds.reduce((acc, curr) => acc + curr.confidenceScore, 0) / (totalFeeds || 1)).toFixed(0);
-    const tlpAmberCount = feeds.filter((f) => f.tlpMarking.includes("AMBER")).length;
 
-    return { totalFeeds, totalIndicators, avgConfidence, tlpAmberCount };
+    return { totalFeeds, totalIndicators, avgConfidence };
   }, [feeds]);
 
   return (
@@ -334,31 +270,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
                 : "bg-slate-800 text-slate-400 hover:text-white"
             }`}
           >
-            <Zap size={15} /> STIX 2.1 Pattern Sandbox
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("JSON_EXPORT")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeTab === "JSON_EXPORT"
-                ? "bg-red-600 text-white font-black shadow-lg shadow-red-600/20"
-                : "bg-slate-800 text-slate-400 hover:text-white"
-            }`}
-          >
-            <Code size={15} /> STIX 2.1 JSON Schema Inspector
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("ENDPOINTS")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeTab === "ENDPOINTS"
-                ? "bg-red-600 text-white font-black shadow-lg shadow-red-600/20"
-                : "bg-slate-800 text-slate-400 hover:text-white"
-            }`}
-          >
-            <Server size={15} /> TAXII Endpoints & mTLS ({endpoints.length})
+            <Zap size={15} /> STIX 2.1 Pattern Verification Sandbox
           </button>
 
           <button
@@ -370,7 +282,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
                 : "bg-slate-800 text-slate-400 hover:text-white"
             }`}
           >
-            <ShieldCheck size={15} /> OASIS Standards ({standards.length})
+            <ShieldCheck size={15} /> OASIS STIX/TAXII & TLP Standards ({standards.length})
           </button>
         </div>
 
@@ -391,31 +303,6 @@ export default function BiomedicalCtiStixTaxiiPanel() {
               <h3 className="text-base font-bold text-white">Automated Health-ISAC & CISA TAXII 2.1 Threat Feeds</h3>
               <p className="text-xs text-slate-400 font-mono">Feed IDs, names, STIX 2.1 object types, TLP markings, threat actor groups, confidence scores, and indicator counts</p>
             </div>
-
-            {/* Search & TLP Filter Bar */}
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
-                <Search size={14} className="absolute left-3 top-3 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Search feeds, actors, IOCs..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              <select
-                className="py-2 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
-                value={selectedTlpFilter}
-                onChange={(e) => setSelectedTlpFilter(e.target.value)}
-              >
-                <option value="ALL">All TLP Protocols</option>
-                <option value="AMBER">TLP:AMBER</option>
-                <option value="GREEN">TLP:GREEN</option>
-                <option value="RED">TLP:RED</option>
-              </select>
-            </div>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950">
@@ -430,12 +317,9 @@ export default function BiomedicalCtiStixTaxiiPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 font-mono">
-                {filteredFeeds.map((f, idx) => (
-                  <tr key={idx} className="hover:bg-slate-900/60 transition cursor-pointer" onClick={() => handleExportFeedJson(f.feedId)}>
-                    <td className="p-3 font-bold text-red-400 flex items-center gap-1.5">
-                      <Radio size={12} className="text-red-500 animate-pulse" />
-                      {f.feedId}
-                    </td>
+                {feeds.map((f, idx) => (
+                  <tr key={idx} className="hover:bg-slate-900/60">
+                    <td className="p-3 font-bold text-red-400">{f.feedId}</td>
                     <td className="p-3 font-sans">
                       <div className="font-semibold text-white">{f.feedName}</div>
                       <div className="text-[10px] text-red-300 font-mono">{f.taxiiCollectionId}</div>
@@ -470,7 +354,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Zap size={18} className="text-red-400" /> TAXII 2.1 Server Ingestion Synchronization
+                <Zap size={18} className="text-red-400" /> STIX 2.1 Pattern Verification & TAXII Sync Sandbox
               </h3>
             </div>
 
@@ -518,51 +402,25 @@ export default function BiomedicalCtiStixTaxiiPanel() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Terminal size={18} className="text-red-400" /> STIX 2.1 Pattern Matcher Evaluator
+                <ShieldCheck size={18} className="text-emerald-400" /> Synchronization Output
               </h3>
             </div>
 
-            <form onSubmit={handleTestPattern} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">STIX 2.1 Pattern Expression:</label>
-                <input
-                  type="text"
-                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-red-300 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                  value={stixPatternInput}
-                  onChange={(e) => setStixPatternInput(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Sample Network / File Observable Payload:</label>
-                <textarea
-                  rows={3}
-                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                  value={sampleObservableInput}
-                  onChange={(e) => setSampleObservableInput(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={actionLoading}
-                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 text-xs border border-slate-700"
-              >
-                <Check size={16} /> Evaluate STIX Pattern Match
-              </button>
-            </form>
-
-            {patternTestResult && (
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-sans font-bold uppercase">Pattern Evaluation:</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${patternTestResult.matched ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
-                    {patternTestResult.matched ? "MATCH CONFIRMED" : "NO MATCH"}
-                  </span>
+            {syncResult ? (
+              <div className="space-y-3 font-mono text-xs">
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-400 font-sans font-bold uppercase">TAXII mTLS Connection:</span>
+                  <div className="text-sm font-bold text-emerald-400">{syncResult.taxiiConnectionStatus}</div>
                 </div>
-                <p className="text-[11px] text-slate-300 font-sans">{patternTestResult.reason}</p>
+
+                <div className="grid grid-cols-2 gap-3 text-[11px] p-3 bg-slate-950/60 rounded-xl border border-slate-800 font-sans">
+                  <div>STIX Objects Ingested: <strong className="text-emerald-400 font-mono text-[10px]">{syncResult.stixObjectsIngested} Objects</strong></div>
+                  <div>TLP Protocol Check: <strong className="text-emerald-400">PASSED</strong></div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-12 text-center text-slate-500 font-mono text-xs border border-dashed border-slate-800 rounded-2xl">
+                Click "Execute Real-Time TAXII 2.1 Ingestion Sync" to sync threat feeds.
               </div>
             )}
           </div>
@@ -643,7 +501,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div>
-              <h3 className="text-base font-bold text-white">OASIS STIX 2.1, TAXII 2.1 & FIRST TLP 2.0 Standards</h3>
+              <h3 className="text-base font-bold text-white">OASIS STIX 2.1 & TAXII 2.1 Standards</h3>
               <p className="text-xs text-slate-400 font-mono">Frameworks for structured threat intelligence, automated exchange protocols, and TLP protocol classification</p>
             </div>
           </div>

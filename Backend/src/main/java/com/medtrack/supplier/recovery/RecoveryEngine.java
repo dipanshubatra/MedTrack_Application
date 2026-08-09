@@ -86,7 +86,7 @@ public class RecoveryEngine {
                 op.setStatus("FAILED");
             } else {
                 op.setNextRetryAt(
-                        LocalDateTime.now().plusMillis(workflowConfig.getRetryBackoffMillis() * op.getRetryCount()));
+                        LocalDateTime.now().plus(workflowConfig.getRetryBackoffMillis() * op.getRetryCount(), java.time.temporal.ChronoUnit.MILLIS));
             }
             op.setLastErrorMessage(message);
         }
