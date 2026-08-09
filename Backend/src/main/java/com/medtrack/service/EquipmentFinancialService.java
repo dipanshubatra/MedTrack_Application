@@ -2,8 +2,11 @@ package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
-import com.medtrack.dto.*;
+import com.medtrack.dto.EquipmentFinancialDashboardResponse;
+import com.medtrack.dto.EquipmentFinancialResponse;
+import com.medtrack.dto.EquipmentFinancialSummary;
 import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.model.DepreciationMethod;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.Hospital;
 import com.medtrack.repository.EquipmentRepository;
@@ -11,14 +14,32 @@ import com.medtrack.repository.HospitalRepository;
 import com.medtrack.util.DepreciationCalculator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
+/**
+ * Depreciation and fleet-valuation reporting for the equipment owned by one hospital.
+ *
+ * <p>Every read is scoped to the hospital that owns the authenticated user, so an asset belonging
+ * to another tenant can neither be valued nor counted in a summary.</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class EquipmentFinancialService {
+
+    /**
+     * Residual value assumed when an asset has no salvage figure recorded. Equipment does not
+     * store one, so the reports fall back to a tenth of the purchase price and say so through
+     * {@code salvageValue} in the response rather than hiding the assumption.
+     */
+    private static final double DEFAULT_SALVAGE_RATE = 0.10;
+
+    /** Depreciable life assumed when an asset has none recorded. */
+    private static final int DEFAULT_USEFUL_LIFE_YEARS = 10;
 
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
@@ -63,6 +84,9 @@ public class EquipmentFinancialService {
         summary.setAverageDepreciation(equipmentList.isEmpty() ? 0 : totalDepreciation / equipmentList.size());
         summary.setReplacementRecommended(replacementRecommended);
 
+        EquipmentFinancialDashboardResponse response = new EquipmentFinancialDashboardResponse();
+        response.setGeneratedAt(LocalDateTime.now());
+        response.setGeneratedBy(username);
         response.setSummary(summary);
         response.setEquipment(responses);
         return response;
