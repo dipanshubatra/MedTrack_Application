@@ -2,11 +2,11 @@ import API from "./HttpService";
 
 /**
  * BiomedicalAiAgentGovernanceService
- * Service layer for Autonomous Clinical AI Agent Authorization, Tool-Call Sandboxing,
- * Guardrail Policy Enforcement, Prompt Injection Mitigation, and Agentic Decision Audit Trails.
+ * Service layer for Autonomous Clinical AI Agent Governance, Real-Time Guardrails,
+ * Tool-Use Access Boundaries, Agentic Hallucination Inspection, Human-in-the-Loop (HITL) Triaging, US EO 14110 & NIST AI RMF 1.0 Standards.
  */
 
-// Fetch Active Autonomous AI Agents & Guardrail Telemetry
+// Fetch Active Autonomous AI Agents & Guardrail Policy Inventory
 export const getAiAgentGovernanceInventory = async () => {
   try {
     const response = await API.get("/api/auth/ai-agent-governance/agents");
@@ -15,81 +15,81 @@ export const getAiAgentGovernanceInventory = async () => {
     console.warn("Using fallback Biomedical AI Agent Governance registry:", error.message);
     return [
       {
-        agentId: "AGENT-CLINICAL-701",
-        agentName: "ICU Sepsis Early Warning Autonomous Agent",
-        modelArchitecture: "Med-Llama-3-70B (Clinical Fine-Tuned)",
-        guardrailPolicy: "STRICT_PHI_REDACTION_AND_HUMAN_IN_THE_LOOP",
-        toolAccessScope: ["FHIR_PATIENT_READ", "VITAL_SIGNS_QUERY"],
-        governanceStatus: "AGENT_AUTHORIZED_ACTIVE",
-        promptInjectionRisk: "LOW_PROMPT_INJECTION_RISK",
-        lastExecutionAt: "2026-08-05T16:20:00Z"
+        agentId: "AGENT-CLIN-2201",
+        agentName: "Oncology Clinical Decision Support Agent",
+        autonomyLevel: "LEVEL_3_HUMAN_OVERWATCH",
+        allowedTools: ["ReadEHR", "QueryDrugInteractions", "ProposeChemoProtocol"],
+        prohibitedActions: ["ExecuteOrderWithoutDoctorSign", "ExportUnsanitizedPHI"],
+        guardrailStatus: "GUARDRAILS_ACTIVE_ENFORCED",
+        hallucinationRiskPercent: 0.01,
+        lastActiveAt: "2026-08-09T02:20:00Z"
       },
       {
-        agentId: "AGENT-PHARMA-702",
-        agentName: "Polypharmacy Interaction Discovery Agent",
-        modelArchitecture: "BioGPT-Clinical-Large",
-        guardrailPolicy: "DRUG_DOSAGE_BOUNDS_AND_FDA_ALERT_GUARDRAIL",
-        toolAccessScope: ["DRUG_KNOWLEDGEBASE_READ", "PRESCRIPTION_PROPOSE"],
-        governanceStatus: "AGENT_AUTHORIZED_ACTIVE",
-        promptInjectionRisk: "LOW_PROMPT_INJECTION_RISK",
-        lastExecutionAt: "2026-08-05T15:55:00Z"
+        agentId: "AGENT-CLIN-2202",
+        agentName: "ICU Patient Telemetry Predictive Alarm Agent",
+        autonomyLevel: "LEVEL_4_HIGH_AUTONOMY_HITL_OVERRIDE",
+        allowedTools: ["StreamVitalSigns", "TriggerNursePager", "AdjustAlarmThresholds"],
+        prohibitedActions: ["AlterVentilatorFlowRate", "DisableInfusionPump"],
+        guardrailStatus: "GUARDRAILS_ACTIVE_ENFORCED",
+        hallucinationRiskPercent: 0.005,
+        lastActiveAt: "2026-08-09T02:10:00Z"
       },
       {
-        agentId: "AGENT-TRIAGE-703",
-        agentName: "Emergency Department Triage & Routing Agent",
-        modelArchitecture: "Med-PaLM-2-Healthcare",
-        guardrailPolicy: "HUMAN_OVERRIDE_MANDATORY_FOR_HIGH_ACUITY",
-        toolAccessScope: ["TRIAGE_BED_ASSIGNMENT", "PATIENT_RECORD_UPDATE"],
-        governanceStatus: "GUARDRAIL_VIOLATION_SUSPENDED",
-        promptInjectionRisk: "SUSPECTED_PROMPT_INJECTION_QUARANTINE",
-        lastExecutionAt: "2026-08-05T14:30:00Z"
+        agentId: "AGENT-CLIN-2203",
+        agentName: "Pharmacy Automated Inventory & Re-order Agent",
+        autonomyLevel: "LEVEL_2_STRICT_HUMAN_APPROVAL",
+        allowedTools: ["CheckMedicationStock", "DraftPurchaseOrder"],
+        prohibitedActions: ["AuthorizeNarcoticsOrder", "BypassSupplierVetting"],
+        guardrailStatus: "GUARDRAILS_ACTIVE_ENFORCED",
+        hallucinationRiskPercent: 0.0,
+        lastActiveAt: "2026-08-09T01:45:00Z"
       }
     ];
   }
 };
 
-// Register & Deploy Autonomous AI Agent with Guardrail Policy
+// Register New Autonomous Clinical AI Agent with Guardrail Rules
 export const registerAiAgent = async (agentData) => {
   try {
     const response = await API.post("/api/auth/ai-agent-governance/agents", agentData);
     return response.data;
   } catch (error) {
     return {
-      agentId: `AGENT-CLINICAL-${Math.floor(704 + Math.random() * 200)}`,
-      agentName: agentData.agentName || "Oncology Biomarker Recommendation Agent",
-      modelArchitecture: "Clinical-Mistral-Large TEE Enclave",
-      guardrailPolicy: "STRICT_PHI_REDACTION_AND_HUMAN_IN_THE_LOOP",
-      toolAccessScope: ["GENOMIC_VARIANT_READ", "TREATMENT_PLAN_DRAFT"],
-      governanceStatus: "AGENT_AUTHORIZED_ACTIVE",
-      promptInjectionRisk: "LOW_PROMPT_INJECTION_RISK",
-      lastExecutionAt: new Date().toISOString()
+      agentId: `AGENT-CLIN-${Math.floor(2204 + Math.random() * 200)}`,
+      agentName: agentData.agentName || "Radiology Medical Imaging Assistant Agent",
+      autonomyLevel: "LEVEL_3_HUMAN_OVERWATCH",
+      allowedTools: ["ScanDICOMHeader", "FlagAnomalyHeatmap"],
+      prohibitedActions: ["IssueFinalDiagnosticReport"],
+      guardrailStatus: "GUARDRAILS_ACTIVE_ENFORCED",
+      hallucinationRiskPercent: 0.008,
+      lastActiveAt: new Date().toISOString()
     };
   }
 };
 
-// Validate Autonomous Agent Tool Call & Run Prompt Guardrail Inspection
-export const validateAgentToolCall = async (agentId) => {
+// Execute Real-Time Agentic Guardrail & Hallucination Inspection
+export const inspectAgentGuardrails = async (agentId) => {
   try {
-    const response = await API.post(`/api/auth/ai-agent-governance/agents/${agentId}/validate`);
+    const response = await API.post(`/api/auth/ai-agent-governance/agents/${agentId}/inspect`);
     return response.data;
   } catch (error) {
     return {
       agentId,
-      toolCallApproved: true,
-      promptInjectionDetected: false,
-      phiRedactedCount: 3,
-      guardrailEvaluator: "Llama-Guard-3 Healthcare Fine-Tune",
-      validationLatencyMs: 16,
+      toolBoundaryViolationCount: 0,
+      hallucinationScore: 0.002,
+      hitlOverrideActive: false,
+      governanceDecision: "AGENT_EXECUTION_PERMITTED",
+      inspectionLatencyMs: 11,
       timestamp: new Date().toISOString()
     };
   }
 };
 
-// Fetch AI Agent Governance & ISO/IEC 42001 Standards
+// Fetch AI Agent Governance Standards
 export const getAiAgentGovernanceStandards = async () => {
   return [
-    { standard: "ISO/IEC 42001 Artificial Intelligence Management System (AIMS)", detail: "International standard for trustworthy AI agent governance, risk management, and operational controls" },
-    { standard: "NIST AI Risk Management Framework (AI RMF 1.0)", detail: "Guidelines for governing autonomous agent safety, explainability, bias mitigation, and human oversight" },
-    { standard: "OWASP Top 10 for LLM Applications & Autonomous Agents", detail: "Mitigation strategies for prompt injection, insecure tool use, excessive agency, and sensitive data disclosure" }
+    { standard: "NIST AI Risk Management Framework (AI RMF 1.0)", detail: "Federal standard specifying AI governance, transparency, safety, and trustworthiness dimensions for autonomous systems" },
+    { standard: "US Executive Order 14110 Safe, Secure, and Trustworthy AI", detail: "Mandates rigorous red-teaming, guardrails, and human oversight for safety-critical clinical AI deployments" },
+    { standard: "ISO/IEC 42001 Artificial Intelligence Management System", detail: "Global certification standard for AI policy enforcement, risk assessment, and continuous monitoring" }
   ];
 };
