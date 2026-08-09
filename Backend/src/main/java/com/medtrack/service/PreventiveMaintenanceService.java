@@ -694,11 +694,9 @@ public class PreventiveMaintenanceService {
         return switch (frequency) {
             case DAILY -> current.plusDays(1);
             case WEEKLY -> current.plusWeeks(1);
-            case MONTHLY -> current.with(TemporalAdjusters.firstDayOfNextMonth());
-            case QUARTERLY -> current.with(TemporalAdjusters.firstDayOfNextMonth())
-                    .plusMonths(2);
-            case YEARLY -> current.with(TemporalAdjusters.firstDayOfNextMonth())
-                    .plusMonths(11);
+            case MONTHLY -> current.plusMonths(1);
+            case QUARTERLY -> current.plusMonths(3);
+            case YEARLY -> current.plusYears(1);
             case CUSTOM -> current.plusDays(rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7);
         };
     }
