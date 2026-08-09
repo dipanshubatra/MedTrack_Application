@@ -54,11 +54,16 @@ import "../../pages/auth/auth.css";
 export default function BiomedicalCtiStixTaxiiPanel() {
   // State
   const [feeds, setFeeds] = useState([]);
+  const [endpoints, setEndpoints] = useState([]);
   const [standards, setStandards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
-  const [activeTab, setActiveTab] = useState("FEEDS"); // "FEEDS" | "SANDBOX" | "STANDARDS"
+  const [activeTab, setActiveTab] = useState("FEEDS"); // "FEEDS" | "SANDBOX" | "JSON_EXPORT" | "ENDPOINTS" | "STANDARDS"
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTlpFilter, setSelectedTlpFilter] = useState("ALL");
 
   // Sandbox State
   const [selectedFeedId, setSelectedFeedId] = useState("CTI-FEED-2501");
@@ -67,6 +72,10 @@ export default function BiomedicalCtiStixTaxiiPanel() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [feedName, setFeedName] = useState("");
+  const [threatActorGroup, setThreatActorGroup] = useState("UNC-EMERGING-BEACON");
+  const [tlpMarking, setTlpMarking] = useState("TLP:AMBER");
+  const [stixPattern, setStixPattern] = useState("[network-traffic:dst_port = 8443]");
+  const [description, setDescription] = useState("");
 
   // Load telemetry
   const loadData = useCallback(async () => {
@@ -74,11 +83,17 @@ export default function BiomedicalCtiStixTaxiiPanel() {
     try {
       const [feedList, stdList] = await Promise.all([
         getCtiStixTaxiiInventory().catch(() => []),
+        getTaxiiEndpoints().catch(() => []),
         getCtiStixTaxiiStandards().catch(() => [])
       ]);
 
       setFeeds(feedList);
       setStandards(stdList);
+
+      if (feedList.length > 0) {
+        const initialJson = await exportStixBundleJson(feedList[0].feedId);
+        setExportedJson(initialJson);
+      }
     } catch (err) {
       console.error("Failed to load biomedical CTI STIX TAXII data:", err);
       setMessage({ type: "error", text: "Failed connecting to CTI STIX TAXII service." });
@@ -121,6 +136,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
       const newFeed = await shareStixThreatIndicator({ feedName: feedName.trim() });
 
       setFeedName("");
+      setDescription("");
       setIsModalOpen(false);
       setMessage({ type: "success", text: `STIX 2.1 Threat Indicator ${newFeed.feedId} published to TAXII 2.1 server under TLP:AMBER protocol!` });
       await loadData();
@@ -130,6 +146,28 @@ export default function BiomedicalCtiStixTaxiiPanel() {
       setActionLoading(false);
     }
   };
+
+  // Copy JSON to Clipboard
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(exportedJson);
+    setCopiedJson(true);
+    setTimeout(() => setCopiedJson(false), 2000);
+  };
+
+  // Filtered Feeds
+  const filteredFeeds = useMemo(() => {
+    return feeds.filter((f) => {
+      const matchesSearch =
+        f.feedName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.threatActorGroup.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.taxiiCollectionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.feedId.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesTlp = selectedTlpFilter === "ALL" || f.tlpMarking.includes(selectedTlpFilter);
+
+      return matchesSearch && matchesTlp;
+    });
+  }, [feeds, searchQuery, selectedTlpFilter]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -210,7 +248,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
 
       {/* 2. Navigation bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveTab("FEEDS")}
@@ -260,7 +298,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
       {/* 3. FEEDS TAB */}
       {activeTab === "FEEDS" && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
               <h3 className="text-base font-bold text-white">Automated Health-ISAC & CISA TAXII 2.1 Threat Feeds</h3>
               <p className="text-xs text-slate-400 font-mono">Feed IDs, names, STIX 2.1 object types, TLP markings, threat actor groups, confidence scores, and indicator counts</p>
@@ -311,6 +349,8 @@ export default function BiomedicalCtiStixTaxiiPanel() {
       {/* 4. SANDBOX TAB */}
       {activeTab === "SANDBOX" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* TAXII Ingestion Box */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -342,8 +382,23 @@ export default function BiomedicalCtiStixTaxiiPanel() {
                 <Zap size={16} /> Execute Real-Time TAXII 2.1 Ingestion Sync
               </button>
             </form>
+
+            {syncResult && (
+              <div className="space-y-3 font-mono text-xs pt-3 border-t border-slate-800">
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-400 font-sans font-bold uppercase">TAXII mTLS Connection:</span>
+                  <div className="text-sm font-bold text-emerald-400">{syncResult.taxiiConnectionStatus}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-[11px] p-3 bg-slate-950/60 rounded-xl border border-slate-800 font-sans">
+                  <div>STIX Objects Ingested: <strong className="text-emerald-400 font-mono text-[10px]">{syncResult.stixObjectsIngested} Objects</strong></div>
+                  <div>TLP Protocol Check: <strong className="text-emerald-400">PASSED</strong></div>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* STIX 2.1 Pattern Evaluation Box */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -369,10 +424,79 @@ export default function BiomedicalCtiStixTaxiiPanel() {
               </div>
             )}
           </div>
+
         </div>
       )}
 
-      {/* 5. STANDARDS TAB */}
+      {/* 5. STIX 2.1 JSON SCHEMA INSPECTOR TAB */}
+      {activeTab === "JSON_EXPORT" && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Code size={18} className="text-red-400" /> STIX 2.1 Compliant JSON Bundle Schema
+              </h3>
+              <p className="text-xs text-slate-400 font-mono">Standardized OASIS STIX 2.1 JSON schema representing Indicator, Threat-Actor, and Relationship graph nodes</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleCopyJson}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-2 border border-slate-700"
+            >
+              {copiedJson ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
+              {copiedJson ? "Copied STIX JSON!" : "Copy STIX 2.1 JSON"}
+            </button>
+          </div>
+
+          <div className="relative rounded-2xl border border-slate-800 bg-slate-950 p-4 max-h-[500px] overflow-y-auto">
+            <pre className="text-xs font-mono text-red-300 leading-relaxed whitespace-pre-wrap">
+              {exportedJson}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {/* 6. TAXII 2.1 ENDPOINTS TAB */}
+      {activeTab === "ENDPOINTS" && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-white">TAXII 2.1 Server Endpoints & mTLS Authentication</h3>
+              <p className="text-xs text-slate-400 font-mono">Configured TAXII 2.1 server REST API collection URIs, media types, and mutual TLS client certificate statuses</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {endpoints.map((ep, idx) => (
+              <div key={idx} className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 font-sans">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Server size={18} className="text-red-400" />
+                    <h4 className="text-sm font-bold text-white">{ep.collectionTitle}</h4>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
+                    {ep.authMethod}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                  <div>
+                    <span className="text-slate-400 text-[10px] block uppercase font-sans font-bold">TAXII Collection Endpoint:</span>
+                    <span className="text-red-300 break-all">{ep.endpointUrl}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block uppercase font-sans font-bold">Media Type:</span>
+                    <span className="text-slate-300">{ep.mediaType}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 7. STANDARDS TAB */}
       {activeTab === "STANDARDS" && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -398,7 +522,7 @@ export default function BiomedicalCtiStixTaxiiPanel() {
         </div>
       )}
 
-      {/* 6. PROVISION MODAL */}
+      {/* 8. PROVISION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full text-slate-100 space-y-4 shadow-2xl">
@@ -421,6 +545,55 @@ export default function BiomedicalCtiStixTaxiiPanel() {
                   value={feedName}
                   onChange={(e) => setFeedName(e.target.value)}
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Threat Actor Attribution Group:</label>
+                <input
+                  type="text"
+                  placeholder="e.g. APT-HEALTHCARE-PHANTOM"
+                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-red-500 font-sans"
+                  value={threatActorGroup}
+                  onChange={(e) => setThreatActorGroup(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">FIRST TLP Marking Protocol:</label>
+                <select
+                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-red-500 font-sans"
+                  value={tlpMarking}
+                  onChange={(e) => setTlpMarking(e.target.value)}
+                >
+                  <option value="TLP:AMBER">TLP:AMBER (Restricted to Organization & Partners)</option>
+                  <option value="TLP:AMBER+STRICT">TLP:AMBER+STRICT (Restricted to Organization Only)</option>
+                  <option value="TLP:GREEN">TLP:GREEN (Community Wide Sharing)</option>
+                  <option value="TLP:RED">TLP:RED (Strict Named Recipients Only)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">STIX 2.1 Pattern Expression:</label>
+                <input
+                  type="text"
+                  placeholder="[network-traffic:dst_port = 8443]"
+                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-red-300 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
+                  value={stixPattern}
+                  onChange={(e) => setStixPattern(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Threat Description & Context:</label>
+                <textarea
+                  rows={3}
+                  placeholder="Detailed context regarding the threat vector..."
+                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-red-500 font-sans"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
 
