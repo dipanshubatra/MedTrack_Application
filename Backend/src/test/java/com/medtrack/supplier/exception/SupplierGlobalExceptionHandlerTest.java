@@ -10,9 +10,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class GlobalExceptionHandlerTest {
+class SupplierGlobalExceptionHandlerTest {
 
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+    private final SupplierGlobalExceptionHandler handler = new SupplierGlobalExceptionHandler();
 
     @Test
     void testHandleIllegalArgumentException() {

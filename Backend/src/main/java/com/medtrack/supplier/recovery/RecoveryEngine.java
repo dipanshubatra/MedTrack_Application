@@ -32,7 +32,17 @@ public class RecoveryEngine {
     private final EquipmentOrderRepository orderRepository;
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final SupplierPerformanceService supplierPerformanceService;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    /**
+     * Optional on purpose. {@link #recoverEventPublish} already refuses to run without it, and the
+     * rest of the recovery engine - order and shipment reconciliation, performance recalculation -
+     * is useful whether or not a broker is configured. Declared final, this bean could not be
+     * created at all when Kafka auto-configuration is absent, which is the default in tests and in
+     * any deployment that has not configured a broker, and the whole application context failed to
+     * start as a result. Matches how SupplierOrderService, SupplierPerformanceService and
+     * DeliveryDelayDetectionService already inject it.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @Transactional
     public List<RecoveryResultDTO> processPendingOperations() {

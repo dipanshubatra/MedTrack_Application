@@ -278,9 +278,12 @@ public final class DepreciationCalculator {
             return usefulLifeYears;
         }
 
-        double elapsed = elapsedYears(purchaseDate, asOf);
-        int consumed = (int) Math.floor(Math.max(elapsed, 0.0));
-        return Math.max(usefulLifeYears - consumed, 0);
+        // Calendar years, not elapsedYears(): the fractional measure divides by 365.25, so an
+        // asset bought exactly five years ago measures 4.9993 years old, floors to four, and is
+        // reported with six years of a ten-year life left instead of five. elapsedYears() stays
+        // the right unit for book value, which is meant to move smoothly between anniversaries.
+        long consumed = Math.max(ChronoUnit.YEARS.between(purchaseDate, asOf), 0L);
+        return (int) Math.max(usefulLifeYears - consumed, 0L);
     }
 
     /** Whole years since acquisition; zero for an unknown or future purchase date. */

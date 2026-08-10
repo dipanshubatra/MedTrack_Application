@@ -8,6 +8,8 @@ import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.repository.EquipmentRepository;
+import com.medtrack.auth.model.User;
+import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.repository.HospitalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,25 +35,30 @@ class EquipmentReportServiceTest {
     @Mock
     private HospitalRepository hospitalRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     @InjectMocks
     private EquipmentReportService equipmentReportService;
 
+    private User hospitalUser;
     private Hospital hospital;
     private Equipment eq1;
     private Equipment eq2;
 
     @BeforeEach
     void setUp() {
-        hospital = Hospital.builder().id(1L).username("hospital_user").name("City General").build();
+        hospitalUser = User.builder().id(11L).username("hospital_user").email("hospital@city.test").build();
+        hospital = Hospital.builder().id(1L).user(hospitalUser).name("City General").build();
 
         eq1 = Equipment.builder()
                 .id(101L)
                 .hospital(hospital)
                 .name("Ventilator X1")
                 .department("ICU")
-                .category(EquipmentCategory.DIAGNOSTIC)
+                .category(EquipmentCategory.RESPIRATORY)
                 .status(EquipmentStatus.ACTIVE)
-                .manufacturer("MedTech")
+                .model("MedTech V-Series")
                 .purchaseDate(LocalDate.now().minusMonths(6))
                 .warrantyExpiry(LocalDate.now().plusMonths(6))
                 .quantity(5)
@@ -63,9 +70,9 @@ class EquipmentReportServiceTest {
                 .hospital(hospital)
                 .name("Defibrillator D2")
                 .department("Emergency")
-                .category(EquipmentCategory.LIFE_SUPPORT)
+                .category(EquipmentCategory.MONITORING)
                 .status(EquipmentStatus.UNDER_MAINTENANCE)
-                .manufacturer("BioCare")
+                .model("BioCare D2")
                 .purchaseDate(LocalDate.now().minusYears(2))
                 .warrantyExpiry(LocalDate.now().minusDays(10))
                 .quantity(1)
@@ -75,7 +82,8 @@ class EquipmentReportServiceTest {
 
     @Test
     void generateReport_returnsFilteredSummarySuccessfully() {
-        when(hospitalRepository.findByUsername("hospital_user")).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername("hospital_user")).thenReturn(Optional.of(hospitalUser));
+        when(hospitalRepository.findByUserId(11L)).thenReturn(Optional.of(hospital));
         when(equipmentRepository.findByHospitalId(1L)).thenReturn(List.of(eq1, eq2));
 
         EquipmentReportRequest request = EquipmentReportRequest.builder()
@@ -92,7 +100,8 @@ class EquipmentReportServiceTest {
 
     @Test
     void generateReport_throwsExceptionWhenHospitalNotFound() {
-        when(hospitalRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("unknown")).thenReturn(Optional.empty());
 
         EquipmentReportRequest request = new EquipmentReportRequest();
 

@@ -38,6 +38,37 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DuplicateDetectionService {
 
+    /**
+     * Every table that points at an equipment record, and how a merge moves its rows onto the
+     * surviving asset.
+     *
+     * <p>Kept as one list rather than a run of inline calls so the set is visible in a single place
+     * and so {@code DuplicateDetectionTest} can assert against it. A table missing from here is not
+     * a cosmetic gap: {@code mergeDuplicates} archives the duplicate, and archived records fall out
+     * of every query through the {@code deleted = false} restriction, so rows left behind become
+     * unreachable from both assets. That is how the whole work-order history of a merged asset came
+     * to disappear once the work-order module was added without this list being extended.</p>
+     *
+     * <p>{@code maintenance_tasks} is handled separately by {@link #reassignTaskMetadata} because it
+     * also carries denormalised copies of the equipment code and name.</p>
+     *
+     * <p>Package-private so the test in this package can check it against the foreign keys the
+     * schema actually declares, which is what turns "someone remembered" into "the build noticed".</p>
+     */
+    static final List<String> CHILD_REASSIGNMENTS = List.of(
+            "UPDATE equipment_lifecycle_actions SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE equipment_location_history SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE equipment_disposals SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE maintenance_work_orders SET equipment_id = :keep WHERE equipment_id = :merge",
+            // A preventive-maintenance rule scoped to one asset would otherwise stay on the
+            // archived duplicate, and the surviving record would quietly stop being scheduled.
+            "UPDATE maintenance_policy_rules SET equipment_record_id = :keep "
+                    + "WHERE equipment_record_id = :merge",
+            "UPDATE equipment_audit SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE equipment SET replacement_equipment_id = :keep WHERE replacement_equipment_id = :merge",
+            "UPDATE equipment_lifecycle_actions SET replacement_equipment_id = :keep "
+                    + "WHERE replacement_equipment_id = :merge");
+
     private static final double SERIAL_THRESHOLD = 0.75;
     private static final double CODE_THRESHOLD = 0.75;
     private static final double NAME_MODEL_THRESHOLD = 0.8;
@@ -261,17 +292,10 @@ public class DuplicateDetectionService {
 
         transferMissingMetadata(keep, merge);
 
-        reassign("UPDATE equipment_lifecycle_actions SET equipment_id = :keep WHERE equipment_id = :merge",
-                keepId, mergeId);
-        reassign("UPDATE equipment_location_history SET equipment_id = :keep WHERE equipment_id = :merge",
-                keepId, mergeId);
-        reassign("UPDATE equipment_disposals SET equipment_id = :keep WHERE equipment_id = :merge",
-                keepId, mergeId);
+        for (String statement : CHILD_REASSIGNMENTS) {
+            reassign(statement, keepId, mergeId);
+        }
         reassignTaskMetadata(keepId, mergeId, keep.getEquipmentCode(), keep.getName());
-        reassign("UPDATE equipment SET replacement_equipment_id = :keep WHERE replacement_equipment_id = :merge",
-                keepId, mergeId);
-        reassign("UPDATE equipment_lifecycle_actions SET replacement_equipment_id = :keep WHERE replacement_equipment_id = :merge",
-                keepId, mergeId);
 
         Equipment savedKeep = equipmentRepository.save(keep);
 

@@ -74,6 +74,7 @@ public class EquipmentService {
     private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
     private final FacilityLocationRepository facilityLocationRepository;
     private final EventPublisherService eventPublisherService;
+    private final EquipmentAuditService equipmentAuditService;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -1754,7 +1755,7 @@ public class EquipmentService {
 
         equipmentAuditService.logAction(
                 equipment,
-                hospital,
+                equipment.getHospital(),
                 username,
                 "DELETE",
                 "ALL",

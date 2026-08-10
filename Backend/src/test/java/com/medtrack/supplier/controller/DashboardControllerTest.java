@@ -1,28 +1,15 @@
 package com.medtrack.supplier.controller;
 
-import com.medtrack.supplier.dto.DashboardResponse;
-import com.medtrack.supplier.dto.DashboardSummary;
-import com.medtrack.supplier.dto.DelayAnalytics;
-import com.medtrack.supplier.dto.MonthlyShipmentReport;
-import com.medtrack.supplier.dto.PredictionDTO;
-import com.medtrack.supplier.dto.RecommendationDTO;
-import com.medtrack.supplier.dto.ShipmentRiskDTO;
-import com.medtrack.supplier.dto.ShipmentStatistics;
-import com.medtrack.supplier.dto.ShipmentTrackingResponse;
-import com.medtrack.supplier.dto.SupplierPerformance;
-import com.medtrack.supplier.dto.TrendAnalysisDTO;
+import com.medtrack.supplier.dto.*;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.supplier.service.DashboardService;
 import com.medtrack.supplier.service.prediction.PredictionService;
 import com.medtrack.supplier.service.prediction.RecommendationService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
 import java.util.List;
@@ -30,14 +17,13 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DashboardControllerTest {
 
-    private static final Long AUTHENTICATED_SUPPLIER_ID = 42L;
+    private static final Long SUPPLIER_ID = 42L;
+    private static final Long ORDER_ID = 9001L;
 
     @Mock
     private DashboardService dashboardService;
@@ -51,229 +37,140 @@ class DashboardControllerTest {
     @Mock
     private SupplierAccessGuard supplierAccessGuard;
 
+    @Mock
+    private Authentication authentication;
+
     private Authentication authentication;
     private DashboardController dashboardController;
 
-    @BeforeEach
-    void setUp() {
-        authentication = new UsernamePasswordAuthenticationToken(
-                "supplier@medtrack.com",
-                null,
-                List.of(() -> "ROLE_SUPPLIER"));
-        dashboardController = new DashboardController(
-                dashboardService,
-                predictionService,
-                recommendationService,
-                supplierAccessGuard);
-    }
-
     @Test
-    void getDashboard_UsesAuthenticatedSupplierId() {
-        DashboardResponse expected = DashboardResponse.builder().build();
+    void coreDashboardEndpointsUseAuthenticatedSupplierId() {
+        DashboardResponse dashboard = DashboardResponse.builder().build();
+        DashboardSummary summary = DashboardSummary.builder().build();
+        SupplierPerformance performance = SupplierPerformance.builder().build();
         resolveAuthenticatedSupplier();
-        when(dashboardService.getDashboard(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
+        when(dashboardService.getDashboard(SUPPLIER_ID)).thenReturn(dashboard);
+        when(dashboardService.getSummary(SUPPLIER_ID)).thenReturn(summary);
+        when(dashboardService.getPerformanceScore(SUPPLIER_ID)).thenReturn(performance);
 
-        DashboardResponse actual = dashboardController.getDashboard(authentication).getBody();
+        assertSame(dashboard, dashboardController.getDashboard(authentication).getBody());
+        assertSame(summary, dashboardController.getSummary(authentication).getBody());
+        assertSame(performance, dashboardController.getPerformance(authentication).getBody());
 
-        assertSame(expected, actual);
-        verify(dashboardService).getDashboard(AUTHENTICATED_SUPPLIER_ID);
+        verify(supplierAccessGuard, times(3)).resolveCallerId(authentication);
+        verify(dashboardService).getDashboard(SUPPLIER_ID);
+        verify(dashboardService).getSummary(SUPPLIER_ID);
+        verify(dashboardService).getPerformanceScore(SUPPLIER_ID);
     }
 
     @Test
-    void getSummary_UsesAuthenticatedSupplierId() {
-        DashboardSummary expected = DashboardSummary.builder().totalOrders(7).build();
+    void derivedDashboardEndpointsRemainScopedToAuthenticatedSupplier() {
+        DelayAnalytics delays = DelayAnalytics.builder().build();
+        ShipmentStatistics shipments = ShipmentStatistics.builder().build();
+        DashboardResponse dashboard = DashboardResponse.builder()
+                .delayAnalytics(delays)
+                .shipmentStatistics(shipments)
+                .build();
         resolveAuthenticatedSupplier();
-        when(dashboardService.getSummary(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
+        when(dashboardService.getDashboard(SUPPLIER_ID)).thenReturn(dashboard);
 
-        DashboardSummary actual = dashboardController.getSummary(authentication).getBody();
+        assertSame(delays, dashboardController.getDelayAnalytics(authentication).getBody());
+        assertSame(shipments, dashboardController.getShipmentStatistics(authentication).getBody());
+        assertSame(dashboard, dashboardController.getStatistics(authentication).getBody());
 
-        assertSame(expected, actual);
-        verify(dashboardService).getSummary(AUTHENTICATED_SUPPLIER_ID);
+        verify(supplierAccessGuard, times(3)).resolveCallerId(authentication);
+        verify(dashboardService, times(3)).getDashboard(SUPPLIER_ID);
     }
 
     @Test
-    void getPerformance_UsesAuthenticatedSupplierId() {
-        SupplierPerformance expected = SupplierPerformance.builder().performanceScore(91.0).build();
+    void reportEndpointsUseAuthenticatedSupplierId() {
+        List<MonthlyShipmentReport> monthlyReports = List.of(MonthlyShipmentReport.builder().build());
+        Map<String, Long> statusDistribution = Map.of("DELIVERED", 7L);
+        List<ShipmentTrackingResponse> delayedShipments =
+                List.of(ShipmentTrackingResponse.builder().id(12L).build());
         resolveAuthenticatedSupplier();
-        when(dashboardService.getPerformanceScore(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
+        when(dashboardService.getMonthlyReports(SUPPLIER_ID)).thenReturn(monthlyReports);
+        when(dashboardService.getStatusDistribution(SUPPLIER_ID)).thenReturn(statusDistribution);
+        when(dashboardService.getDelayedShipmentsReport(SUPPLIER_ID)).thenReturn(delayedShipments);
 
-        SupplierPerformance actual = dashboardController.getPerformance(authentication).getBody();
+        assertSame(monthlyReports, dashboardController.getMonthlyOrderSummary(authentication).getBody());
+        assertSame(statusDistribution, dashboardController.getStatusDistribution(authentication).getBody());
+        assertSame(delayedShipments, dashboardController.getDelayedShipments(authentication).getBody());
 
-        assertSame(expected, actual);
-        verify(dashboardService).getPerformanceScore(AUTHENTICATED_SUPPLIER_ID);
+        verify(supplierAccessGuard, times(3)).resolveCallerId(authentication);
+        verify(dashboardService).getMonthlyReports(SUPPLIER_ID);
+        verify(dashboardService).getStatusDistribution(SUPPLIER_ID);
+        verify(dashboardService).getDelayedShipmentsReport(SUPPLIER_ID);
     }
 
     @Test
-    void getDelayAnalytics_UsesAuthenticatedSupplierId() {
-        DelayAnalytics expected = DelayAnalytics.builder().totalDelayedShipments(2).build();
-        DashboardResponse dashboard = DashboardResponse.builder().delayAnalytics(expected).build();
+    void predictionEndpointsUseAuthenticatedSupplierId() {
+        PredictionDTO daily = PredictionDTO.builder().category("DAILY").build();
+        PredictionDTO weekly = PredictionDTO.builder().category("WEEKLY").build();
+        PredictionDTO delayProbability = PredictionDTO.builder().category("DELAY").build();
+        TrendAnalysisDTO trends = TrendAnalysisDTO.builder().build();
         resolveAuthenticatedSupplier();
-        when(dashboardService.getDashboard(AUTHENTICATED_SUPPLIER_ID)).thenReturn(dashboard);
+        when(predictionService.getDailyForecast(SUPPLIER_ID)).thenReturn(daily);
+        when(predictionService.getWeeklyForecast(SUPPLIER_ID)).thenReturn(weekly);
+        when(predictionService.getDelayProbability(SUPPLIER_ID)).thenReturn(delayProbability);
+        when(predictionService.getTrendAnalysis(SUPPLIER_ID)).thenReturn(trends);
 
-        DelayAnalytics actual = dashboardController.getDelayAnalytics(authentication).getBody();
+        assertSame(daily, dashboardController.getDailyForecast(authentication).getBody());
+        assertSame(weekly, dashboardController.getWeeklyForecast(authentication).getBody());
+        assertSame(delayProbability, dashboardController.getDelayProbability(authentication).getBody());
+        assertSame(trends, dashboardController.getPerformanceTrends(authentication).getBody());
 
-        assertSame(expected, actual);
-        verify(dashboardService).getDashboard(AUTHENTICATED_SUPPLIER_ID);
+        verify(supplierAccessGuard, times(4)).resolveCallerId(authentication);
+        verify(predictionService).getDailyForecast(SUPPLIER_ID);
+        verify(predictionService).getWeeklyForecast(SUPPLIER_ID);
+        verify(predictionService).getDelayProbability(SUPPLIER_ID);
+        verify(predictionService).getTrendAnalysis(SUPPLIER_ID);
     }
 
     @Test
-    void getShipmentStatistics_UsesAuthenticatedSupplierId() {
-        ShipmentStatistics expected = ShipmentStatistics.builder().totalShipments(12).build();
-        DashboardResponse dashboard = DashboardResponse.builder().shipmentStatistics(expected).build();
+    void riskAndRecommendationEndpointsUseAuthenticatedSupplierId() {
+        ShipmentRiskDTO risk = ShipmentRiskDTO.builder().orderId(ORDER_ID).build();
+        List<RecommendationDTO> recommendations = List.of(RecommendationDTO.builder().build());
         resolveAuthenticatedSupplier();
-        when(dashboardService.getDashboard(AUTHENTICATED_SUPPLIER_ID)).thenReturn(dashboard);
+        when(predictionService.calculateShipmentRisk(SUPPLIER_ID, ORDER_ID)).thenReturn(risk);
+        when(recommendationService.getRecommendations(SUPPLIER_ID)).thenReturn(recommendations);
 
-        ShipmentStatistics actual = dashboardController.getShipmentStatistics(authentication).getBody();
+        assertSame(risk, dashboardController.getRiskAnalysis(ORDER_ID, authentication).getBody());
+        assertSame(recommendations, dashboardController.getRecommendations(authentication).getBody());
 
-        assertSame(expected, actual);
-        verify(dashboardService).getDashboard(AUTHENTICATED_SUPPLIER_ID);
+        verify(supplierAccessGuard, times(2)).resolveCallerId(authentication);
+        verify(predictionService).calculateShipmentRisk(SUPPLIER_ID, ORDER_ID);
+        verify(recommendationService).getRecommendations(SUPPLIER_ID);
     }
 
     @Test
-    @DisplayName("Statistics compatibility endpoint preserves authenticated supplier isolation")
-    void getStatistics_UsesAuthenticatedSupplierId() {
-        DashboardResponse expected = DashboardResponse.builder().build();
-        resolveAuthenticatedSupplier();
-        when(dashboardService.getDashboard(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
+    void unresolvedAuthenticatedIdentityFailsClosed() {
+        AccessDeniedException failure = new AccessDeniedException("Authenticated user could not be resolved");
+        when(supplierAccessGuard.resolveCallerId(authentication)).thenThrow(failure);
 
-        DashboardResponse actual = dashboardController.getStatistics(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(dashboardService).getDashboard(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Monthly report uses the authenticated supplier ID")
-    void getMonthlyOrderSummary_UsesAuthenticatedSupplierId() {
-        List<MonthlyShipmentReport> expected = List.of(MonthlyShipmentReport.builder().month("2026-08").build());
-        resolveAuthenticatedSupplier();
-        when(dashboardService.getMonthlyReports(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        List<MonthlyShipmentReport> actual = dashboardController.getMonthlyOrderSummary(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(dashboardService).getMonthlyReports(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Status distribution uses the authenticated supplier ID")
-    void getStatusDistribution_UsesAuthenticatedSupplierId() {
-        Map<String, Long> expected = Map.of("SHIPPED", 3L);
-        resolveAuthenticatedSupplier();
-        when(dashboardService.getStatusDistribution(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        Map<String, Long> actual = dashboardController.getStatusDistribution(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(dashboardService).getStatusDistribution(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Delayed shipments report uses the authenticated supplier ID")
-    void getDelayedShipments_UsesAuthenticatedSupplierId() {
-        List<ShipmentTrackingResponse> expected = List.of(ShipmentTrackingResponse.builder().id(9L).build());
-        resolveAuthenticatedSupplier();
-        when(dashboardService.getDelayedShipmentsReport(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        List<ShipmentTrackingResponse> actual = dashboardController.getDelayedShipments(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(dashboardService).getDelayedShipmentsReport(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Daily forecast uses the authenticated supplier ID")
-    void getDailyForecast_UsesAuthenticatedSupplierId() {
-        PredictionDTO expected = PredictionDTO.builder().category("DAILY_FORECAST").build();
-        resolveAuthenticatedSupplier();
-        when(predictionService.getDailyForecast(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        PredictionDTO actual = dashboardController.getDailyForecast(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(predictionService).getDailyForecast(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Weekly forecast uses the authenticated supplier ID")
-    void getWeeklyForecast_UsesAuthenticatedSupplierId() {
-        PredictionDTO expected = PredictionDTO.builder().category("WEEKLY_FORECAST").build();
-        resolveAuthenticatedSupplier();
-        when(predictionService.getWeeklyForecast(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        PredictionDTO actual = dashboardController.getWeeklyForecast(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(predictionService).getWeeklyForecast(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Delay prediction uses the authenticated supplier ID")
-    void getDelayProbability_UsesAuthenticatedSupplierId() {
-        PredictionDTO expected = PredictionDTO.builder().category("DELAY_PROBABILITY").build();
-        resolveAuthenticatedSupplier();
-        when(predictionService.getDelayProbability(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        PredictionDTO actual = dashboardController.getDelayProbability(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(predictionService).getDelayProbability(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Risk analysis combines the authenticated supplier ID with the requested order")
-    void getRiskAnalysis_UsesAuthenticatedSupplierId() {
-        ShipmentRiskDTO expected = ShipmentRiskDTO.builder().orderId(88L).build();
-        resolveAuthenticatedSupplier();
-        when(predictionService.calculateShipmentRisk(AUTHENTICATED_SUPPLIER_ID, 88L)).thenReturn(expected);
-
-        ShipmentRiskDTO actual = dashboardController.getRiskAnalysis(88L, authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(predictionService).calculateShipmentRisk(AUTHENTICATED_SUPPLIER_ID, 88L);
-    }
-
-    @Test
-    @DisplayName("Performance trends use the authenticated supplier ID")
-    void getPerformanceTrends_UsesAuthenticatedSupplierId() {
-        TrendAnalysisDTO expected = TrendAnalysisDTO.builder().supplierId(AUTHENTICATED_SUPPLIER_ID).build();
-        resolveAuthenticatedSupplier();
-        when(predictionService.getTrendAnalysis(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        TrendAnalysisDTO actual = dashboardController.getPerformanceTrends(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(predictionService).getTrendAnalysis(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("Recommendations use the authenticated supplier ID")
-    void getRecommendations_UsesAuthenticatedSupplierId() {
-        List<RecommendationDTO> expected = List.of(RecommendationDTO.builder().type("IMMEDIATE_ACTION").build());
-        resolveAuthenticatedSupplier();
-        when(recommendationService.getRecommendations(AUTHENTICATED_SUPPLIER_ID)).thenReturn(expected);
-
-        List<RecommendationDTO> actual = dashboardController.getRecommendations(authentication).getBody();
-
-        assertSame(expected, actual);
-        verify(recommendationService).getRecommendations(AUTHENTICATED_SUPPLIER_ID);
-    }
-
-    @Test
-    @DisplayName("An unresolved principal is denied instead of falling back to another account")
-    void getDashboard_UnresolvedPrincipal_DeniesAccessWithoutCallingServices() {
-        AccessDeniedException denied = new AccessDeniedException("Authenticated user could not be resolved");
-        when(supplierAccessGuard.resolveCallerId(authentication)).thenThrow(denied);
-
-        AccessDeniedException actual = assertThrows(
+        AccessDeniedException thrown = assertThrows(
                 AccessDeniedException.class,
                 () -> dashboardController.getDashboard(authentication));
 
-        assertSame(denied, actual);
+        assertSame(failure, thrown);
+        verifyNoInteractions(dashboardService, predictionService, recommendationService);
+    }
+
+    @Test
+    void missingAuthenticationNeverFallsBackToAnotherSupplier() {
+        AccessDeniedException failure = new AccessDeniedException("Authenticated user could not be resolved");
+        when(supplierAccessGuard.resolveCallerId(null)).thenThrow(failure);
+
+        AccessDeniedException thrown = assertThrows(
+                AccessDeniedException.class,
+                () -> dashboardController.getSummary(null));
+
+        assertSame(failure, thrown);
+        verify(supplierAccessGuard).resolveCallerId(null);
         verifyNoInteractions(dashboardService, predictionService, recommendationService);
     }
 
     private void resolveAuthenticatedSupplier() {
-        when(supplierAccessGuard.resolveCallerId(authentication)).thenReturn(AUTHENTICATED_SUPPLIER_ID);
+        when(supplierAccessGuard.resolveCallerId(authentication)).thenReturn(SUPPLIER_ID);
     }
 }

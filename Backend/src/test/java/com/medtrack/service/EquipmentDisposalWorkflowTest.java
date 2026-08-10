@@ -13,8 +13,13 @@ import com.medtrack.model.EquipmentDisposalMethod;
 import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.MaintenanceWorkOrder;
+import com.medtrack.model.MaintenanceWorkOrderPriority;
+import com.medtrack.model.MaintenanceWorkOrderStatus;
+import com.medtrack.model.MaintenanceWorkOrderType;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +30,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,6 +68,9 @@ class EquipmentDisposalWorkflowTest {
 
     @Autowired
     private HospitalRepository hospitalRepository;
+
+    @Autowired
+    private MaintenanceWorkOrderRepository workOrderRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -234,5 +245,92 @@ class EquipmentDisposalWorkflowTest {
                 () -> disposalService.requestDisposal(
                         asset.getId(), request(EquipmentDisposalMethod.SALE, false), username),
                 "a retired asset cannot be decommissioned again");
+    }
+
+    private MaintenanceWorkOrder workOrder(Equipment asset, String code, MaintenanceWorkOrderStatus status) {
+        return workOrderRepository.saveAndFlush(MaintenanceWorkOrder.builder()
+                .workOrderCode(code)
+                .hospitalId(hospital.getId())
+                .equipment(asset)
+                .title("Outstanding work on " + asset.getEquipmentCode())
+                .maintenanceType(MaintenanceWorkOrderType.CORRECTIVE)
+                .priority(MaintenanceWorkOrderPriority.MEDIUM)
+                .status(status)
+                .dueDate(LocalDate.now().plusDays(2))
+                .createdAt(LocalDateTime.now())
+                .createdBy(username)
+                .deleted(false)
+                .build());
+    }
+
+    @Test
+    @DisplayName("an asset with work still assigned to a technician cannot be decommissioned")
+    void completionIsRefusedWhileWorkOrdersAreLive() {
+        Equipment asset = liveAsset("EQ-DISP-WO-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        workOrder(asset, "WO-000801", MaintenanceWorkOrderStatus.IN_PROGRESS);
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username));
+
+        assertTrue(refused.getMessage().contains("WO-000801"),
+                "The refusal has to name the work that is in the way: " + refused.getMessage());
+        assertEquals(EquipmentStatus.ACTIVE,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus(),
+                "The asset stays in service while the work order is live");
+    }
+
+    @Test
+    @DisplayName("every live work-order state blocks decommissioning")
+    void everyLiveWorkOrderStateBlocksCompletion() {
+        for (MaintenanceWorkOrderStatus status : List.of(
+                MaintenanceWorkOrderStatus.OPEN,
+                MaintenanceWorkOrderStatus.ASSIGNED,
+                MaintenanceWorkOrderStatus.IN_PROGRESS,
+                MaintenanceWorkOrderStatus.ON_HOLD)) {
+
+            Equipment asset = liveAsset("EQ-DISP-WO-" + status.name());
+            EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                    asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+            disposalService.approveDisposal(disposal.getId(), username);
+            workOrder(asset, "WO-0009" + status.ordinal(), status);
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> disposalService.completeDisposal(disposal.getId(), username),
+                    status + " work must block decommissioning");
+        }
+    }
+
+    @Test
+    @DisplayName("work that is finished or cancelled does not block decommissioning")
+    void settledWorkOrdersDoNotBlockCompletion() {
+        Equipment asset = liveAsset("EQ-DISP-WO-2");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        workOrder(asset, "WO-000810", MaintenanceWorkOrderStatus.COMPLETED);
+        workOrder(asset, "WO-000811", MaintenanceWorkOrderStatus.CANCELLED);
+
+        EquipmentDisposalResponse completed = disposalService.completeDisposal(disposal.getId(), username);
+
+        assertEquals(EquipmentDisposalStatus.COMPLETED, completed.getStatus());
+        assertEquals(EquipmentStatus.DISPOSED,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("another asset's live work does not block this one")
+    void workOnAnotherAssetDoesNotBlockCompletion() {
+        Equipment asset = liveAsset("EQ-DISP-WO-3");
+        Equipment neighbour = liveAsset("EQ-DISP-WO-4");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        workOrder(neighbour, "WO-000820", MaintenanceWorkOrderStatus.OPEN);
+
+        assertEquals(EquipmentDisposalStatus.COMPLETED,
+                disposalService.completeDisposal(disposal.getId(), username).getStatus());
     }
 }

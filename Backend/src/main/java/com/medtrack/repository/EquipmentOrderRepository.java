@@ -21,6 +21,25 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
 
     Page<EquipmentOrder> findByHospital(String hospital, Pageable pageable);
 
+    @Query("SELECT order FROM EquipmentOrder order "
+            + "WHERE EXISTS (SELECT shipment FROM ShipmentTracking shipment "
+            + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId)")
+    Page<EquipmentOrder> findBySupplierId(
+            @Param("supplierId") Long supplierId,
+            Pageable pageable);
+
+    @Query("SELECT order FROM EquipmentOrder order "
+            + "WHERE EXISTS (SELECT shipment FROM ShipmentTracking shipment "
+            + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId)")
+    List<EquipmentOrder> findBySupplierId(@Param("supplierId") Long supplierId);
+
+    @Query("SELECT order FROM EquipmentOrder order WHERE order.id = :orderId "
+            + "AND EXISTS (SELECT shipment FROM ShipmentTracking shipment "
+            + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId)")
+    Optional<EquipmentOrder> findByIdAndSupplierId(
+            @Param("orderId") Long orderId,
+            @Param("supplierId") Long supplierId);
+
     List<EquipmentOrder> findByStatus(String status);
 
     List<EquipmentOrder> findByEquipmentId(String equipmentId);

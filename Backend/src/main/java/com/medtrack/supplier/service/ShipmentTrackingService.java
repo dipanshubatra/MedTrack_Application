@@ -15,6 +15,7 @@ import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.supplier.validation.ShipmentRequestValidator;
+import com.medtrack.supplier.workflow.ShipmentWorkflowOrchestrator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +35,7 @@ public class ShipmentTrackingService {
     private final EquipmentOrderRepository orderRepository;
     private final SupplierAccessGuard supplierAccessGuard;
     private final ShipmentRequestValidator validator;
+    private final ShipmentWorkflowOrchestrator orchestrator;
 
     @Transactional
     public ShipmentTrackingResponse createShipment(CreateShipmentRequest request, Authentication authentication) {
@@ -138,21 +141,23 @@ public class ShipmentTrackingService {
     }
 
     @Transactional
-    public List<ShipmentTrackingResponse> bulkConfirmShipments(BulkShipmentConfirmationRequest request) {
+    public List<ShipmentTrackingResponse> bulkConfirmShipments(BulkShipmentConfirmationRequest request,
+                                                               Authentication authentication) {
         return request.getShipments().stream()
-                .map(this::createShipment)
+                .map(shipment -> createShipment(shipment, authentication))
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public List<ShipmentTrackingResponse> bulkConfirmDeliveries(BulkDeliveryConfirmationRequest request) {
+    public List<ShipmentTrackingResponse> bulkConfirmDeliveries(BulkDeliveryConfirmationRequest request,
+                                                                Authentication authentication) {
         UpdateShipmentStatusRequest updateRequest = UpdateShipmentStatusRequest.builder()
                 .shipmentStatus("DELIVERED")
                 .supplierNotes("Bulk delivery confirmation")
                 .build();
 
         return request.getShipmentIds().stream()
-                .map(id -> updateShipmentStatus(id, updateRequest))
+                .map(id -> updateShipmentStatus(id, updateRequest, authentication))
                 .collect(Collectors.toList());
     }
 

@@ -221,8 +221,8 @@ class PreventiveMaintenanceServiceTest {
     void monthlyCadenceAdvancesFromThePriorOccurrenceInsteadOfTheWindowStart() {
         LocalDate start = LocalDate.now();
         LocalDate latestDeadline = start.withDayOfMonth(1);
-        LocalDate firstExpected = latestDeadline.with(TemporalAdjusters.firstDayOfNextMonth());
-        LocalDate secondExpected = firstExpected.with(TemporalAdjusters.firstDayOfNextMonth());
+        LocalDate firstExpected = latestDeadline.plusMonths(1);
+        LocalDate secondExpected = firstExpected.plusMonths(1);
         LocalDate end = secondExpected.plusDays(1);
         weeklyRule.setFrequency(RecurrenceFrequency.MONTHLY);
         when(ruleRepository.findByIdAndHospitalId(weeklyRule.getId(), hospital.getId()))
