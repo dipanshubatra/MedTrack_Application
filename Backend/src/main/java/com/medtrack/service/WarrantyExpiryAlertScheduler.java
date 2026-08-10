@@ -23,9 +23,9 @@ import java.util.List;
  * day of expiry itself. Assets already past expiry are not re-alerted: the EXPIRED status badge
  * on the inventory pages covers them, and daily spam would drown the feed.</p>
  *
- * <p>Alerting is idempotent per asset and window: the threshold is recorded in the event detail,
- * and an existing event for the same asset and threshold suppresses a duplicate, so the job is
- * safe to run repeatedly and a missed day simply folds the asset into the nearest window.</p>
+ * <p>Alerting is idempotent per asset, contract expiry and window. Both the threshold and expiry
+ * date are recorded in the event detail, so repeated runs for the same contract are suppressed
+ * without allowing an old contract's alert history to suppress alerts after a warranty renewal.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -61,7 +61,7 @@ public class WarrantyExpiryAlertScheduler {
                 continue;
             }
             Integer threshold = windowFor(daysUntil);
-            if (threshold == null || alreadyAlerted(equipment.getId(), threshold)) {
+            if (threshold == null || alreadyAlerted(equipment.getId(), expiry, threshold)) {
                 continue;
             }
             publishAlert(equipment, threshold, daysUntil);
@@ -89,17 +89,21 @@ public class WarrantyExpiryAlertScheduler {
     }
 
     /**
-     * Whether this asset already has an event for the given threshold. The threshold is encoded
-     * into the event detail as {@code "threshold":N}, which stays stable across runs.
+     * Whether this asset already has an event for the given contract and threshold. Matching both
+     * markers preserves idempotency for repeated runs while allowing a renewed warranty to begin a
+     * fresh alert cycle. Existing events are compatible because they already include both fields.
      */
-    private boolean alreadyAlerted(Long equipmentId, int threshold) {
-        String marker = "\"threshold\":" + threshold;
+    private boolean alreadyAlerted(Long equipmentId, LocalDate expiry, int threshold) {
+        String thresholdMarker = "\"threshold\":" + threshold;
+        String expiryMarker = "\"expiry\":\"" + expiry + "\"";
         return eventRepository
                 .findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
                         OperationsEvent.EntityType.EQUIPMENT, equipmentId)
                 .stream()
                 .filter(event -> event.getType() == OperationsEvent.EventType.EQUIPMENT_WARRANTY_EXPIRING)
-                .anyMatch(event -> event.getDetail() != null && event.getDetail().contains(marker));
+                .map(OperationsEvent::getDetail)
+                .filter(detail -> detail != null)
+                .anyMatch(detail -> detail.contains(thresholdMarker) && detail.contains(expiryMarker));
     }
 
     private void publishAlert(Equipment equipment, int threshold, long daysUntil) {
