@@ -657,13 +657,20 @@ public class PreventiveMaintenanceService {
             LocalDate latestGeneratedDeadline) {
         validateWindow(start, end);
         List<LocalDate> dueDates = new ArrayList<>();
-        LocalDate cursor = latestGeneratedDeadline == null
-                ? start
-                : nextOccurrence(latestGeneratedDeadline, rule);
+
+        // Every occurrence is measured from a fixed anchor rather than from the previous
+        // occurrence. Chaining loses the anchor's day of month the first time it is clamped: a
+        // monthly rule anchored on the 31st produces 31 Jan -> 28 Feb, and chaining from 28 Feb
+        // then yields 28 Mar, so the schedule slips three days permanently after one February.
+        // Anchoring gives 31 Jan, 28 Feb, 31 Mar, which is what a monthly schedule means.
+        LocalDate anchor = latestGeneratedDeadline == null ? start : latestGeneratedDeadline;
+        int step = latestGeneratedDeadline == null ? 0 : 1;
+        LocalDate cursor = occurrenceAt(anchor, rule, step);
         int safety = 0;
 
         while (cursor.isBefore(start) && safety < MAX_OCCURRENCES_PER_EQUIPMENT) {
-            cursor = nextOccurrence(cursor, rule);
+            step++;
+            cursor = occurrenceAt(anchor, rule, step);
             safety++;
         }
         if (cursor.isBefore(start)) {
@@ -674,7 +681,8 @@ public class PreventiveMaintenanceService {
         }
         while (!cursor.isAfter(end) && safety < MAX_OCCURRENCES_PER_EQUIPMENT) {
             dueDates.add(cursor);
-            cursor = nextOccurrence(cursor, rule);
+            step++;
+            cursor = occurrenceAt(anchor, rule, step);
             safety++;
         }
         if (!cursor.isAfter(end)) {
@@ -686,18 +694,27 @@ public class PreventiveMaintenanceService {
         return List.copyOf(dueDates);
     }
 
-    private LocalDate nextOccurrence(LocalDate current, MaintenancePolicyRule rule) {
+    /**
+     * The occurrence {@code step} intervals after {@code anchor}.
+     *
+     * <p>Offsetting from the anchor rather than from the previous occurrence is what keeps a
+     * month-end schedule on the month end. {@link LocalDate#plusMonths} clamps into a short month
+     * but keeps the anchor's day for every later month, so an anchor of 31 January yields
+     * 28 February and then 31 March.</p>
+     */
+    private LocalDate occurrenceAt(LocalDate anchor, MaintenancePolicyRule rule, int step) {
         RecurrenceFrequency frequency = rule.getFrequency();
         if (frequency == null) {
-            return current.plusDays(1);
+            return anchor.plusDays(step);
         }
         return switch (frequency) {
-            case DAILY -> current.plusDays(1);
-            case WEEKLY -> current.plusWeeks(1);
-            case MONTHLY -> current.plusMonths(1);
-            case QUARTERLY -> current.plusMonths(3);
-            case YEARLY -> current.plusYears(1);
-            case CUSTOM -> current.plusDays(rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7);
+            case DAILY -> anchor.plusDays(step);
+            case WEEKLY -> anchor.plusWeeks(step);
+            case MONTHLY -> anchor.plusMonths(step);
+            case QUARTERLY -> anchor.plusMonths(3L * step);
+            case YEARLY -> anchor.plusYears(step);
+            case CUSTOM -> anchor.plusDays(
+                    (long) step * (rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7));
         };
     }
 

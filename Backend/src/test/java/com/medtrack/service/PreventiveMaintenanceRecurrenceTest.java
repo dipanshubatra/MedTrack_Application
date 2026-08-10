@@ -47,6 +47,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PreventiveMaintenanceRecurrenceTest {
 
+    /**
+     * Generation windows must not be entirely in the past, so the fixtures below are anchored on
+     * next January rather than on a hard-coded calendar year. Pinned to 2026, every one of these
+     * tests started throwing "Generation window cannot be entirely in the past" the moment that
+     * year was under way.
+     */
+    private static final int NEXT_YEAR = java.time.LocalDate.now().getYear() + 1;
+
     private static final String HOSPITAL_EMAIL = "admin@hospital.com";
     private static final Long HOSPITAL_ID = 100L;
     private static final Long RULE_ID = 50L;
@@ -106,8 +114,8 @@ class PreventiveMaintenanceRecurrenceTest {
                 .equipmentCode("EQ-VENT-100")
                 .name("Mechanical Ventilator")
                 .hospital(hospital)
-                .status(EquipmentStatus.OPERATIONAL)
-                .category(EquipmentCategory.DIAGNOSTIC)
+                .status(EquipmentStatus.ACTIVE)
+                .category(EquipmentCategory.RESPIRATORY)
                 .build();
 
         rule = MaintenancePolicyRule.builder()
@@ -133,9 +141,9 @@ class PreventiveMaintenanceRecurrenceTest {
     @DisplayName("Should preserve exact day of month for monthly recurrence cadence")
     void shouldPreserveDayOfMonthForMonthlyRecurrence() {
         rule.setFrequency(RecurrenceFrequency.MONTHLY);
-        LocalDate start = LocalDate.of(2026, 3, 15);
-        LocalDate end = LocalDate.of(2026, 6, 20);
-        LocalDate priorDeadline = LocalDate.of(2026, 3, 15);
+        LocalDate start = LocalDate.of(NEXT_YEAR, 3, 15);
+        LocalDate end = LocalDate.of(NEXT_YEAR, 6, 20);
+        LocalDate priorDeadline = LocalDate.of(NEXT_YEAR, 3, 15);
 
         when(ruleRepository.findByIdAndHospitalId(RULE_ID, HOSPITAL_ID)).thenReturn(Optional.of(rule));
         when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
@@ -147,9 +155,9 @@ class PreventiveMaintenanceRecurrenceTest {
         RulePreviewResponse preview = service.previewRule(RULE_ID, start, end, authentication);
 
         List<LocalDate> expectedDates = List.of(
-                LocalDate.of(2026, 4, 15),
-                LocalDate.of(2026, 5, 15),
-                LocalDate.of(2026, 6, 15)
+                LocalDate.of(NEXT_YEAR, 4, 15),
+                LocalDate.of(NEXT_YEAR, 5, 15),
+                LocalDate.of(NEXT_YEAR, 6, 15)
         );
         assertEquals(expectedDates, preview.getDueDates());
         assertEquals(3, preview.getWouldCreate());
@@ -159,9 +167,9 @@ class PreventiveMaintenanceRecurrenceTest {
     @DisplayName("Should calculate exact 3-month quarterly intervals preserving day of month")
     void shouldPreserveDayOfMonthForQuarterlyRecurrence() {
         rule.setFrequency(RecurrenceFrequency.QUARTERLY);
-        LocalDate start = LocalDate.of(2026, 1, 15);
-        LocalDate end = LocalDate.of(2026, 10, 30);
-        LocalDate priorDeadline = LocalDate.of(2026, 1, 15);
+        LocalDate start = LocalDate.of(NEXT_YEAR, 1, 15);
+        LocalDate end = LocalDate.of(NEXT_YEAR, 10, 30);
+        LocalDate priorDeadline = LocalDate.of(NEXT_YEAR, 1, 15);
 
         when(ruleRepository.findByIdAndHospitalId(RULE_ID, HOSPITAL_ID)).thenReturn(Optional.of(rule));
         when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
@@ -173,9 +181,9 @@ class PreventiveMaintenanceRecurrenceTest {
         RulePreviewResponse preview = service.previewRule(RULE_ID, start, end, authentication);
 
         List<LocalDate> expectedDates = List.of(
-                LocalDate.of(2026, 4, 15),
-                LocalDate.of(2026, 7, 15),
-                LocalDate.of(2026, 10, 15)
+                LocalDate.of(NEXT_YEAR, 4, 15),
+                LocalDate.of(NEXT_YEAR, 7, 15),
+                LocalDate.of(NEXT_YEAR, 10, 15)
         );
         assertEquals(expectedDates, preview.getDueDates());
         assertEquals(3, preview.getWouldCreate());
@@ -185,9 +193,9 @@ class PreventiveMaintenanceRecurrenceTest {
     @DisplayName("Should advance exactly 12 months for yearly recurrence frequency")
     void shouldPreserveDayOfMonthForYearlyRecurrence() {
         rule.setFrequency(RecurrenceFrequency.YEARLY);
-        LocalDate start = LocalDate.of(2026, 2, 20);
-        LocalDate end = LocalDate.of(2028, 5, 1);
-        LocalDate priorDeadline = LocalDate.of(2026, 2, 20);
+        LocalDate start = LocalDate.of(NEXT_YEAR, 2, 20);
+        LocalDate end = LocalDate.of(NEXT_YEAR + 2, 5, 1);
+        LocalDate priorDeadline = LocalDate.of(NEXT_YEAR, 2, 20);
 
         when(ruleRepository.findByIdAndHospitalId(RULE_ID, HOSPITAL_ID)).thenReturn(Optional.of(rule));
         when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
@@ -199,8 +207,8 @@ class PreventiveMaintenanceRecurrenceTest {
         RulePreviewResponse preview = service.previewRule(RULE_ID, start, end, authentication);
 
         List<LocalDate> expectedDates = List.of(
-                LocalDate.of(2027, 2, 20),
-                LocalDate.of(2028, 2, 20)
+                LocalDate.of(NEXT_YEAR + 1, 2, 20),
+                LocalDate.of(NEXT_YEAR + 2, 2, 20)
         );
         assertEquals(expectedDates, preview.getDueDates());
         assertEquals(2, preview.getWouldCreate());
@@ -210,9 +218,9 @@ class PreventiveMaintenanceRecurrenceTest {
     @DisplayName("Should handle month-end boundary dates correctly for monthly recurrence")
     void shouldHandleMonthEndBoundaryForMonthlyRecurrence() {
         rule.setFrequency(RecurrenceFrequency.MONTHLY);
-        LocalDate start = LocalDate.of(2026, 1, 31);
-        LocalDate end = LocalDate.of(2026, 4, 5);
-        LocalDate priorDeadline = LocalDate.of(2026, 1, 31);
+        LocalDate start = LocalDate.of(NEXT_YEAR, 1, 31);
+        LocalDate end = LocalDate.of(NEXT_YEAR, 4, 5);
+        LocalDate priorDeadline = LocalDate.of(NEXT_YEAR, 1, 31);
 
         when(ruleRepository.findByIdAndHospitalId(RULE_ID, HOSPITAL_ID)).thenReturn(Optional.of(rule));
         when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
@@ -224,8 +232,8 @@ class PreventiveMaintenanceRecurrenceTest {
         RulePreviewResponse preview = service.previewRule(RULE_ID, start, end, authentication);
 
         List<LocalDate> expectedDates = List.of(
-                LocalDate.of(2026, 2, 28),
-                LocalDate.of(2026, 3, 31)
+                LocalDate.of(NEXT_YEAR, 2, 28),
+                LocalDate.of(NEXT_YEAR, 3, 31)
         );
         assertEquals(expectedDates, preview.getDueDates());
     }
@@ -234,8 +242,8 @@ class PreventiveMaintenanceRecurrenceTest {
     @DisplayName("Should generate maintenance tasks with correct deadlines for quarterly recurrence")
     void shouldGenerateTasksWithQuarterlyRecurrenceDeadlines() {
         rule.setFrequency(RecurrenceFrequency.QUARTERLY);
-        LocalDate start = LocalDate.of(2026, 1, 1);
-        LocalDate end = LocalDate.of(2026, 7, 1);
+        LocalDate start = LocalDate.of(NEXT_YEAR, 1, 1);
+        LocalDate end = LocalDate.of(NEXT_YEAR, 7, 1);
 
         when(ruleRepository.findByIdAndHospitalIdForUpdate(RULE_ID, HOSPITAL_ID)).thenReturn(Optional.of(rule));
         when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
@@ -255,9 +263,9 @@ class PreventiveMaintenanceRecurrenceTest {
 
         List<MaintenanceTask> created = captor.getValue();
         assertEquals(3, created.size());
-        assertEquals(LocalDate.of(2026, 1, 1), created.get(0).getDeadline());
-        assertEquals(LocalDate.of(2026, 4, 1), created.get(1).getDeadline());
-        assertEquals(LocalDate.of(2026, 7, 1), created.get(2).getDeadline());
+        assertEquals(LocalDate.of(NEXT_YEAR, 1, 1), created.get(0).getDeadline());
+        assertEquals(LocalDate.of(NEXT_YEAR, 4, 1), created.get(1).getDeadline());
+        assertEquals(LocalDate.of(NEXT_YEAR, 7, 1), created.get(2).getDeadline());
     }
 
     @Test
@@ -265,9 +273,9 @@ class PreventiveMaintenanceRecurrenceTest {
     void shouldAdvanceCustomIntervalBySpecifiedDays() {
         rule.setFrequency(RecurrenceFrequency.CUSTOM);
         rule.setCustomIntervalDays(10);
-        LocalDate start = LocalDate.of(2026, 5, 1);
-        LocalDate end = LocalDate.of(2026, 5, 25);
-        LocalDate priorDeadline = LocalDate.of(2026, 5, 1);
+        LocalDate start = LocalDate.of(NEXT_YEAR, 5, 1);
+        LocalDate end = LocalDate.of(NEXT_YEAR, 5, 25);
+        LocalDate priorDeadline = LocalDate.of(NEXT_YEAR, 5, 1);
 
         when(ruleRepository.findByIdAndHospitalId(RULE_ID, HOSPITAL_ID)).thenReturn(Optional.of(rule));
         when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
@@ -279,8 +287,8 @@ class PreventiveMaintenanceRecurrenceTest {
         RulePreviewResponse preview = service.previewRule(RULE_ID, start, end, authentication);
 
         List<LocalDate> expectedDates = List.of(
-                LocalDate.of(2026, 5, 11),
-                LocalDate.of(2026, 5, 21)
+                LocalDate.of(NEXT_YEAR, 5, 11),
+                LocalDate.of(NEXT_YEAR, 5, 21)
         );
         assertEquals(expectedDates, preview.getDueDates());
     }

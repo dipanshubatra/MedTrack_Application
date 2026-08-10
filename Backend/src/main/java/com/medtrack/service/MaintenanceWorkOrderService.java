@@ -1005,6 +1005,20 @@ public class MaintenanceWorkOrderService {
         Equipment equipment =
                 workOrder.getEquipment();
 
+        // equipmentId and assignedUserId are read-only mirrors of the join columns
+        // (insertable = false, updatable = false), so JPA only populates them when the row is
+        // read back from the database. Responding straight after a save - which is what
+        // createWorkOrder and assignWorkOrder do - would otherwise report them as null. Prefer the
+        // relationship, which is the write path, and fall back to the mirror for entities loaded
+        // from the database.
+        Long resolvedEquipmentId = equipment != null && equipment.getId() != null
+                ? equipment.getId()
+                : workOrder.getEquipmentId();
+        Long resolvedAssignedUserId = workOrder.getAssignedUser() != null
+                && workOrder.getAssignedUser().getId() != null
+                ? workOrder.getAssignedUser().getId()
+                : workOrder.getAssignedUserId();
+
         return MaintenanceWorkOrderResponse
                 .builder()
                 .id(workOrder.getId())
@@ -1015,7 +1029,7 @@ public class MaintenanceWorkOrderService {
                         workOrder.getHospitalId()
                 )
                 .equipmentId(
-                        workOrder.getEquipmentId()
+                        resolvedEquipmentId
                 )
                 .equipmentCode(
                         equipment != null
@@ -1046,7 +1060,7 @@ public class MaintenanceWorkOrderService {
                         workOrder.getStatus()
                 )
                 .assignedUserId(
-                        workOrder.getAssignedUserId()
+                        resolvedAssignedUserId
                 )
                 .assignedTechnician(
                         workOrder.getAssignedTechnician()
