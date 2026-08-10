@@ -7,6 +7,7 @@ import com.medtrack.dto.MaintenanceWorkOrderCompletionRequest;
 import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
@@ -50,6 +51,8 @@ class MaintenanceWorkOrderServiceTest {
     @InjectMocks
     private MaintenanceWorkOrderService workOrderService;
 
+    private Hospital hospital;
+
     private Equipment equipment;
 
     private final Long hospitalId = 1L;
@@ -59,11 +62,17 @@ class MaintenanceWorkOrderServiceTest {
     @BeforeEach
     void setUp() {
 
+        hospital = Hospital.builder()
+                .id(hospitalId)
+                .name("City General")
+                .build();
+
         equipment = Equipment.builder()
                 .id(100L)
                 .equipmentCode("EQ-100")
                 .name("MRI Scanner")
                 .department("Radiology")
+                .hospital(hospital)
                 .build();
     }
 
@@ -166,10 +175,10 @@ class MaintenanceWorkOrderServiceTest {
                         MaintenanceWorkOrderStatus.OPEN
                 );
 
-        User technician = mock(User.class);
-
-        when(technician.getUsername())
-                .thenReturn("technician@test.com");
+        User technician = User.builder()
+                .id(20L)
+                .username("technician@test.com")
+                .build();
 
         when(workOrderRepository
                 .findByIdAndHospitalId(10L, hospitalId))

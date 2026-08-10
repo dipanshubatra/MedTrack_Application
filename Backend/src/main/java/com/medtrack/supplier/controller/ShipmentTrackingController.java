@@ -46,8 +46,10 @@ public class ShipmentTrackingController {
             @ApiResponse(responseCode = "400", description = "Invalid request or duplicate tracking data")
     })
     public ResponseEntity<List<ShipmentTrackingResponse>> bulkCreateShipments(
-            @Valid @RequestBody com.medtrack.supplier.dto.BulkShipmentConfirmationRequest request) {
-        List<ShipmentTrackingResponse> response = shipmentTrackingService.bulkConfirmShipments(request);
+            @Valid @RequestBody com.medtrack.supplier.dto.BulkShipmentConfirmationRequest request,
+            Authentication authentication) {
+        List<ShipmentTrackingResponse> response =
+                shipmentTrackingService.bulkConfirmShipments(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -68,8 +70,10 @@ public class ShipmentTrackingController {
             @ApiResponse(responseCode = "400", description = "Invalid status transition")
     })
     public ResponseEntity<List<ShipmentTrackingResponse>> bulkConfirmDeliveries(
-            @Valid @RequestBody com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest request) {
-        List<ShipmentTrackingResponse> response = shipmentTrackingService.bulkConfirmDeliveries(request);
+            @Valid @RequestBody com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest request,
+            Authentication authentication) {
+        List<ShipmentTrackingResponse> response =
+                shipmentTrackingService.bulkConfirmDeliveries(request, authentication);
         return ResponseEntity.ok(response);
     }
 
