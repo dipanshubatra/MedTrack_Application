@@ -235,6 +235,7 @@ class UserResolutionServiceTest {
                     equipmentRepository,
                     hospitalRepository,
                     userRepository,
+                    null,
                     certificatePdf
             );
 
