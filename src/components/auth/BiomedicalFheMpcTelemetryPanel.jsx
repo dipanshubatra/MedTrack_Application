@@ -32,7 +32,10 @@ import {
   Radio,
   Share2,
   Network,
-  Binary
+  Binary,
+  ShieldAlert,
+  Settings2,
+  Workflow
 } from "lucide-react";
 import {
   getFheMpcRegistry,
@@ -51,10 +54,11 @@ import "../../pages/auth/auth.css";
  * Features:
  * 1. Active FHE / MPC Telemetry Stream Registry (CKKS & BFV Schemes)
  * 2. Multi-Party Computation (MPC) Custodian Cluster Nodes Matrix
- * 3. Zero-Decryption Homomorphic Evaluation Sandbox
- * 4. FHE / MPC Audit JSON Report Inspector & Exporter
- * 5. HomomorphicEncryption.org & ISO/IEC 18033-6 Standards
- * 6. Provision Encrypted Telemetry Stream Modal
+ * 3. Ring-Lattice Cryptographic Polynomial Matrix & Key Length Telemetry
+ * 4. Zero-Decryption Homomorphic Evaluation Sandbox
+ * 5. FHE / MPC Audit JSON Report Inspector & Exporter
+ * 6. HomomorphicEncryption.org & ISO/IEC 18033-6 Standards
+ * 7. Provision Encrypted Telemetry Stream Modal
  */
 export default function BiomedicalFheMpcTelemetryPanel() {
   // State
@@ -64,7 +68,7 @@ export default function BiomedicalFheMpcTelemetryPanel() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
-  const [activeTab, setActiveTab] = useState("STREAMS"); // "STREAMS" | "MPC_NODES" | "SANDBOX" | "JSON_REPORT" | "STANDARDS"
+  const [activeTab, setActiveTab] = useState("STREAMS"); // "STREAMS" | "MPC_NODES" | "LATTICE_MATRIX" | "SANDBOX" | "JSON_REPORT" | "STANDARDS"
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
@@ -192,6 +196,26 @@ export default function BiomedicalFheMpcTelemetryPanel() {
     });
   }, [streams, searchQuery, selectedSchemeFilter]);
 
+  // Lattice Polynomial Matrix Data
+  const latticeMatrixData = useMemo(() => {
+    return [
+      {
+        schemeName: "CKKS (Floating Point Arithmetic)",
+        polynomialDegree: "N = 8192 / 16384 Rings",
+        modulusSizeBits: "438-bit Prime Modulus (q)",
+        noiseBudgetRemaining: "128 bits (Optimal)",
+        bootstrappingRequired: "FALSE (Leveled FHE)"
+      },
+      {
+        schemeName: "BFV (Exact Integer Arithmetic)",
+        polynomialDegree: "N = 4096 / 8192 Rings",
+        modulusSizeBits: "218-bit Prime Modulus (q)",
+        noiseBudgetRemaining: "96 bits (Optimal)",
+        bootstrappingRequired: "FALSE (Leveled FHE)"
+      }
+    ];
+  }, []);
+
   // Metrics
   const metrics = useMemo(() => {
     const totalStreams = streams.length;
@@ -294,6 +318,18 @@ export default function BiomedicalFheMpcTelemetryPanel() {
             }`}
           >
             <Network size={15} /> MPC Custodian Nodes ({mpcNodes.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("LATTICE_MATRIX")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === "LATTICE_MATRIX"
+                ? "bg-indigo-600 text-white font-black shadow-lg shadow-indigo-600/20"
+                : "bg-slate-800 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Settings2 size={15} /> Ring-Lattice Matrix ({latticeMatrixData.length})
           </button>
 
           <button
@@ -450,7 +486,42 @@ export default function BiomedicalFheMpcTelemetryPanel() {
         </div>
       )}
 
-      {/* 5. SANDBOX TAB */}
+      {/* 5. LATTICE MATRIX TAB */}
+      {activeTab === "LATTICE_MATRIX" && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Settings2 size={18} className="text-indigo-400" /> Ring-Lattice Cryptographic Polynomial Matrix
+              </h3>
+              <p className="text-xs text-slate-400 font-mono">Polynomial degrees (N), prime moduli (q), noise budgets, and leveling status</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {latticeMatrixData.map((l, idx) => (
+              <div key={idx} className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 font-sans">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded font-bold">
+                    {l.schemeName}
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold">{l.noiseBudgetRemaining}</span>
+                </div>
+
+                <h4 className="text-sm font-bold text-white">{l.schemeName}</h4>
+
+                <div className="space-y-1 font-mono text-[11px]">
+                  <div className="text-slate-400">Polynomial Degree: <strong className="text-indigo-300">{l.polynomialDegree}</strong></div>
+                  <div className="text-slate-400">Modulus Size: <strong className="text-white">{l.modulusSizeBits}</strong></div>
+                  <div className="text-slate-400">Bootstrapping Required: <strong className="text-emerald-400">{l.bootstrappingRequired}</strong></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 6. SANDBOX TAB */}
       {activeTab === "SANDBOX" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
@@ -527,7 +598,7 @@ export default function BiomedicalFheMpcTelemetryPanel() {
         </div>
       )}
 
-      {/* 6. FHE AUDIT JSON REPORT TAB */}
+      {/* 7. FHE AUDIT JSON REPORT TAB */}
       {activeTab === "JSON_REPORT" && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -556,7 +627,7 @@ export default function BiomedicalFheMpcTelemetryPanel() {
         </div>
       )}
 
-      {/* 7. STANDARDS TAB */}
+      {/* 8. STANDARDS TAB */}
       {activeTab === "STANDARDS" && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -582,7 +653,7 @@ export default function BiomedicalFheMpcTelemetryPanel() {
         </div>
       )}
 
-      {/* 8. PROVISION MODAL */}
+      {/* 9. PROVISION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full text-slate-100 space-y-4 shadow-2xl">
