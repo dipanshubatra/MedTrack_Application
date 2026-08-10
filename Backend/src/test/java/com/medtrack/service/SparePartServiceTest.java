@@ -182,4 +182,5 @@ class SparePartServiceTest {
         verify(sparePartRepository).save(captor.capture());
         assertThat(captor.getValue().getDeleted()).isTrue();
     }
+
 }
