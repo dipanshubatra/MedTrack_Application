@@ -6,7 +6,6 @@ import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
 import com.medtrack.repository.EquipmentRepository;
-import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.util.SupplierInvoicePdf;
 import com.medtrack.auth.service.EmailService;
@@ -47,8 +46,8 @@ import static org.mockito.Mockito.when;
  * behaviours are pinned here as a result:</p>
  *
  * <ul>
- *   <li>the listing is tenant-scoped - a supplier sees every order, a hospital user only their own
- *       organisation's - and that scoping survives paging;</li>
+ *   <li>the listing is tenant-scoped - suppliers see only shipment-assigned orders and hospital
+ *       users only their own organisation's - and that scoping survives paging;</li>
  *   <li>{@code getSupplierMetrics()} aggregates over the caller's <em>whole</em> order history. It
  *       is deliberately not routed through the paged read: computing an on-time rate from page 0
  *       gives a number that changes with the page size, which is worse than no number at all.</li>
@@ -69,9 +68,6 @@ class OrderListingTest {
 
     @Mock
     private EmailService emailService;
-
-    @Mock
-    private ShipmentTrackingRepository shipmentTrackingRepository;
 
     @Mock
     private SupplierAccessGuard supplierAccessGuard;
@@ -115,18 +111,20 @@ class OrderListingTest {
     class PagedListing {
 
         @Test
-        @DisplayName("a supplier sees every order")
-        void supplierSeesEveryOrder() {
+        @DisplayName("a supplier sees only shipment-assigned orders")
+        void supplierSeesOnlyAssignedOrders() {
             authenticateAs("supplier@medsupply.com", "Global Suppliers", "ROLE_SUPPLIER");
             Pageable pageable = PageRequest.of(0, 20);
             EquipmentOrder order = deliveredOrder(1L, 10, 5);
-            when(orderRepository.findAll(pageable))
+            when(supplierAccessGuard.resolveCallerId(any())).thenReturn(41L);
+            when(orderRepository.findBySupplierId(41L, pageable))
                     .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
 
             Page<EquipmentOrder> page = orderService.getAllOrders(pageable);
 
             assertEquals(1, page.getTotalElements());
-            verify(orderRepository).findAll(pageable);
+            verify(orderRepository).findBySupplierId(41L, pageable);
+            verify(orderRepository, never()).findAll(any(Pageable.class));
             verify(orderRepository, never()).findByHospital(any(), any(Pageable.class));
         }
 
@@ -168,6 +166,7 @@ class OrderListingTest {
         @DisplayName("aggregates over the full order history, not one page of it")
         void aggregatesOverFullHistory() {
             authenticateAs("supplier@medsupply.com", "Global Suppliers", "ROLE_SUPPLIER");
+            when(supplierAccessGuard.resolveCallerId(any())).thenReturn(41L);
 
             // 60 orders, all delivered: 30 inside the 7-day SLA and 30 outside it. A page-shaped
             // read capped at 20 would report an on-time rate drawn from whichever 20 came first.
@@ -176,7 +175,7 @@ class OrderListingTest {
                             ? deliveredOrder(index, 10, 5)    // 5 days -> on time
                             : deliveredOrder(index, 20, 5))   // 15 days -> late
                     .toList();
-            when(orderRepository.findAll()).thenReturn(history);
+            when(orderRepository.findBySupplierId(41L)).thenReturn(history);
 
             SupplierMetricsDto metrics = orderService.getSupplierMetrics();
 
@@ -184,7 +183,8 @@ class OrderListingTest {
             assertEquals(60, metrics.getDeliveredOrders());
             assertEquals(50.0, metrics.getOnTimeRate());
             assertEquals(10.0, metrics.getAverageDeliveryDays());
-            verify(orderRepository).findAll();
+            verify(orderRepository).findBySupplierId(41L);
+            verify(orderRepository, never()).findAll();
             verify(orderRepository, never()).findAll(any(Pageable.class));
         }
 
@@ -207,7 +207,8 @@ class OrderListingTest {
         @DisplayName("reports 100% on time when nothing has been delivered yet")
         void emptyHistoryDefaultsToFullyOnTime() {
             authenticateAs("supplier@medsupply.com", "Global Suppliers", "ROLE_SUPPLIER");
-            when(orderRepository.findAll()).thenReturn(List.of());
+            when(supplierAccessGuard.resolveCallerId(any())).thenReturn(41L);
+            when(orderRepository.findBySupplierId(41L)).thenReturn(List.of());
 
             SupplierMetricsDto metrics = orderService.getSupplierMetrics();
 

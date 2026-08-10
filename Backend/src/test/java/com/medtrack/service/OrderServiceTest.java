@@ -9,8 +9,6 @@ import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
 import com.medtrack.repository.EquipmentRepository;
-import com.medtrack.supplier.model.ShipmentTracking;
-import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -53,9 +50,6 @@ public class OrderServiceTest {
 
     @Mock
     private EmailService emailService;
-
-    @Mock
-    private ShipmentTrackingRepository shipmentTrackingRepository;
 
     @Mock
     private SupplierAccessGuard supplierAccessGuard;
@@ -120,10 +114,9 @@ public class OrderServiceTest {
 
     @Test
     void updateOrderStatus_Shipped_SetsDispatchedAtAndTracking() {
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
-        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(supplierAccessGuard.resolveCallerId(supplierAuth)).thenReturn(7L);
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+        when(orderRepository.findByIdAndSupplierId(1L, 7L)).thenReturn(Optional.of(mockOrder));
+        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
 
         EquipmentOrder updated = orderService.updateOrderStatus(
                 1L, "Shipped", "Dispatched to delivery terminal", supplierAuth);
@@ -143,10 +136,9 @@ public class OrderServiceTest {
         mockOrder.setStatus("Shipped");
         mockOrder.setDispatchedAt(LocalDateTime.now().minusDays(3));
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
-        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(supplierAccessGuard.resolveCallerId(supplierAuth)).thenReturn(7L);
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+        when(orderRepository.findByIdAndSupplierId(1L, 7L)).thenReturn(Optional.of(mockOrder));
+        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
 
         EquipmentOrder updated = orderService.updateOrderStatus(
                 1L, "Delivered", "Handed over to facilities desk", supplierAuth);
@@ -159,19 +151,11 @@ public class OrderServiceTest {
     }
 
     @Test
-    void updateOrderStatus_UnassignedSupplier_RejectedForOrderAssignedToAnotherSupplier() {
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
+    void updateOrderStatus_UnassignedOrForeignOrder_IsNotVisible() {
         when(supplierAccessGuard.resolveCallerId(supplierAuth)).thenReturn(7L);
+        when(orderRepository.findByIdAndSupplierId(1L, 7L)).thenReturn(Optional.empty());
 
-        ShipmentTracking existingShipment = ShipmentTracking.builder()
-                .orderId(1L)
-                .supplierId(99L)
-                .build();
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.of(existingShipment));
-        doThrow(new AccessDeniedException("You are not authorized to access this supplier's data"))
-                .when(supplierAccessGuard).assertSelfOrHospitalAdmin(supplierAuth, 7L, 99L);
-
-        assertThrows(AccessDeniedException.class, () ->
+        assertThrows(ResourceNotFoundException.class, () ->
                 orderService.updateOrderStatus(1L, "Shipped", "notes", supplierAuth));
 
         verify(orderRepository, never()).save(any());
@@ -179,15 +163,9 @@ public class OrderServiceTest {
 
     @Test
     void updateOrderStatus_AssignedSupplier_Allowed() {
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
-        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(supplierAccessGuard.resolveCallerId(supplierAuth)).thenReturn(7L);
-
-        ShipmentTracking existingShipment = ShipmentTracking.builder()
-                .orderId(1L)
-                .supplierId(7L)
-                .build();
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.of(existingShipment));
+        when(orderRepository.findByIdAndSupplierId(1L, 7L)).thenReturn(Optional.of(mockOrder));
+        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
 
         EquipmentOrder updated = orderService.updateOrderStatus(1L, "Shipped", "notes", supplierAuth);
 
@@ -198,10 +176,9 @@ public class OrderServiceTest {
     @Test
     void getSupplierMetrics_CalculatesCorrectKPIs() {
         // Authenticated as a supplier on purpose: getSupplierMetrics goes through getAllOrders,
-        // which returns findAll() for ROLE_SUPPLIER and an organisation-scoped query for everyone
-        // else. The fixture stubs findAll(), so a hospital caller would correctly see zero orders
-        // and the KPI assertions would all read 0.
+        // which resolves the supplier and aggregates only that supplier's complete order history.
         authenticateAs("supplier@medtrack.com", "Global Suppliers Ltd", "ROLE_SUPPLIER");
+        when(supplierAccessGuard.resolveCallerId(any())).thenReturn(7L);
         // Order 1: Delivered in 5 days (On-Time)
         EquipmentOrder order1 = EquipmentOrder.builder()
                 .id(10L)
@@ -236,7 +213,8 @@ public class OrderServiceTest {
                 .orderDate(LocalDateTime.now())
                 .build();
 
-        when(orderRepository.findAll()).thenReturn(Arrays.asList(order1, order2, order3, order4));
+        when(orderRepository.findBySupplierId(7L))
+                .thenReturn(Arrays.asList(order1, order2, order3, order4));
 
         SupplierMetricsDto metrics = orderService.getSupplierMetrics();
 
