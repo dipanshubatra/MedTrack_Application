@@ -15,9 +15,20 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
+/**
+ * Supplier-module error responses, in the supplier module's {@code ApiErrorResponse} shape and
+ * carrying the correlation id its filter puts on the MDC.
+ *
+ * <p>Named for its module and scoped to it. Under its previous name it collided with
+ * {@code com.medtrack.exception.GlobalExceptionHandler}: both classes generate the bean name
+ * {@code globalExceptionHandler}, and component scanning rejects that with a
+ * {@code ConflictingBeanDefinitionException} before any bean is created, so the application context
+ * never started. Scoping the advice to {@code com.medtrack.supplier} also settles which advice
+ * answers for the exception types both classes handle, instead of leaving it to advice ordering.</p>
+ */
 @Slf4j
-@RestControllerAdvice
-public class GlobalExceptionHandler {
+@RestControllerAdvice(basePackages = "com.medtrack.supplier")
+public class SupplierGlobalExceptionHandler {
 
     private static final String CORRELATION_ID_LOG_VAR = "correlationId";
 

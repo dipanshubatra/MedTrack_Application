@@ -1,10 +1,12 @@
 package com.medtrack.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medtrack.dto.SparePartDeductRequest;
+import com.medtrack.dto.SparePartCreateRequest;
+import com.medtrack.dto.SparePartResponse;
+import com.medtrack.dto.SparePartStockRequest;
+import com.medtrack.dto.SparePartUpdateRequest;
 import com.medtrack.exception.GlobalExceptionHandler;
 import com.medtrack.exception.ResourceNotFoundException;
-import com.medtrack.model.SparePart;
 import com.medtrack.service.SparePartService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,11 +61,7 @@ class SparePartControllerTest {
     @Test
     @DisplayName("Should return list of spare parts for authenticated hospital")
     void shouldReturnAllSpareParts() throws Exception {
-        SparePart part = new SparePart();
-        part.setId(1L);
-        part.setPartNumber("SP-100");
-        part.setDescription("Filter Valve");
-        part.setStockLevel(10);
+        SparePartResponse part = response(1L, "SP-100", 10);
 
         when(sparePartService.getAllSpareParts("hospitalUser")).thenReturn(List.of(part));
 
@@ -80,11 +78,7 @@ class SparePartControllerTest {
     @Test
     @DisplayName("Should return low stock spare parts alerts")
     void shouldReturnLowStockAlerts() throws Exception {
-        SparePart lowStockPart = new SparePart();
-        lowStockPart.setId(2L);
-        lowStockPart.setPartNumber("SP-200");
-        lowStockPart.setStockLevel(2);
-        lowStockPart.setReorderPoint(5);
+        SparePartResponse lowStockPart = response(2L, "SP-200", 2);
 
         when(sparePartService.getLowStockAlerts("hospitalUser")).thenReturn(List.of(lowStockPart));
 
@@ -100,56 +94,52 @@ class SparePartControllerTest {
     @Test
     @DisplayName("Should create new spare part when request is valid")
     void shouldCreateSparePart() throws Exception {
-        SparePart newPart = new SparePart();
-        newPart.setPartNumber("SP-300");
-        newPart.setDescription("Sensor Probe");
-        newPart.setStockLevel(10);
-        newPart.setReorderPoint(5);
-        newPart.setUnitCost(150.0);
-
-        SparePart createdPart = new SparePart();
-        createdPart.setId(3L);
-        createdPart.setPartNumber("SP-300");
-        createdPart.setDescription("Sensor Probe");
-        createdPart.setStockLevel(10);
-        createdPart.setReorderPoint(5);
-        createdPart.setUnitCost(150.0);
-
-        when(sparePartService.createSparePart(any(SparePart.class), eq("hospitalUser")))
-                .thenReturn(createdPart);
+        SparePartCreateRequest request = SparePartCreateRequest.builder()
+                .partNumber("SP-300")
+                .description("Sensor Probe")
+                .stockLevel(10)
+                .reorderPoint(5)
+                .unitCost(150.0)
+                .build();
+        when(sparePartService.createSparePart(
+                any(SparePartCreateRequest.class), eq("hospitalUser")))
+                .thenReturn(response(3L, "SP-300", 10));
 
         mockMvc.perform(post("/api/spare-parts")
                         .principal(hospitalAuth)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newPart)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(3))
                 .andExpect(jsonPath("$.partNumber").value("SP-300"));
 
-        verify(sparePartService).createSparePart(any(SparePart.class), eq("hospitalUser"));
+        verify(sparePartService).createSparePart(
+                any(SparePartCreateRequest.class), eq("hospitalUser"));
     }
 
     @Test
     @DisplayName("Should update existing spare part")
     void shouldUpdateSparePart() throws Exception {
-        SparePart updatePart = new SparePart();
-        updatePart.setPartNumber("SP-100-REV");
-        updatePart.setDescription("Updated Filter Valve");
-        updatePart.setStockLevel(15);
-        updatePart.setReorderPoint(5);
-        updatePart.setUnitCost(200.0);
-
-        when(sparePartService.updateSparePart(eq(1L), any(SparePart.class), eq("hospitalUser")))
-                .thenReturn(updatePart);
+        SparePartUpdateRequest request = SparePartUpdateRequest.builder()
+                .partNumber("SP-100-REV")
+                .description("Updated Filter Valve")
+                .stockLevel(15)
+                .reorderPoint(5)
+                .unitCost(200.0)
+                .build();
+        when(sparePartService.updateSparePart(
+                eq(1L), any(SparePartUpdateRequest.class), eq("hospitalUser")))
+                .thenReturn(response(1L, "SP-100-REV", 15));
 
         mockMvc.perform(put("/api/spare-parts/1")
                         .principal(hospitalAuth)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatePart)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.partNumber").value("SP-100-REV"));
 
-        verify(sparePartService).updateSparePart(eq(1L), any(SparePart.class), eq("hospitalUser"));
+        verify(sparePartService).updateSparePart(
+                eq(1L), any(SparePartUpdateRequest.class), eq("hospitalUser"));
     }
 
     @Test
@@ -167,12 +157,13 @@ class SparePartControllerTest {
     @Test
     @DisplayName("Should deduct stock when request is valid")
     void shouldDeductStockSuccessfully() throws Exception {
-        SparePartDeductRequest request = SparePartDeductRequest.builder()
+        SparePartStockRequest request = SparePartStockRequest.builder()
                 .partNumber("SP-100")
                 .quantity(3)
                 .build();
-
-        doNothing().when(sparePartService).deductStock("SP-100", 3, "hospitalUser");
+        when(sparePartService.deductStock(
+                any(SparePartStockRequest.class), eq("hospitalUser")))
+                .thenReturn(response(1L, "SP-100", 7));
 
         mockMvc.perform(post("/api/spare-parts/deduct")
                         .principal(hospitalAuth)
@@ -180,13 +171,14 @@ class SparePartControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(sparePartService).deductStock("SP-100", 3, "hospitalUser");
+        verify(sparePartService).deductStock(
+                any(SparePartStockRequest.class), eq("hospitalUser"));
     }
 
     @Test
     @DisplayName("Should return 400 Bad Request when deduct request validation fails")
     void shouldFailValidationOnInvalidDeductRequest() throws Exception {
-        SparePartDeductRequest invalidRequest = SparePartDeductRequest.builder()
+        SparePartStockRequest invalidRequest = SparePartStockRequest.builder()
                 .partNumber("")
                 .quantity(0)
                 .build();
@@ -201,13 +193,14 @@ class SparePartControllerTest {
     @Test
     @DisplayName("Should return 400 Bad Request when stock deduction fails due to insufficient stock")
     void shouldReturnBadRequestWhenInsufficientStock() throws Exception {
-        SparePartDeductRequest request = SparePartDeductRequest.builder()
+        SparePartStockRequest request = SparePartStockRequest.builder()
                 .partNumber("SP-100")
                 .quantity(100)
                 .build();
 
         doThrow(new IllegalArgumentException("Insufficient stock for part: SP-100"))
-                .when(sparePartService).deductStock("SP-100", 100, "hospitalUser");
+                .when(sparePartService).deductStock(
+                        any(SparePartStockRequest.class), eq("hospitalUser"));
 
         mockMvc.perform(post("/api/spare-parts/deduct")
                         .principal(hospitalAuth)
@@ -219,12 +212,14 @@ class SparePartControllerTest {
     @Test
     @DisplayName("Should restock stock when request is valid")
     void shouldRestockStockSuccessfully() throws Exception {
-        SparePartDeductRequest request = SparePartDeductRequest.builder()
+        SparePartStockRequest request = SparePartStockRequest.builder()
                 .partNumber("SP-100")
                 .quantity(5)
                 .build();
 
-        doNothing().when(sparePartService).restockStock("SP-100", 5, "hospitalUser");
+        when(sparePartService.restockSparePart(
+                any(SparePartStockRequest.class), eq("hospitalUser")))
+                .thenReturn(response(1L, "SP-100", 15));
 
         mockMvc.perform(post("/api/spare-parts/restock")
                         .principal(hospitalAuth)
@@ -232,13 +227,14 @@ class SparePartControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(sparePartService).restockStock("SP-100", 5, "hospitalUser");
+        verify(sparePartService).restockSparePart(
+                any(SparePartStockRequest.class), eq("hospitalUser"));
     }
 
     @Test
     @DisplayName("Should return 400 Bad Request when restock quantity is invalid")
     void shouldFailValidationOnInvalidRestockRequest() throws Exception {
-        SparePartDeductRequest invalidRequest = SparePartDeductRequest.builder()
+        SparePartStockRequest invalidRequest = SparePartStockRequest.builder()
                 .partNumber("SP-100")
                 .quantity(-2)
                 .build();
@@ -253,18 +249,30 @@ class SparePartControllerTest {
     @Test
     @DisplayName("Should return 404 Not Found when restocking non-existent part")
     void shouldReturnNotFoundWhenRestockingNonExistentPart() throws Exception {
-        SparePartDeductRequest request = SparePartDeductRequest.builder()
+        SparePartStockRequest request = SparePartStockRequest.builder()
                 .partNumber("NON-EXISTENT")
                 .quantity(5)
                 .build();
 
         doThrow(new ResourceNotFoundException("Spare part not found: NON-EXISTENT"))
-                .when(sparePartService).restockStock("NON-EXISTENT", 5, "hospitalUser");
+                .when(sparePartService).restockSparePart(
+                        any(SparePartStockRequest.class), eq("hospitalUser"));
 
         mockMvc.perform(post("/api/spare-parts/restock")
                         .principal(hospitalAuth)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());
+    }
+
+    private SparePartResponse response(Long id, String partNumber, int stockLevel) {
+        return SparePartResponse.builder()
+                .id(id)
+                .partNumber(partNumber)
+                .description("Test spare part")
+                .stockLevel(stockLevel)
+                .reorderPoint(5)
+                .unitCost(10.0)
+                .build();
     }
 }
