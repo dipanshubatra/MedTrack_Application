@@ -9,6 +9,7 @@ import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.dto.MaintenanceWorkOrderStatusRequest;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
@@ -75,6 +76,8 @@ public class MaintenanceWorkOrderService {
                 equipment,
                 hospitalId
         );
+
+        validateEquipmentIsServiceable(equipment);
 
         MaintenanceTask maintenanceTask = null;
 
@@ -797,6 +800,31 @@ public class MaintenanceWorkOrderService {
                                         + id
                         )
                 );
+    }
+
+    /**
+     * Rejects a work order against an asset that has left the operating fleet.
+     *
+     * <p>A retired or disposed asset is not on the floor to be serviced, so a work order raised
+     * against it dispatches a technician to a device that is not there. The preventive-maintenance
+     * side already applies this rule - see {@code MaintenanceTaskRepository.countSchedulableEquipment},
+     * which excludes RETIRED and DISPOSED explicitly - and manual work orders had no equivalent.</p>
+     */
+    private void validateEquipmentIsServiceable(Equipment equipment) {
+
+        EquipmentStatus status = equipment.getStatus();
+
+        if (status == EquipmentStatus.RETIRED
+                || status == EquipmentStatus.DISPOSED) {
+
+            throw new IllegalArgumentException(
+                    "Equipment "
+                            + equipment.getEquipmentCode()
+                            + " is "
+                            + status.name().toLowerCase()
+                            + " and cannot have new maintenance work raised against it"
+            );
+        }
     }
 
     /**
