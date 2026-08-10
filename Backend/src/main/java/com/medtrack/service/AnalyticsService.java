@@ -44,11 +44,16 @@ public class AnalyticsService {
                 ? (underMaintenanceCount * 100.0) / totalEquipment
                 : 0.0;
 
-        // 2. Upcoming Warranty Expirations (within next 30 days) — database-level
+        // 2. Upcoming Warranty Expirations (within next 30 days) — database-level.
+        //
+        // Retired and disposed assets are excluded (issue #943). Their warranty date is historical
+        // record: the device has left the estate and the cover cannot be renewed, so counting it
+        // here overstates the work in front of the team and puts this tile out of step with the
+        // warranty-expiry alert feed, which applies the same rule.
         LocalDate today = LocalDate.now();
         LocalDate limit = today.plusDays(30);
-        long upcomingWarrantyCount = equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
-                hospitalId, today, limit);
+        long upcomingWarrantyCount = equipmentRepository.countAlertableByHospitalIdAndWarrantyExpiryBetween(
+                hospitalId, today, limit, EquipmentStatus.DECOMMISSIONED);
 
         // 3. Maintenance SLA compliance — load only measurable completed tasks
         List<MaintenanceTask> measurableTasks = taskRepository.findCompletedTasksWithTimestamps(
