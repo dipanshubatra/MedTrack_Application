@@ -7,7 +7,6 @@ import com.medtrack.supplier.service.prediction.PredictionService;
 import com.medtrack.supplier.service.prediction.RecommendationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
@@ -41,7 +40,7 @@ class DashboardControllerTest {
     @Mock
     private Authentication authentication;
 
-    @InjectMocks
+    private Authentication authentication;
     private DashboardController dashboardController;
 
     @Test
