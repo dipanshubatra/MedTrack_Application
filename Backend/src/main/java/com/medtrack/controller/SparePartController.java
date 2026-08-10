@@ -1,9 +1,11 @@
 package com.medtrack.controller;
 
 import com.medtrack.dto.SparePartCreateRequest;
+import com.medtrack.dto.SparePartDeductRequest;
 import com.medtrack.dto.SparePartResponse;
 import com.medtrack.dto.SparePartStockRequest;
 import com.medtrack.dto.SparePartUpdateRequest;
+import com.medtrack.model.SparePart;
 import com.medtrack.service.SparePartService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

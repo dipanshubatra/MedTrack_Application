@@ -1,6 +1,7 @@
 package com.medtrack.supplier.controller;
 
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.supplier.dto.BulkStatusUpdateRequest;
 import com.medtrack.supplier.dto.SupplierPerformanceResponse;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.supplier.service.SupplierOrderService;
