@@ -86,7 +86,7 @@ public class WarrantyExpiryAlertScheduler {
 
             long daysUntil = ChronoUnit.DAYS.between(today, equipment.getWarrantyExpiry());
             Integer threshold = windowFor(daysUntil);
-            if (threshold == null || alreadyAlerted(equipment.getId(), threshold)) {
+            if (threshold == null || alreadyAlerted(equipment.getId(), expiry, threshold)) {
                 continue;
             }
             publishAlert(equipment, threshold, daysUntil);
@@ -139,17 +139,21 @@ public class WarrantyExpiryAlertScheduler {
     }
 
     /**
-     * Whether this asset already has an event for the given threshold. The threshold is encoded
-     * into the event detail as {@code "threshold":N}, which stays stable across runs.
+     * Whether this asset already has an event for the given contract and threshold. Matching both
+     * markers preserves idempotency for repeated runs while allowing a renewed warranty to begin a
+     * fresh alert cycle. Existing events are compatible because they already include both fields.
      */
-    private boolean alreadyAlerted(Long equipmentId, int threshold) {
-        String marker = "\"threshold\":" + threshold;
+    private boolean alreadyAlerted(Long equipmentId, LocalDate expiry, int threshold) {
+        String thresholdMarker = "\"threshold\":" + threshold;
+        String expiryMarker = "\"expiry\":\"" + expiry + "\"";
         return eventRepository
                 .findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
                         OperationsEvent.EntityType.EQUIPMENT, equipmentId)
                 .stream()
                 .filter(event -> event.getType() == OperationsEvent.EventType.EQUIPMENT_WARRANTY_EXPIRING)
-                .anyMatch(event -> event.getDetail() != null && event.getDetail().contains(marker));
+                .map(OperationsEvent::getDetail)
+                .filter(detail -> detail != null)
+                .anyMatch(detail -> detail.contains(thresholdMarker) && detail.contains(expiryMarker));
     }
 
     private void publishAlert(Equipment equipment, int threshold, long daysUntil) {
