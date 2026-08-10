@@ -68,7 +68,8 @@ public class SupplierOrderServiceTest {
         void setUp() throws Exception {
                 MockitoAnnotations.openMocks(this);
                 supplierOrderService = new SupplierOrderService(orderRepository, shipmentTrackingRepository,
-                                supplierAccessGuard, supplierPerformanceService);
+                                supplierAccessGuard, supplierPerformanceService, auditLogService, orchestrator,
+                                metricsService);
                 ReflectionTestUtils.setField(supplierOrderService, "kafkaTemplate", kafkaTemplate);
                 ReflectionTestUtils.setField(supplierOrderService, "orderEventsTopic", "order-events");
 

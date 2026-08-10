@@ -33,8 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -174,6 +177,21 @@ public class TenderService {
         if (winner.getStatus() == TenderBidStatus.WITHDRAWN) {
             throw new IllegalArgumentException("A withdrawn bid cannot win the tender");
         }
+        if (winner.getStatus() != TenderBidStatus.SUBMITTED) {
+            throw new IllegalArgumentException(
+                    "Only a live bid can win the tender, but this one is " + winner.getStatus());
+        }
+        // A bid from a superseded round is not a live offer. Opening a new round asks every
+        // supplier to reprice; awarding round 1 after round 3 has been priced accepts a number the
+        // supplier has already replaced, and the audit entry would record the stale round as
+        // though it were the current one - which is the outcome the round structure exists to
+        // prevent.
+        if (!Objects.equals(winner.getRoundNumber(), tender.getCurrentRound())) {
+            throw new IllegalArgumentException(
+                    "Only a bid from the current round (" + tender.getCurrentRound()
+                            + ") can win the tender, but this bid is from round "
+                            + winner.getRoundNumber());
+        }
 
         // Accept the winner, reject every other live bid - the full decision is recorded.
         for (TenderBid bid : bidRepository.findByTenderIdOrderByRoundNumberDescSubmittedAtAsc(tenderId)) {
@@ -298,14 +316,38 @@ public class TenderService {
     // Read views
     // ------------------------------------------------------------------
 
+    /**
+     * The tenders the caller may see.
+     *
+     * <p>A hospital sees its own. A supplier sees the open tenders they are invited to, plus every
+     * tender they have already bid on whatever its status - which is the point of the second half.
+     * The list was previously drawn from {@code findByStatusOrderByCreatedAtDesc(OPEN)} alone, so a
+     * tender disappeared from the supplier's dashboard the moment the hospital closed the round.
+     * The supplier had a priced bid on record and no way to see the tender it belonged to, or who
+     * won it - the outcome vanished at exactly the moment it became available.</p>
+     */
     public List<TenderResponse> listTenders(Authentication authentication) {
         if (supplierAccessGuard.isSupplier(authentication)) {
             Long supplierId = supplierAccessGuard.resolveCallerId(authentication);
             User supplier = userRepository.findById(supplierId)
                     .orElseThrow(() -> new ResourceNotFoundException("Supplier account not found"));
-            return tenderRepository.findByStatusOrderByCreatedAtDesc(TenderStatus.OPEN).stream()
+
+            // Keyed by id so a tender that is both open-and-invited and already bid on appears once.
+            Map<Long, Tender> visible = new LinkedHashMap<>();
+            tenderRepository.findByStatusOrderByCreatedAtDesc(TenderStatus.OPEN).stream()
                     .filter(tender -> isInvited(tender, supplier.getEmail()))
-                    .map(this::toResponse)
+                    .forEach(tender -> visible.put(tender.getId(), tender));
+
+            List<Long> participated = bidRepository.findDistinctTenderIdsBySupplierId(supplierId);
+            if (!participated.isEmpty()) {
+                tenderRepository.findByIdInOrderByCreatedAtDesc(participated)
+                        .forEach(tender -> visible.putIfAbsent(tender.getId(), tender));
+            }
+
+            return visible.values().stream()
+                    .sorted(Comparator.comparing(Tender::getCreatedAt,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .map(tender -> toSupplierResponse(tender, supplierId))
                     .toList();
         }
         HospitalAccess hospital = getHospitalForUser(authentication);
@@ -321,16 +363,10 @@ public class TenderService {
             Long supplierId = supplierAccessGuard.resolveCallerId(authentication);
             User supplier = userRepository.findById(supplierId)
                     .orElseThrow(() -> new ResourceNotFoundException("Supplier account not found"));
-            if (!isInvited(tender, supplier.getEmail())) {
+            if (!canSupplierSee(tender, supplierId, supplier.getEmail())) {
                 throw new AccessDeniedException("You are not invited to this tender");
             }
-            // Suppliers only see their own bids: competitor prices stay sealed until the award.
-            List<TenderBidResponse> ownBids = bidRepository
-                    .findByTenderIdOrderByRoundNumberDescSubmittedAtAsc(tenderId).stream()
-                    .filter(bid -> Objects.equals(bid.getSupplierId(), supplierId))
-                    .map(TenderBidResponse::from)
-                    .toList();
-            return TenderResponse.from(tender, ownBids);
+            return toSupplierResponse(tender, supplierId);
         }
         HospitalAccess hospital = getHospitalForUser(authentication);
         if (!Objects.equals(tender.getHospitalId(), hospital.hospitalId())) {
@@ -345,6 +381,11 @@ public class TenderService {
         List<TenderBid> bids = bidRepository.findByTenderIdOrderByRoundNumberDescSubmittedAtAsc(tenderId);
         if (supplierAccessGuard.isSupplier(authentication)) {
             Long supplierId = supplierAccessGuard.resolveCallerId(authentication);
+            User supplier = userRepository.findById(supplierId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Supplier account not found"));
+            if (!canSupplierSee(tender, supplierId, supplier.getEmail())) {
+                throw new AccessDeniedException("You are not invited to this tender");
+            }
             // Suppliers only ever see their own bids; the hospital sees the full comparison set.
             return bids.stream()
                     .filter(bid -> Objects.equals(bid.getSupplierId(), supplierId))
@@ -376,6 +417,33 @@ public class TenderService {
                 .map(TenderBidResponse::from)
                 .toList();
         return TenderResponse.from(tender, bids);
+    }
+
+    /**
+     * A tender as one supplier may see it: their own bids only.
+     *
+     * <p>Competitor prices stay sealed. {@code getTender} already did this; the list view did not,
+     * and returned every bid on every tender it showed.</p>
+     */
+    private TenderResponse toSupplierResponse(Tender tender, Long supplierId) {
+        List<TenderBidResponse> ownBids = bidRepository
+                .findByTenderIdOrderByRoundNumberDescSubmittedAtAsc(tender.getId()).stream()
+                .filter(bid -> Objects.equals(bid.getSupplierId(), supplierId))
+                .map(TenderBidResponse::from)
+                .toList();
+        return TenderResponse.from(tender, ownBids);
+    }
+
+    /**
+     * Whether a supplier may see a tender: they are invited to it, or they have bid on it.
+     *
+     * <p>Participation has to keep a tender visible on its own. Invitation is editable and the
+     * tender may move past the round the supplier priced, but a submitted bid is a commitment the
+     * supplier is entitled to see the outcome of.</p>
+     */
+    private boolean canSupplierSee(Tender tender, Long supplierId, String supplierEmail) {
+        return isInvited(tender, supplierEmail)
+                || bidRepository.findDistinctTenderIdsBySupplierId(supplierId).contains(tender.getId());
     }
 
     private void validateTenderRequest(TenderRequest request) {

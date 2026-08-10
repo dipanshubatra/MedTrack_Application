@@ -2,6 +2,7 @@ package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.dto.SparePartResponse;
 import com.medtrack.dto.SparePartStockRequest;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.SparePart;
@@ -90,7 +91,8 @@ class SparePartServiceTest {
 
         when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
         when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
-        when(sparePartRepository.findByIdAndHospitalId(50L, 1L)).thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.findByIdAndHospitalIdForUpdate(50L, 1L))
+                .thenReturn(Optional.of(testSparePart));
         when(sparePartRepository.save(any(SparePart.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         SparePart updated = sparePartService.updateSparePart(50L, updateRequest, "hospitalAdmin");
@@ -105,11 +107,14 @@ class SparePartServiceTest {
 
         when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
         when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
-        when(sparePartRepository.findByHospitalIdAndPartNumberAndDeletedFalse(1L, "FILTER-001")).thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(
+                1L, "FILTER-001")).thenReturn(Optional.of(testSparePart));
         when(sparePartRepository.save(any(SparePart.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        SparePart updated = sparePartService.deductStock(request, "hospitalAdmin");
+        SparePartResponse updated = sparePartService.deductStock(request, "hospitalAdmin");
         assertThat(updated.getStockLevel()).isEqualTo(20);
+        verify(sparePartRepository).findActiveByHospitalIdAndPartNumberForUpdate(
+                1L, "FILTER-001");
     }
 
     @Test
@@ -117,7 +122,9 @@ class SparePartServiceTest {
     void deductStock_InvalidQuantity_ThrowsException() {
         SparePartStockRequest request = SparePartStockRequest.builder().partNumber("FILTER-001").quantity(-10).build();
         assertThatThrownBy(() -> sparePartService.deductStock(request, "hospitalAdmin"))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Deduction quantity must be greater than zero");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Stock adjustment quantity must be greater than zero");
+        verifyNoInteractions(userRepository, hospitalRepository, sparePartRepository);
     }
 
     @Test
@@ -127,10 +134,12 @@ class SparePartServiceTest {
 
         when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
         when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
-        when(sparePartRepository.findByHospitalIdAndPartNumberAndDeletedFalse(1L, "FILTER-001")).thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(
+                1L, "FILTER-001")).thenReturn(Optional.of(testSparePart));
 
         assertThatThrownBy(() -> sparePartService.deductStock(request, "hospitalAdmin"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Insufficient stock");
+        verify(sparePartRepository, never()).save(any());
     }
 
     @Test
@@ -140,10 +149,11 @@ class SparePartServiceTest {
 
         when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
         when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
-        when(sparePartRepository.findByHospitalIdAndPartNumberAndDeletedFalse(1L, "FILTER-001")).thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(
+                1L, "FILTER-001")).thenReturn(Optional.of(testSparePart));
         when(sparePartRepository.save(any(SparePart.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        SparePart restocked = sparePartService.restockSparePart(request, "hospitalAdmin");
+        SparePartResponse restocked = sparePartService.restockSparePart(request, "hospitalAdmin");
         assertThat(restocked.getStockLevel()).isEqualTo(40);
     }
 
@@ -154,7 +164,7 @@ class SparePartServiceTest {
         when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
         when(sparePartRepository.findLowStockPartsByHospitalId(1L)).thenReturn(List.of(testSparePart));
 
-        List<SparePart> alerts = sparePartService.getLowStockAlerts("hospitalAdmin");
+        List<SparePartResponse> alerts = sparePartService.getLowStockAlerts("hospitalAdmin");
         assertThat(alerts).hasSize(1);
     }
 
@@ -163,7 +173,8 @@ class SparePartServiceTest {
     void deleteSparePart_Success() {
         when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
         when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
-        when(sparePartRepository.findByIdAndHospitalId(50L, 1L)).thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.findByIdAndHospitalIdForUpdate(50L, 1L))
+                .thenReturn(Optional.of(testSparePart));
 
         sparePartService.deleteSparePart(50L, "hospitalAdmin");
 
@@ -171,4 +182,5 @@ class SparePartServiceTest {
         verify(sparePartRepository).save(captor.capture());
         assertThat(captor.getValue().getDeleted()).isTrue();
     }
+
 }

@@ -1,6 +1,7 @@
 package com.medtrack.supplier.controller;
 
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.supplier.dto.BulkStatusUpdateRequest;
 import com.medtrack.supplier.dto.SupplierPerformanceResponse;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.supplier.service.SupplierOrderService;
@@ -25,6 +26,7 @@ import java.time.LocalDateTime;
 @RestController
 @RequestMapping("/api/supplier")
 @RequiredArgsConstructor
+@Slf4j
 @CrossOrigin(origins = "http://localhost:3000")
 @Tag(name = "Supplier Orders", description = "Endpoints for suppliers to query and retrieve localized equipment purchase orders.")
 public class SupplierController {
@@ -103,11 +105,13 @@ public class SupplierController {
                         @ApiResponse(responseCode = "400", description = "Invalid request or status transitions")
         })
         public ResponseEntity<java.util.List<EquipmentOrder>> bulkUpdateOrderStatus(
-                        @jakarta.validation.Valid @RequestBody BulkStatusUpdateRequest request) {
+                        @jakarta.validation.Valid @RequestBody BulkStatusUpdateRequest request,
+                        Authentication authentication) {
 
                 log.info("Incoming request for bulk status update: orders={}, newStatus={}", request.getOrderIds(),
                                 request.getStatus());
-                java.util.List<EquipmentOrder> updatedOrders = supplierOrderService.bulkUpdateOrderStatus(request);
+                java.util.List<EquipmentOrder> updatedOrders =
+                                supplierOrderService.bulkUpdateOrderStatus(request, authentication);
                 log.info("Successfully performed bulk status update for {} orders", updatedOrders.size());
                 return ResponseEntity.ok(updatedOrders);
         }

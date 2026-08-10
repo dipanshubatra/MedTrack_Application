@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import java.util.List;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -45,8 +46,10 @@ public class ShipmentTrackingController {
             @ApiResponse(responseCode = "400", description = "Invalid request or duplicate tracking data")
     })
     public ResponseEntity<List<ShipmentTrackingResponse>> bulkCreateShipments(
-            @Valid @RequestBody com.medtrack.supplier.dto.BulkShipmentConfirmationRequest request) {
-        List<ShipmentTrackingResponse> response = shipmentTrackingService.bulkConfirmShipments(request);
+            @Valid @RequestBody com.medtrack.supplier.dto.BulkShipmentConfirmationRequest request,
+            Authentication authentication) {
+        List<ShipmentTrackingResponse> response =
+                shipmentTrackingService.bulkConfirmShipments(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -67,8 +70,10 @@ public class ShipmentTrackingController {
             @ApiResponse(responseCode = "400", description = "Invalid status transition")
     })
     public ResponseEntity<List<ShipmentTrackingResponse>> bulkConfirmDeliveries(
-            @Valid @RequestBody com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest request) {
-        List<ShipmentTrackingResponse> response = shipmentTrackingService.bulkConfirmDeliveries(request);
+            @Valid @RequestBody com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest request,
+            Authentication authentication) {
+        List<ShipmentTrackingResponse> response =
+                shipmentTrackingService.bulkConfirmDeliveries(request, authentication);
         return ResponseEntity.ok(response);
     }
 

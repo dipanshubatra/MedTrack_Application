@@ -6,6 +6,8 @@ import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
+import com.medtrack.supplier.workflow.ShipmentWorkflowOrchestrator;
+import com.medtrack.supplier.metrics.MetricsService;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.auth.repository.UserRepository;
@@ -136,9 +138,19 @@ public class SupplierOrderService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    /**
+     * Advances an order through the shipment workflow.
+     *
+     * <p>Reconstructed after a merge interleaved two revisions of this method: the ownership-aware
+     * version and the metrics-wrapped version were spliced together, leaving the order lookup and
+     * the requested-status parse missing entirely and three locals declared twice. The intent of
+     * both revisions is preserved here - the whole transition runs inside
+     * {@link com.medtrack.supplier.metrics.MetricsService#recordProcessingLatency}, and an order
+     * that already has a shipment record may only be advanced by the supplier it was assigned to
+     * or by a hospital admin.</p>
+     */
     @Transactional
     public EquipmentOrder updateOrderStatus(Long orderId, String newStatus, Authentication authentication) {
-        Set<String> publishedEvents = new HashSet<>();
         if (orderId == null || orderId <= 0) {
             throw new IllegalArgumentException("Invalid resource ID.");
         }
@@ -148,52 +160,28 @@ public class SupplierOrderService {
 
         Long callerSupplierId = supplierAccessGuard.resolveCallerId(authentication);
 
-        ShipmentStatus requestedStatus;
         try {
             return metricsService.recordProcessingLatency("updateOrderStatus", () -> {
                 Set<String> publishedEvents = new HashSet<>();
-                if (orderId == null || orderId <= 0) {
-                    throw new IllegalArgumentException("Invalid resource ID.");
+
+                ShipmentStatus requestedStatus;
+                try {
+                    requestedStatus = ShipmentStatus.valueOf(newStatus.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid status: " + newStatus);
                 }
-                if (newStatus == null || newStatus.isEmpty()) {
-                    throw new IllegalArgumentException("Status cannot be blank");
-                }
 
-        // If a supplier has already been assigned to this order (a shipment tracking record
-        // exists), only that supplier - or a HOSPITAL admin - may advance its status. This
-        // closes the gap where any authenticated supplier could hijack/advance another
-        // supplier's order because the order itself carries no supplier assignment until
-        // the first shipment record is created.
-        shipmentTrackingRepository.findByOrderId(orderId).ifPresent(existingShipment ->
-                supplierAccessGuard.assertSelfOrHospitalAdmin(authentication, callerSupplierId, existingShipment.getSupplierId()));
+                EquipmentOrder order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        String currentStatusStr = order.getStatus();
-        ShipmentStatus currentStatus;
-        try {
-            currentStatus = ShipmentStatus.valueOf(currentStatusStr.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new InvalidStatusTransitionException(
-                    "Legacy order status is not valid for transitions: " + currentStatusStr);
-        }
-
-        orchestrator.validateStateTransition(currentStatus, requestedStatus);
-
-        // Process Shipment state additions
-        if (requestedStatus == ShipmentStatus.SHIPPED) {
-            ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
-                    .orElseGet(() -> {
-                        Long supplierId = callerSupplierId;
-                        return ShipmentTracking.builder()
-                                .orderId(orderId)
-                                .supplierId(supplierId)
-                                .createdAt(LocalDateTime.now())
-                                .shipmentStatus(ShipmentStatus.PENDING)
-                                .build();
-                    });
-
-            if (shipment.getShipmentTrackingNumber() == null || shipment.getShipmentTrackingNumber().isEmpty()) {
-                shipment.setShipmentTrackingNumber(generateUniqueTrackingNumber());
-            }
+                // If a supplier has already been assigned to this order (a shipment tracking record
+                // exists), only that supplier - or a HOSPITAL admin - may advance its status. This
+                // closes the gap where any authenticated supplier could hijack/advance another
+                // supplier's order because the order itself carries no supplier assignment until
+                // the first shipment record is created.
+                shipmentTrackingRepository.findByOrderId(orderId).ifPresent(existingShipment ->
+                        supplierAccessGuard.assertSelfOrHospitalAdmin(
+                                authentication, callerSupplierId, existingShipment.getSupplierId()));
 
                 String currentStatusStr = order.getStatus();
                 ShipmentStatus currentStatus;
@@ -204,46 +192,67 @@ public class SupplierOrderService {
                             "Legacy order status is not valid for transitions: " + currentStatusStr);
                 }
 
-            shipment.setShipmentStatus(ShipmentStatus.SHIPPED);
-            shipment.setUpdatedAt(LocalDateTime.now());
-            shipmentTrackingRepository.save(shipment);
+                log.info("Attempting to update order status for orderId={} from {} to {}", orderId, currentStatus,
+                        requestedStatus);
+                orchestrator.validateStateTransition(currentStatus, requestedStatus);
 
-            order.setTrackingNo(shipment.getShipmentTrackingNumber());
-            order.setCarrier(order.getCarrier() != null ? order.getCarrier() : "Standard Carrier");
-            order.setShippingStatus("Shipped");
-            order.setDispatchedAt(LocalDateTime.now());
-            order.setEstimatedDelivery(shipment.getEstimatedDeliveryDate().toString());
+                // Process Shipment state additions
+                if (requestedStatus == ShipmentStatus.SHIPPED) {
+                    ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
+                            .orElseGet(() -> ShipmentTracking.builder()
+                                    .orderId(orderId)
+                                    .supplierId(callerSupplierId)
+                                    .createdAt(LocalDateTime.now())
+                                    .shipmentStatus(ShipmentStatus.PENDING)
+                                    .build());
 
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
+                    if (shipment.getShipmentTrackingNumber() == null
+                            || shipment.getShipmentTrackingNumber().isEmpty()) {
+                        shipment.setShipmentTrackingNumber(generateUniqueTrackingNumber());
+                    }
 
-        } else if (requestedStatus == ShipmentStatus.DELIVERED) {
-            ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
-                    .orElseGet(() -> {
-                        Long supplierId = callerSupplierId;
-                        return ShipmentTracking.builder()
-                                .orderId(orderId)
-                                .supplierId(supplierId)
-                                .createdAt(LocalDateTime.now())
-                                .shipmentStatus(ShipmentStatus.SHIPPED)
-                                .build();
-                    });
+                    if (shipment.getEstimatedDeliveryDate() == null) {
+                        shipment.setEstimatedDeliveryDate(LocalDateTime.now().plusDays(3));
+                    }
 
-            shipment.setShipmentStatus(ShipmentStatus.DELIVERED);
-            shipment.setActualDeliveryDate(LocalDateTime.now());
-            shipment.setUpdatedAt(LocalDateTime.now());
-            shipmentTrackingRepository.save(shipment);
+                    shipment.setShipmentStatus(ShipmentStatus.SHIPPED);
+                    shipment.setUpdatedAt(LocalDateTime.now());
+                    shipmentTrackingRepository.save(shipment);
 
-            order.setShippingStatus("Delivered");
-            order.setDeliveredAt(LocalDateTime.now());
+                    order.setTrackingNo(shipment.getShipmentTrackingNumber());
+                    order.setCarrier(order.getCarrier() != null ? order.getCarrier() : "Standard Carrier");
+                    order.setShippingStatus("Shipped");
+                    order.setDispatchedAt(LocalDateTime.now());
+                    order.setEstimatedDelivery(shipment.getEstimatedDeliveryDate().toString());
 
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
-        }
+                    scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
+
+                } else if (requestedStatus == ShipmentStatus.DELIVERED) {
+                    ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
+                            .orElseGet(() -> ShipmentTracking.builder()
+                                    .orderId(orderId)
+                                    .supplierId(callerSupplierId)
+                                    .createdAt(LocalDateTime.now())
+                                    .shipmentStatus(ShipmentStatus.SHIPPED)
+                                    .build());
+
+                    shipment.setShipmentStatus(ShipmentStatus.DELIVERED);
+                    shipment.setActualDeliveryDate(LocalDateTime.now());
+                    shipment.setUpdatedAt(LocalDateTime.now());
+                    shipmentTrackingRepository.save(shipment);
+
+                    order.setShippingStatus("Delivered");
+                    order.setDeliveredAt(LocalDateTime.now());
+
+                    scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
+                }
 
                 order.setStatus(requestedStatus.name());
                 order.setUpdatedAt(LocalDateTime.now());
 
-                auditLogService.logAction(orderId, resolveSupplierId(), "STATUS_UPDATE",
-                        "Order status transitioned to " + requestedStatus.name(), resolveCurrentUsername());
+                auditLogService.logAction(orderId, callerSupplierId, "STATUS_UPDATE",
+                        "Order status transitioned to " + requestedStatus.name(),
+                        authentication != null ? authentication.getName() : "system");
 
                 metricsService.incrementOrdersProcessed();
                 log.info("Successfully completed status update for orderId={} to {}", orderId, requestedStatus);
@@ -257,6 +266,21 @@ public class SupplierOrderService {
             }
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Applies one status transition to a batch of orders.
+     *
+     * <p>Each order goes through {@link #updateOrderStatus} individually, so per-order ownership
+     * and transition rules apply exactly as they do for a single update - a batch cannot be used
+     * to bypass them.</p>
+     */
+    @Transactional
+    public List<EquipmentOrder> bulkUpdateOrderStatus(com.medtrack.supplier.dto.BulkStatusUpdateRequest request,
+                                                      Authentication authentication) {
+        return request.getOrderIds().stream()
+                .map(id -> updateOrderStatus(id, request.getStatus(), authentication))
+                .collect(Collectors.toList());
     }
 
     private String generateUniqueTrackingNumber() {

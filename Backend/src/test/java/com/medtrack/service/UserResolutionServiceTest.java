@@ -97,6 +97,7 @@ class UserResolutionServiceTest {
                     userRepository,
                     null,
                     facilityLocationRepository,
+                    null,
                     null
             );
 
@@ -120,6 +121,7 @@ class UserResolutionServiceTest {
                     userRepository,
                     null,
                     facilityLocationRepository,
+                    null,
                     null
             );
 
@@ -144,6 +146,7 @@ class UserResolutionServiceTest {
                     userRepository,
                     null,
                     facilityLocationRepository,
+                    null,
                     null
             );
 
@@ -235,6 +238,7 @@ class UserResolutionServiceTest {
                     equipmentRepository,
                     hospitalRepository,
                     userRepository,
+                    null,
                     certificatePdf
             );
 
