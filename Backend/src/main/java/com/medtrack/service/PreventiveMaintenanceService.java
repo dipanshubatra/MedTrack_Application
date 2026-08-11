@@ -344,7 +344,13 @@ public class PreventiveMaintenanceService {
                 task.setSlaState(SlaState.ESCALATED);
                 task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
                 taskRepository.save(task);
-                activityService.recordSystemCreated(task, "escalated due to critical SLA breach");
+
+                activityService.recordSystemCreated(
+                        task,
+                        "escalated due to critical SLA breach"
+                );
+
+                publishSlaEscalatedEvent(task);
             }
         }
 
@@ -355,7 +361,13 @@ public class PreventiveMaintenanceService {
                 task.setSlaState(SlaState.ESCALATED);
                 task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
                 taskRepository.save(task);
-                activityService.recordSystemCreated(task, "escalated due to unassigned SLA breach");
+
+                activityService.recordSystemCreated(
+                        task,
+                        "escalated due to unassigned SLA breach"
+                );
+
+                publishSlaEscalatedEvent(task);
             }
         }
 
