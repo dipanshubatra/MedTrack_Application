@@ -68,7 +68,8 @@ public class PasswordResetTest {
                 authenticationManager,
                 passwordResetTokenRepository,
                 emailService,
-                kafkaEventPublisher
+                kafkaEventPublisher,
+                new PublicRegistrationRolePolicy()
         );
         ReflectionTestUtils.setField(userService, "otpLength", 6);
         ReflectionTestUtils.setField(userService, "otpExpiryMinutes", 10);
