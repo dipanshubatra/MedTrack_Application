@@ -8,6 +8,8 @@ import com.medtrack.dto.MaintenanceScheduleRevisionPageResponse;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
+import com.medtrack.dto.MaintenanceRuleStatusRequest;
+import com.medtrack.dto.MaintenanceRuleResponse;
 import com.medtrack.service.MaintenanceScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -207,5 +209,18 @@ public class MaintenanceController {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("Invalid resource ID.");
         }
+    }
+
+    @PatchMapping("/rules/{id}/status")
+    public ResponseEntity<MaintenanceRuleResponse> updateRuleStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody MaintenanceRuleStatusRequest request,
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                preventiveMaintenanceService.updateRuleStatus(
+                        id,
+                        request,
+                        authentication));
     }
 }

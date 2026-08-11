@@ -7,6 +7,8 @@ import com.medtrack.dto.MaintenanceRuleRequest;
 import com.medtrack.dto.MaintenanceRuleResponse;
 import com.medtrack.dto.RulePreviewResponse;
 import com.medtrack.dto.SlaSummaryResponse;
+import com.medtrack.dto.MaintenanceRuleStatusRequest;
+import com.medtrack.model.MaintenancePolicyStatus;
 import com.medtrack.dto.TechnicianWorkloadResponse;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
@@ -128,6 +130,51 @@ public class PreventiveMaintenanceService {
         rule.setUpdatedAt(LocalDateTime.now());
 
         return MaintenanceRuleResponse.from(ruleRepository.save(rule), resolveEquipmentName(rule));
+    }
+
+    @Transactional
+    public MaintenanceRuleResponse updateRuleStatus(
+            Long id,
+            MaintenanceRuleStatusRequest request,
+            Authentication authentication) {
+
+        Long hospitalId = getHospitalForUser(authentication).getId();
+
+        MaintenancePolicyRule rule = ruleRepository.findByIdAndHospitalId(id, hospitalId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Maintenance rule not found or access denied"));
+
+        MaintenancePolicyStatus currentStatus = rule.getStatus();
+        MaintenancePolicyStatus targetStatus = request.getStatus();
+
+        if (currentStatus == targetStatus) {
+            throw new IllegalArgumentException(
+                    "Maintenance rule is already in " + targetStatus + " status");
+        }
+
+        if (!isValidStatusTransition(currentStatus, targetStatus)) {
+            throw new IllegalArgumentException(
+                    "Invalid maintenance rule status transition: "
+                            + currentStatus + " -> " + targetStatus);
+        }
+
+        rule.setStatus(targetStatus);
+        rule.setActive(targetStatus == MaintenancePolicyStatus.ACTIVE);
+        rule.setUpdatedAt(LocalDateTime.now());
+
+        MaintenancePolicyRule savedRule = ruleRepository.save(rule);
+
+        log.info(
+                "Maintenance rule {} transitioned from {} to {} for hospital {}",
+                rule.getId(),
+                currentStatus,
+                targetStatus,
+                hospitalId);
+
+        return MaintenanceRuleResponse.from(
+                savedRule,
+                resolveEquipmentName(savedRule));
     }
 
     @Transactional
@@ -303,6 +350,35 @@ public class PreventiveMaintenanceService {
     public SlaSummaryResponse refreshSla(Authentication authentication) {
         Hospital hospital = getHospitalForUser(authentication);
         return refreshSlaForHospital(hospital);
+    }
+    private boolean isValidStatusTransition(
+            MaintenancePolicyStatus currentStatus,
+            MaintenancePolicyStatus targetStatus) {
+
+        if (currentStatus == null || targetStatus == null) {
+            return false;
+        }
+
+        return switch (currentStatus) {
+            case DRAFT ->
+                    targetStatus == MaintenancePolicyStatus.ACTIVE
+                            || targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case ACTIVE ->
+                    targetStatus == MaintenancePolicyStatus.PAUSED
+                            || targetStatus == MaintenancePolicyStatus.COMPLETED
+                            || targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case PAUSED ->
+                    targetStatus == MaintenancePolicyStatus.ACTIVE
+                            || targetStatus == MaintenancePolicyStatus.COMPLETED
+                            || targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case COMPLETED ->
+                    targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case ARCHIVED -> false;
+        };
     }
 
     /**
