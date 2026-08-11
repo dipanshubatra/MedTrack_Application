@@ -207,6 +207,25 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     @Query(value = "SELECT * FROM equipment WHERE id = :id AND deleted = TRUE", nativeQuery = true)
     Optional<Equipment> findByIdAndDeletedTrue(@Param("id") Long id);
 
+    /**
+     * Resolves an archived asset inside a hospital boundary.
+     *
+     * <p>This remains a native query for the same reason as the other archive queries:
+     * {@link org.hibernate.annotations.SQLRestriction} would otherwise add
+     * {@code deleted = false}. Including {@code hospital_id} in the database predicate prevents
+     * destructive archive operations from ever loading another tenant's record.</p>
+     */
+    @Query(value = """
+            SELECT *
+            FROM equipment
+            WHERE id = :id
+              AND deleted = TRUE
+              AND hospital_id = :hospitalId
+            """, nativeQuery = true)
+    Optional<Equipment> findArchivedByIdAndHospitalId(
+            @Param("id") Long id,
+            @Param("hospitalId") Long hospitalId);
+
     // ---------------------------------------------------------------------
     // Preventive-maintenance automation matching queries
     // ---------------------------------------------------------------------

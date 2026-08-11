@@ -1707,13 +1707,7 @@ public class EquipmentService {
     @Transactional
     public Equipment restoreEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
-        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
-
-        // Verify it belongs to the user's hospital
-        if (!equipment.getHospital().getId().equals(hospital.getId())) {
-            throw new ResourceNotFoundException("Archived equipment not found or you don't have access");
-        }
+        Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());
 
         equipment.setDeleted(false);
         equipment.setDeletedAt(null);
@@ -1745,11 +1739,13 @@ public class EquipmentService {
      */
     @Transactional
     public void permanentlyDeleteEquipment(Long id, String username) {
-        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());
 
-        // Check if 90 days have passed since archival
-        if (equipment.getDeletedAt() != null && equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
+        // Missing archive metadata must never shorten the retention window. A malformed or legacy
+        // row is retained until its archive timestamp is repaired explicitly.
+        if (equipment.getDeletedAt() == null
+                || equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
             throw new IllegalStateException("Equipment cannot be permanently deleted until 90 days after archival");
         }
 
@@ -1771,5 +1767,11 @@ public class EquipmentService {
                 id,
                 equipment.getName()
         );
+    }
+
+    private Equipment getOwnedArchivedEquipment(Long id, Long hospitalId) {
+        return equipmentRepository.findArchivedByIdAndHospitalId(id, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Archived equipment not found or you don't have access"));
     }
 }
