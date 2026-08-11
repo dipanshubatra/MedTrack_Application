@@ -59,11 +59,6 @@ import com.medtrack.auth.event.UserRegisteredEvent;
 @RequiredArgsConstructor
 public class UserService {
 
-    /**
-     * List of acceptable security roles within the application system.
-     * Roles must match authorized paths configured in security configurations.
-     */
-    private static final List<String> VALID_ROLES = List.of("HOSPITAL", "TECHNICIAN", "SUPPLIER");
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     @Value("${app.jwt.expiration-ms:900000}")
@@ -92,6 +87,7 @@ public class UserService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
     private final KafkaEventPublisher kafkaEventPublisher;
+    private final PublicRegistrationRolePolicy publicRegistrationRolePolicy;
 
     @Value("${security.account.lock-duration:30}")
     private int lockDurationMinutes;
@@ -107,11 +103,12 @@ public class UserService {
 
     /**
      * Registers a new user account in the application database.
-     * Enforces unique email check and valid system role assignment, then encodes the password using BCrypt.
+     * Enforces the public-registration role policy and email uniqueness, then encodes the password using BCrypt.
      *
      * @param request the registration details DTO
      * @return the {@link AuthResponse} containing user profile information and generated JWT token
-     * @throws RuntimeException if the email already exists in the database or if an invalid role is provided
+     * @throws RuntimeException if the email already exists in the database
+     * @throws IllegalArgumentException if the requested role is invalid or privileged
      */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -120,17 +117,13 @@ public class UserService {
             throw new IllegalArgumentException("Passwords do not match");
         }
 
+        // Resolve authorization before touching persistence. Public callers may never mint
+        // the HOSPITAL authority used by administrative endpoints throughout the application.
+        String role = publicRegistrationRolePolicy.resolve(request.getRole());
+
         // Enforce email uniqueness constraint prior to registration
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new EmailAlreadyExistsException("Email already exists");
-        }
-
-        // Normalize the role string casing to uppercase for consistency in authorization checks; defaults to HOSPITAL
-        String role = request.getRole() != null ? request.getRole().toUpperCase() : "HOSPITAL";
-
-        // Validate that the assigned role is mapped to one of the authorized application roles
-        if (!VALID_ROLES.contains(role)) {
-            throw new IllegalArgumentException("Invalid role. Must be one of: HOSPITAL, TECHNICIAN, SUPPLIER");
         }
 
         // Normalize email to lowercase
