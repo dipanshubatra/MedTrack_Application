@@ -1,8 +1,6 @@
 package com.medtrack.service;
 
-import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenancePolicyRule;
-import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenancePolicyRuleRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -14,57 +12,102 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Scheduled driver for the preventive-maintenance automation engine.
+ * Scheduled driver for preventive-maintenance task generation.
  *
- * <p>Runs the generation job across every hospital daily. Generation itself is idempotent per
- * rule/window, so the job is safe to run repeatedly and a crash between runs cannot create
- * duplicates.</p>
+ * <p>The scheduler is intentionally thin. Recurrence calculation, equipment matching,
+ * idempotency, and task creation remain owned by {@link PreventiveMaintenanceService}.</p>
  */
 @Service
 @RequiredArgsConstructor
 public class PreventiveMaintenanceScheduler {
 
-    private static final Logger log = LoggerFactory.getLogger(PreventiveMaintenanceScheduler.class);
+    private static final Logger log =
+            LoggerFactory.getLogger(PreventiveMaintenanceScheduler.class);
 
     private final MaintenancePolicyRuleRepository ruleRepository;
-    private final HospitalRepository hospitalRepository;
     private final PreventiveMaintenanceService preventiveMaintenanceService;
 
     /**
-     * Runs daily at 02:30 server-local time. Every active rule of every hospital is generated for
-     * its configured lead-time window.
+     * Generates upcoming preventive-maintenance tasks for every active policy rule.
      *
-     * <p>Not transactional on purpose: {@code generateTasksForScheduler} is itself transactional, so
-     * each rule run commits independently and a single failed rule cannot poison the whole batch.</p>
+     * <p>The generation horizon is based on each rule's configured lead time. Individual
+     * rule failures are isolated so that one invalid rule does not stop generation for
+     * the remaining hospitals/rules.</p>
      */
-    @Scheduled(cron = "${app.maintenance.automation.cron:0 30 2 * * *}")
-    public void runScheduledGeneration() {
-        log.debug("Running scheduled preventive-maintenance generation...");
-        LocalDate start = LocalDate.now();
-        int hospitalsProcessed = 0;
-        int runsCreated = 0;
+    @Scheduled(cron = "${app.maintenance.generation.cron:0 15 * * * *}")
+    public void runGenerationSweep() {
+        log.info("Starting scheduled preventive-maintenance generation sweep");
 
-        List<Hospital> hospitals = hospitalRepository.findAll();
-        for (Hospital hospital : hospitals) {
-            List<MaintenancePolicyRule> rules = ruleRepository
-                    .findByHospitalIdAndActiveTrue(hospital.getId());
-            if (rules.isEmpty()) {
+        List<MaintenancePolicyRule> rules = ruleRepository.findByActiveTrue();
+
+        int processed = 0;
+        int failed = 0;
+        int skipped = 0;
+        int generated = 0;
+
+        LocalDate today = LocalDate.now();
+
+        for (MaintenancePolicyRule rule : rules) {
+            if (rule == null || rule.getId() == null || rule.getHospitalId() == null) {
+                skipped++;
                 continue;
             }
-            for (MaintenancePolicyRule rule : rules) {
-                try {
-                    LocalDate end = start.plusDays(rule.getLeadTimeDays() != null
-                            ? rule.getLeadTimeDays() : 7);
-                    preventiveMaintenanceService.generateTasksForScheduler(rule.getId(), start, end);
-                    runsCreated++;
-                } catch (RuntimeException exception) {
-                    log.warn("Scheduled generation failed for rule {} of hospital {}: {}",
-                            rule.getId(), hospital.getId(), exception.getMessage());
-                }
+
+            if (!Boolean.TRUE.equals(rule.getActive())
+                    || Boolean.TRUE.equals(rule.getDeleted())) {
+                skipped++;
+                continue;
             }
-            hospitalsProcessed++;
+
+            try {
+                LocalDate windowStart = today;
+                LocalDate windowEnd = today.plusDays(
+                        rule.getLeadTimeDays() != null
+                                ? rule.getLeadTimeDays()
+                                : 7
+                );
+
+                var run = preventiveMaintenanceService.generateTasksForScheduler(
+                        rule.getId(),
+                        windowStart,
+                        windowEnd
+                );
+
+                processed++;
+
+                if (run != null) {
+                    generated += run.getTasksGenerated() != null
+                            ? run.getTasksGenerated()
+                            : 0;
+
+                    log.debug(
+                            "Preventive-maintenance rule {} generated {} tasks and skipped {} existing tasks",
+                            rule.getId(),
+                            run.getTasksGenerated(),
+                            run.getSkippedExisting()
+                    );
+                }
+
+            } catch (RuntimeException exception) {
+                failed++;
+
+                log.error(
+                        "Scheduled preventive-maintenance generation failed for rule {} " +
+                                "in hospital {}",
+                        rule.getId(),
+                        rule.getHospitalId(),
+                        exception
+                );
+            }
         }
 
-        log.info("Scheduled generation processed {} hospitals and {} rule runs", hospitalsProcessed, runsCreated);
+        log.info(
+                "Completed scheduled preventive-maintenance generation sweep: " +
+                        "rulesProcessed={}, rulesFailed={}, rulesSkipped={}, tasksGenerated={}",
+                processed,
+                failed,
+                skipped,
+                generated
+        );
     }
 }
