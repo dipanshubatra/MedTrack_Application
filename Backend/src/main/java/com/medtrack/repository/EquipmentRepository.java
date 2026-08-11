@@ -13,8 +13,10 @@ import org.springframework.data.domain.Pageable;
 
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
@@ -38,6 +40,11 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
             Long hospitalId,
             LocalDate startDate,
             LocalDate endDate
+    );
+
+    List<Equipment> findByHospitalIdAndStatus(
+            Long hospitalId,
+            EquipmentStatus status
     );
 
     // Low stock inventory
@@ -72,11 +79,36 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
+    // Overloaded on purpose: the Pageable variant is a distinct signature, not a duplicate of the
+    // unpaged findByHospitalId(Long) declared at the top of this interface.
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
+
+    @Query("""
+            SELECT e
+            FROM Equipment e
+            WHERE e.hospital.id = :hospitalId
+            AND e.location.id IN :locationIds
+            """)
+    Page<Equipment> findByHospitalIdAndLocationIn(
+            @Param("hospitalId") Long hospitalId,
+            @Param("locationIds") Collection<Long> locationIds,
+            Pageable pageable
+    );
+
+    // Retired view (issue #744): assets that have been decommissioned keep their full history and
+    // remain searchable instead of being deleted. The class-level @SQLRestriction("deleted = false")
+    // applies to these derived queries, which is exactly what the retired view wants.
+    List<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses);
+
+    Page<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses, Pageable pageable);
 
     // countByHospitalId and countByHospitalIdAndStatus are declared above as @Query methods.
     // They were also declared here as derived queries, which is a duplicate method signature
     // and is rejected by javac, so only the @Query declarations are kept.
+    //
+    // The same applies to findByHospitalId(Long) and findByIdAndHospitalId(Long, Long): both are
+    // declared once at the top of this interface and every feature added since reuses those
+    // declarations rather than restating them next to its own queries.
     long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
 
     List<Equipment> findByHospitalIdAndPurchaseDateBetween(
@@ -101,6 +133,61 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     @Query("SELECT COUNT(e) FROM Equipment e WHERE e.hospital.id = :hospitalId AND e.warrantyExpiry IS NULL")
     long countByHospitalIdAndWarrantyExpiryIsNull(@Param("hospitalId") Long hospitalId);
 
+    // ---------------------------------------------------------------------
+    // Warranty-expiry alerting (issue #943)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Assets across every tenant whose warranty ends inside {@code [start, end]} and which are still
+     * part of the operating fleet.
+     *
+     * <p>Two things are deliberately pushed into the database rather than done in Java. The status
+     * exclusion, because an asset that has been retired or disposed of can no longer have its
+     * warranty renewed and must not raise an alert; and the date window, because the alert job only
+     * ever cares about a fixed 90-day horizon and loading the whole {@code equipment} table to
+     * discard almost all of it does not scale past a demo dataset.</p>
+     *
+     * <p>Pass {@link EquipmentStatus#DECOMMISSIONED} as {@code excludedStatuses}. It is exposed as a
+     * parameter rather than hard-coded so the caller's intent is visible at the call site and the
+     * query stays usable if a further terminal status is ever added.</p>
+     *
+     * <p>The class-level {@code @SQLRestriction("deleted = false")} still applies, so archived
+     * records are excluded as well.</p>
+     */
+    @Query("""
+            SELECT e
+            FROM Equipment e
+            WHERE e.warrantyExpiry BETWEEN :start AND :end
+            AND e.status NOT IN :excludedStatuses
+            AND e.hospital IS NOT NULL
+            ORDER BY e.warrantyExpiry ASC, e.id ASC
+            """)
+    List<Equipment> findAlertableByWarrantyExpiryBetween(
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end,
+            @Param("excludedStatuses") Collection<EquipmentStatus> excludedStatuses);
+
+    /**
+     * The count behind the dashboard's "upcoming warranty expirations" tile.
+     *
+     * <p>Applies the same eligibility rule as {@link #findAlertableByWarrantyExpiryBetween} so the
+     * headline number and the alert feed cannot disagree. {@link
+     * #countByHospitalIdAndWarrantyExpiryBetween} is kept for callers that genuinely want every
+     * asset regardless of status.</p>
+     */
+    @Query("""
+            SELECT COUNT(e)
+            FROM Equipment e
+            WHERE e.hospital.id = :hospitalId
+            AND e.warrantyExpiry BETWEEN :start AND :end
+            AND e.status NOT IN :excludedStatuses
+            """)
+    long countAlertableByHospitalIdAndWarrantyExpiryBetween(
+            @Param("hospitalId") Long hospitalId,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end,
+            @Param("excludedStatuses") Collection<EquipmentStatus> excludedStatuses);
+
     // Soft delete - archived records (deleted = true).
     //
     // Native on purpose. Equipment carries a class-level @SQLRestriction("deleted = false") and
@@ -119,4 +206,18 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     @Query(value = "SELECT * FROM equipment WHERE id = :id AND deleted = TRUE", nativeQuery = true)
     Optional<Equipment> findByIdAndDeletedTrue(@Param("id") Long id);
+
+    // ---------------------------------------------------------------------
+    // Preventive-maintenance automation matching queries
+    // ---------------------------------------------------------------------
+
+    List<Equipment> findByHospitalIdAndCategory(Long hospitalId, EquipmentCategory category);
+
+    @Query("SELECT e FROM Equipment e "
+            + "WHERE e.hospital.id = :hospitalId "
+            + "AND (LOWER(e.model) LIKE LOWER(CONCAT('%', :manufacturer, '%')) "
+            + "OR LOWER(e.name) LIKE LOWER(CONCAT('%', :manufacturer, '%')))")
+    List<Equipment> findByHospitalIdAndManufacturer(
+            @Param("hospitalId") Long hospitalId,
+            @Param("manufacturer") String manufacturer);
 }
