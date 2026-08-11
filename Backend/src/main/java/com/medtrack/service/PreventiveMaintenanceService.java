@@ -340,23 +340,21 @@ public class PreventiveMaintenanceService {
                 .toList();
         User hospitalUser = hospital.getUser();
         for (MaintenanceTask task : breachedCritical) {
-            if (task.getSlaState() != SlaState.ESCALATED) {
-                task.setSlaState(SlaState.ESCALATED);
-                task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
-                taskRepository.save(task);
-                activityService.recordSystemCreated(task, "escalated due to critical SLA breach");
-            }
+            task.setSlaState(SlaState.ESCALATED);
+            task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
+            taskRepository.save(task);
+            activityService.recordSystemCreated(task, "escalated due to critical SLA breach");
+            publishSlaEscalatedEvent(task);
         }
 
         // Escalate unassigned high-priority tasks that are already breached.
         for (MaintenanceTask task : taskRepository.findUnassignedByPriority(
                 hospitalId, MaintenanceStatus.COMPLETED, SUGGESTION_PRIORITIES)) {
-            if (task.getSlaState() == SlaState.BREACHED && task.getEscalatedTo() == null) {
-                task.setSlaState(SlaState.ESCALATED);
-                task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
-                taskRepository.save(task);
-                activityService.recordSystemCreated(task, "escalated due to unassigned SLA breach");
-            }
+            task.setSlaState(SlaState.ESCALATED);
+            task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
+            taskRepository.save(task);
+            activityService.recordSystemCreated(task, "escalated due to unassigned SLA breach");
+            publishSlaEscalatedEvent(task);
         }
 
         return buildSlaSummary(hospitalId);
