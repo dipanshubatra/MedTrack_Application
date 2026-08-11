@@ -99,4 +99,40 @@ public class Fido2WebAuthnController {
         Map<String, Object> metrics = fidoService.getWebAuthnAuditMetrics();
         return ResponseEntity.ok(metrics);
     }
+
+    /**
+     * Revoke Passkey Credential
+     */
+    @DeleteMapping("/credentials/{credentialId}")
+    public ResponseEntity<?> revokeCredential(
+            @PathVariable String credentialId,
+            @RequestParam(defaultValue = "USER_REQUESTED") String reason) {
+        try {
+            fidoService.revokeCredential(credentialId, reason);
+            Map<String, String> response = new HashMap<>();
+            response.put("status", "SUCCESS");
+            response.put("message", "Passkey " + credentialId + " revoked successfully.");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "revocation_failed");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+    }
+
+    /**
+     * Get WebAuthn Specifications & FIDO Alliance Metadata
+     */
+    @GetMapping("/spec-standards")
+    public ResponseEntity<Map<String, Object>> getSpecStandards() {
+        Map<String, Object> specs = new HashMap<>();
+        specs.put("webAuthnVersion", "W3C WebAuthn Level 3 Recommendation");
+        specs.put("fidoVersion", "FIDO2 / CTAP2.1 Protocol Specification");
+        specs.put("algorithms", List.of("ES256 (ECDSA P-256)", "RS256 (RSA 2048)", "EdDSA (Ed25519)"));
+        specs.put("userVerificationRequirement", "REQUIRED (Biometric TouchID/FaceID or PIN)");
+        specs.put("residentKeySupport", "PREFERRED (Discoverable Credentials)");
+        return ResponseEntity.ok(specs);
+    }
 }
+
