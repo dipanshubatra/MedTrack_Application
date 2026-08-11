@@ -196,8 +196,22 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
     @Query("SELECT CASE WHEN COUNT(mt) > 0 THEN TRUE ELSE FALSE END FROM MaintenanceTask mt "
             + "WHERE mt.deleted = FALSE "
             + "AND mt.hospitalId = :hospitalId "
+            + "AND ((:equipmentRecordId IS NOT NULL AND mt.equipmentRecord.id = :equipmentRecordId) "
+            + "     OR (:equipmentCode IS NOT NULL AND mt.equipmentId = :equipmentCode)) "
+            + "AND LOWER(TRIM(mt.maintenanceType)) = LOWER(TRIM(:maintenanceType)) "
+            + "AND mt.status IN :activeStatuses")
+    boolean existsActiveTaskForEquipmentWithCode(
+            @Param("hospitalId") Long hospitalId,
+            @Param("equipmentRecordId") Long equipmentRecordId,
+            @Param("equipmentCode") String equipmentCode,
+            @Param("maintenanceType") String maintenanceType,
+            @Param("activeStatuses") List<MaintenanceStatus> activeStatuses);
+
+    @Query("SELECT CASE WHEN COUNT(mt) > 0 THEN TRUE ELSE FALSE END FROM MaintenanceTask mt "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospitalId = :hospitalId "
             + "AND mt.equipmentRecord.id = :equipmentRecordId "
-            + "AND LOWER(mt.maintenanceType) = LOWER(:maintenanceType) "
+            + "AND LOWER(TRIM(mt.maintenanceType)) = LOWER(TRIM(:maintenanceType)) "
             + "AND mt.status IN :activeStatuses")
     boolean existsActiveTaskForEquipment(
             @Param("hospitalId") Long hospitalId,

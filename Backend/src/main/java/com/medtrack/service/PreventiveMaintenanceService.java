@@ -626,7 +626,25 @@ public class PreventiveMaintenanceService {
 
         List<PlannedOccurrence> plannedOccurrences = new ArrayList<>();
         Set<LocalDate> dueDates = new LinkedHashSet<>();
+        List<MaintenanceStatus> activeStatuses = List.of(
+                MaintenanceStatus.SCHEDULED,
+                MaintenanceStatus.IN_PROGRESS,
+                MaintenanceStatus.NEEDS_PART,
+                MaintenanceStatus.ON_HOLD
+        );
+        String ruleMaintType = rule.getMaintenanceType() != null ? rule.getMaintenanceType().trim() : "";
+
         for (Equipment equipment : matchedEquipment) {
+            boolean hasActive = taskRepository.existsActiveTaskForEquipmentWithCode(
+                    hospitalId,
+                    equipment.getId(),
+                    equipment.getEquipmentCode(),
+                    ruleMaintType,
+                    activeStatuses
+            );
+            if (hasActive) {
+                continue;
+            }
             LocalDate latestDeadline = latestDeadlineByEquipment.get(equipment.getId());
             for (LocalDate deadline : computeDueDates(rule, start, end, latestDeadline)) {
                 if (!existingInWindow.contains(new OccurrenceKey(equipment.getId(), deadline))) {
