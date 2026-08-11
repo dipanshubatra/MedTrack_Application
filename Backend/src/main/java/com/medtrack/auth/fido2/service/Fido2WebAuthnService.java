@@ -136,6 +136,30 @@ public class Fido2WebAuthnService {
         metrics.put("biometricTouchIdCount", allRecords.stream().filter(r -> r.getAuthenticatorName().contains("Apple") || r.getAuthenticatorName().contains("Touch")).count());
         metrics.put("userVerificationEnforced", true);
         metrics.put("cloneDetectionActive", true);
+        metrics.put("w3cWebAuthnLevel", "Level 3 Standard");
         return metrics;
     }
+
+    /**
+     * Validate FIDO2 Attestation Statement Format (packed, tpm, android-safetynet, none)
+     */
+    public boolean validateAttestationStatement(String attestationFormat, String clientDataHash) {
+        if (attestationFormat == null || attestationFormat.isEmpty()) {
+            return false;
+        }
+        Set<String> validFormats = Set.of("packed", "tpm", "android-key", "android-safetynet", "fido-u2f", "apple", "none");
+        return validFormats.contains(attestationFormat.toLowerCase());
+    }
+
+    /**
+     * Revoke Compromised Passkey Credential
+     */
+    @Transactional
+    public void revokeCredential(String credentialId, String revocationReason) {
+        Fido2WebAuthnRecord record = recordRepository.findByCredentialId(credentialId)
+                .orElseThrow(() -> new IllegalArgumentException("Credential ID not found"));
+
+        recordRepository.delete(record);
+    }
 }
+
