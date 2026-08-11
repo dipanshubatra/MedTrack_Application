@@ -364,9 +364,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/shipments/**").hasRole("SUPPLIER")
 
                 // Real-time operations event stream boundaries:
-                // WebSocket/SSE endpoint for authenticated users.
+                // The Activity Center is hospital-scoped; suppliers and technicians have no
+                // hospital profile with which to authorize a stream subscription.
                 // REST endpoints for event history and read receipts.
-                .requestMatchers("/api/events/stream/**").authenticated()
+                .requestMatchers("/api/events/stream/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.GET, "/api/events/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/events/**").authenticated()
 
