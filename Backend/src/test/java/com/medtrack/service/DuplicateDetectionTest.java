@@ -6,16 +6,34 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.auth.service.KafkaEventPublisher;
 import com.medtrack.dto.DuplicateGroupResponse;
 import com.medtrack.dto.DuplicateMatch;
+import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.model.DepreciationMethod;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentCategory;
+import com.medtrack.model.EquipmentDisposal;
+import com.medtrack.model.EquipmentDisposalMethod;
+import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentLifecycleAction;
 import com.medtrack.model.EquipmentLifecycleActionType;
 import com.medtrack.model.EquipmentLifecycleStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.MaintenanceTask;
+import com.medtrack.model.MaintenanceWorkOrder;
+import com.medtrack.model.MaintenanceWorkOrderPriority;
+import com.medtrack.model.MaintenanceWorkOrderStatus;
+import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.model.EquipmentAudit;
+import com.medtrack.model.SlaState;
+import com.medtrack.model.WarrantyCoverageType;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentLifecycleActionRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.repository.EquipmentAuditRepository;
+import com.medtrack.repository.MaintenanceTaskRepository;
+import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,11 +42,21 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Duplicate detection & tag reconciliation (issue #746), exercised through
@@ -56,6 +84,21 @@ class DuplicateDetectionTest {
 
     @Autowired
     private EquipmentLifecycleActionRepository lifecycleRepository;
+
+    @Autowired
+    private MaintenanceTaskRepository taskRepository;
+
+    @Autowired
+    private MaintenanceWorkOrderRepository workOrderRepository;
+
+    @Autowired
+    private EquipmentAuditRepository equipmentAuditRepository;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    @Autowired
+    private EquipmentDisposalRepository disposalRepository;
 
     @Autowired
     private HospitalRepository hospitalRepository;
@@ -173,5 +216,318 @@ class DuplicateDetectionTest {
 
         List<DuplicateGroupResponse> groups = duplicateDetectionService.findDuplicateGroups(username);
         assertTrue(groups.isEmpty(), "after the merge no duplicate group may remain");
+    }
+
+    @Test
+    @DisplayName("merging preserves missing metadata and updates maintenance tasks and disposal records")
+    void mergePreservesMetadataAndReassignsTasksAndDisposals() {
+        Equipment survivor = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-KEEP-1")
+                .name("Ultrasound Machine")
+                .department("Radiology")
+                .status(EquipmentStatus.ACTIVE)
+                .quantity(1)
+                .hospital(hospital)
+                .build());
+
+        Equipment duplicate = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-MERGE-1")
+                .name("Ultrasound Machine")
+                .model("Philips EPIQ 7")
+                .serialNumber("SN-US-7788")
+                .department("Cardiology")
+                .purchaseCost(new BigDecimal("150000.00"))
+                .usefulLifeYears(7)
+                .warrantyExpiry(LocalDate.now().plusYears(2))
+                .custodian("Dr. Smith")
+                .status(EquipmentStatus.ACTIVE)
+                .quantity(2)
+                .hospital(hospital)
+                .build());
+
+        disposalRepository.save(EquipmentDisposal.builder()
+                .equipment(duplicate)
+                .hospital(hospital)
+                .disposalMethod(EquipmentDisposalMethod.SCRAP)
+                .status(EquipmentDisposalStatus.PENDING_APPROVAL)
+                .requestedBy(username)
+                .build());
+
+        taskRepository.save(MaintenanceTask.builder()
+                .taskCode("MNT-TASK-1")
+                .equipmentId(duplicate.getEquipmentCode())
+                .equipment(duplicate.getName())
+                .equipmentRecord(duplicate)
+                .hospitalId(hospital.getId())
+                .maintenanceType("Routine")
+                .priority("Normal")
+                .deadline(LocalDate.now().plusDays(10))
+                .status(MaintenanceStatus.SCHEDULED)
+                .slaState(SlaState.UPCOMING)
+                .build());
+
+        Equipment merged = duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+
+        assertEquals("SN-US-7788", merged.getSerialNumber());
+        assertEquals("Philips EPIQ 7", merged.getModel());
+        assertEquals("Radiology", merged.getDepartment(), "Existing non-null survivor department is retained");
+        assertEquals(new BigDecimal("150000.00"), merged.getPurchaseCost());
+        assertEquals(7, merged.getUsefulLifeYears());
+        assertEquals("Dr. Smith", merged.getCustodian());
+        assertEquals(3, merged.getQuantity());
+
+        List<EquipmentDisposal> disposals = disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(
+                survivor.getId(), hospital.getId());
+        assertEquals(1, disposals.size(), "Disposal record must be reassigned to the survivor");
+
+        List<MaintenanceTask> tasks = taskRepository.findByHospitalId(hospital.getId());
+        assertEquals(1, tasks.size());
+        MaintenanceTask updatedTask = tasks.get(0);
+        assertEquals(survivor.getId(), updatedTask.getEquipmentRecord().getId());
+        assertEquals(survivor.getEquipmentCode(), updatedTask.getEquipmentId());
+        assertEquals(survivor.getName(), updatedTask.getEquipment());
+    }
+
+    @Test
+    @DisplayName("merging rejects retired, disposed, or archived equipment")
+    void mergeRejectsInvalidStatusOrArchivedEquipment() {
+        Equipment first = asset("EQ-DUP-8", "MRI-1008", "MRI Scanner", "Siemens X1");
+        Equipment retired = asset("EQ-DUP-9", "MRI-1009", "MRI Scanner", "Siemens X1");
+        retired.setStatus(EquipmentStatus.RETIRED);
+        equipmentRepository.saveAndFlush(retired);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                duplicateDetectionService.mergeDuplicates(first.getId(), retired.getId(), username));
+
+        Equipment archived = asset("EQ-DUP-10", "MRI-1010", "MRI Scanner", "Siemens X1");
+        archived.setDeleted(true);
+        equipmentRepository.saveAndFlush(archived);
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                duplicateDetectionService.mergeDuplicates(first.getId(), archived.getId(), username));
+    }
+
+    @Test
+    @DisplayName("merging rejects invalid asset arguments such as null or identical IDs")
+    void mergeRejectsIdenticalOrNullAssetIds() {
+        Equipment first = asset("EQ-DUP-11", "MRI-1011", "MRI Scanner", "Siemens X1");
+
+        assertThrows(IllegalArgumentException.class, () ->
+                duplicateDetectionService.mergeDuplicates(null, first.getId(), username));
+        assertThrows(IllegalArgumentException.class, () ->
+                duplicateDetectionService.mergeDuplicates(first.getId(), null, username));
+        assertThrows(IllegalArgumentException.class, () ->
+                duplicateDetectionService.mergeDuplicates(first.getId(), first.getId(), username));
+    }
+
+    @Test
+    @DisplayName("merging preserves extended warranty, location, and depreciation contract attributes")
+    void mergePreservesAllExtendedWarrantyAndLocationFields() {
+        Equipment survivor = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-KEEP-EXT")
+                .name("ECG Monitor")
+                .department("ICU")
+                .status(EquipmentStatus.ACTIVE)
+                .quantity(2)
+                .hospital(hospital)
+                .build());
+
+        Equipment duplicate = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-MERGE-EXT")
+                .name("ECG Monitor")
+                .department("ICU")
+                .warrantyProvider("GE Healthcare")
+                .warrantyContractNumber("WARR-998877")
+                .warrantyStartDate(LocalDate.now().minusMonths(6))
+                .warrantyExpiry(LocalDate.now().plusMonths(18))
+                .warrantyCoverageType(WarrantyCoverageType.FULL_PARTS_AND_LABOR)
+                .warrantyTerms("24/7 priority support included")
+                .depreciationMethod(DepreciationMethod.DECLINING_BALANCE)
+                .roomLocation("Room 402")
+                .wardLocation("North Wing")
+                .minimumStock(15)
+                .status(EquipmentStatus.ACTIVE)
+                .quantity(3)
+                .hospital(hospital)
+                .build());
+
+        Equipment merged = duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+
+        assertEquals("GE Healthcare", merged.getWarrantyProvider());
+        assertEquals("WARR-998877", merged.getWarrantyContractNumber());
+        assertEquals(LocalDate.now().minusMonths(6), merged.getWarrantyStartDate());
+        assertEquals(LocalDate.now().plusMonths(18), merged.getWarrantyExpiry());
+        assertEquals(WarrantyCoverageType.FULL_PARTS_AND_LABOR, merged.getWarrantyCoverageType());
+        assertEquals("24/7 priority support included", merged.getWarrantyTerms());
+        assertEquals(DepreciationMethod.STRAIGHT_LINE, merged.getDepreciationMethod());
+        assertEquals("Room 402", merged.getRoomLocation());
+        assertEquals("North Wing", merged.getWardLocation());
+        assertEquals(10, merged.getMinimumStock());
+        assertEquals(5, merged.getQuantity());
+    }
+
+    @Test
+    @DisplayName("merging retains existing non-null metadata on survivor asset")
+    void mergeRetainsExistingSurvivorMetadataWhenAlreadySet() {
+        Equipment survivor = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-KEEP-EXISTING")
+                .name("Defibrillator")
+                .model("Zoll R Series")
+                .serialNumber("SN-KEEP-1111")
+                .department("Emergency")
+                .warrantyProvider("Zoll Medical")
+                .minimumStock(8)
+                .status(EquipmentStatus.ACTIVE)
+                .quantity(1)
+                .hospital(hospital)
+                .build());
+
+        Equipment duplicate = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-MERGE-EXISTING")
+                .name("Defibrillator")
+                .model("Zoll X Series")
+                .serialNumber("SN-MERGE-2222")
+                .department("Cardiology")
+                .warrantyProvider("Other Vendor")
+                .minimumStock(20)
+                .status(EquipmentStatus.ACTIVE)
+                .quantity(1)
+                .hospital(hospital)
+                .build());
+
+        Equipment merged = duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+
+        assertEquals("Zoll R Series", merged.getModel(), "Survivor model must not be overwritten");
+        assertEquals("SN-KEEP-1111", merged.getSerialNumber(), "Survivor serial number must not be overwritten");
+        assertEquals("Emergency", merged.getDepartment(), "Survivor department must not be overwritten");
+        assertEquals("Zoll Medical", merged.getWarrantyProvider(), "Survivor warranty provider must not be overwritten");
+        assertEquals(8, merged.getMinimumStock(), "Survivor minimum stock must not be overwritten");
+        assertEquals(2, merged.getQuantity(), "Quantities must still be combined");
+    }
+
+    @Test
+    @DisplayName("merging carries the duplicate's work orders onto the survivor")
+    void mergeReassignsMaintenanceWorkOrders() {
+        Equipment survivor = asset("EQ-WO-KEEP", "SN-WO-KEEP", "MRI Scanner", "Siemens Magnetom");
+        Equipment duplicate = asset("EQ-WO-MERGE", "SN-WO-MERGE", "MRI Scanner", "Siemens Magnetom");
+
+        workOrderRepository.saveAndFlush(MaintenanceWorkOrder.builder()
+                .workOrderCode("WO-000901")
+                .hospitalId(hospital.getId())
+                .equipment(duplicate)
+                .title("Coil replacement")
+                .maintenanceType(MaintenanceWorkOrderType.CORRECTIVE)
+                .priority(MaintenanceWorkOrderPriority.HIGH)
+                .status(MaintenanceWorkOrderStatus.IN_PROGRESS)
+                .dueDate(LocalDate.now().plusDays(3))
+                .createdAt(LocalDateTime.now())
+                .createdBy(username)
+                .deleted(false)
+                .build());
+
+        // The survivor starts with none of its own, so anything it ends up with came from the merge.
+        assertTrue(workOrderRepository
+                        .findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(hospital.getId(), survivor.getId())
+                        .isEmpty(),
+                "Precondition: the survivor has no work orders of its own");
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        List<MaintenanceWorkOrder> carried = workOrderRepository
+                .findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(hospital.getId(), survivor.getId());
+        assertEquals(1, carried.size(),
+                "The duplicate's work order must follow the asset onto the survivor");
+        assertEquals("WO-000901", carried.get(0).getWorkOrderCode());
+        assertEquals(MaintenanceWorkOrderStatus.IN_PROGRESS, carried.get(0).getStatus(),
+                "An in-flight work order stays in flight; the merge only changes which asset it points at");
+
+        assertTrue(workOrderRepository
+                        .findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(hospital.getId(), duplicate.getId())
+                        .isEmpty(),
+                "Nothing may be left pointing at the archived duplicate");
+    }
+
+    @Test
+    @DisplayName("merging carries the duplicate's audit trail onto the survivor")
+    void mergeReassignsEquipmentAudits() {
+        Equipment survivor = asset("EQ-AUD-KEEP", "SN-AUD-KEEP", "Infusion Pump", "Braun Infusomat");
+        Equipment duplicate = asset("EQ-AUD-MERGE", "SN-AUD-MERGE", "Infusion Pump", "Braun Infusomat");
+
+        equipmentAuditRepository.saveAndFlush(EquipmentAudit.builder()
+                .equipmentId(duplicate.getId())
+                .hospital(hospital)
+                .username(username)
+                .action("UPDATE")
+                .changedFields("department")
+                .previousValue("Radiology")
+                .newValue("Cardiology")
+                .timestamp(LocalDateTime.now())
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        assertEquals(1,
+                equipmentAuditRepository.findByEquipmentIdOrderByTimestampDesc(survivor.getId()).size(),
+                "The audit trail is the reason the duplicate is archived rather than deleted, so it "
+                        + "has to end up on the record that survives");
+        assertTrue(equipmentAuditRepository.findByEquipmentIdOrderByTimestampDesc(duplicate.getId()).isEmpty(),
+                "Nothing may be left pointing at the archived duplicate");
+    }
+
+    @Test
+    @DisplayName("every foreign key into equipment is covered by the merge")
+    void mergeCoversEveryTableThatReferencesEquipment() {
+        // Reads the foreign keys the schema actually declares rather than a hand-kept list, so a
+        // new table referencing equipment fails here the moment it is added instead of silently
+        // stranding its rows on an archived asset - which is exactly how maintenance_work_orders
+        // came to be missing.
+        // Reads the columns the schema actually declares rather than a hand-kept list, so a new
+        // table referencing equipment fails here the moment it is added instead of silently
+        // stranding its rows on an archived asset - which is exactly how maintenance_work_orders
+        // came to be missed.
+        //
+        // Restricted to numeric columns on purpose. maintenance_tasks.equipment_id and
+        // equipment_orders.equipment_id are VARCHAR copies of the asset code rather than keys;
+        // rewriting a delivered purchase order's recorded asset code is not something a duplicate
+        // merge should do.
+        @SuppressWarnings("unchecked")
+        List<Object[]> columns = entityManager.createNativeQuery("""
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'PUBLIC'
+                  AND column_name LIKE '%EQUIPMENT%ID'
+                  AND data_type IN ('BIGINT', 'INTEGER')
+                """).getResultList();
+
+        Set<String> declared = new LinkedHashSet<>();
+        for (Object[] row : columns) {
+            String table = String.valueOf(row[0]).toLowerCase(Locale.ROOT);
+            String column = String.valueOf(row[1]).toLowerCase(Locale.ROOT);
+            // maintenance_tasks is reassigned by reassignTaskMetadata, which also refreshes the
+            // denormalised asset code and name it carries, so it is not in CHILD_REASSIGNMENTS.
+            if ("maintenance_tasks".equals(table)) {
+                continue;
+            }
+            declared.add(table + "." + column);
+        }
+
+        String covered = String.join(" ", DuplicateDetectionService.CHILD_REASSIGNMENTS)
+                .toLowerCase(Locale.ROOT);
+        Set<String> uncovered = new LinkedHashSet<>();
+        for (String reference : declared) {
+            String table = reference.substring(0, reference.indexOf('.'));
+            String column = reference.substring(reference.indexOf('.') + 1);
+            if (!covered.contains("update " + table + " set " + column + " =")) {
+                uncovered.add(reference);
+            }
+        }
+
+        assertTrue(uncovered.isEmpty(),
+                "These columns reference equipment but no merge statement moves them onto the "
+                        + "survivor, so their rows would be stranded on the archived duplicate: "
+                        + uncovered);
+        assertFalse(declared.isEmpty(), "Expected the schema to declare columns referencing equipment");
     }
 }

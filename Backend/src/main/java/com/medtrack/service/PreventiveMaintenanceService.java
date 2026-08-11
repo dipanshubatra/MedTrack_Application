@@ -7,6 +7,8 @@ import com.medtrack.dto.MaintenanceRuleRequest;
 import com.medtrack.dto.MaintenanceRuleResponse;
 import com.medtrack.dto.RulePreviewResponse;
 import com.medtrack.dto.SlaSummaryResponse;
+import com.medtrack.dto.MaintenanceRuleStatusRequest;
+import com.medtrack.model.MaintenancePolicyStatus;
 import com.medtrack.dto.TechnicianWorkloadResponse;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
@@ -128,6 +130,51 @@ public class PreventiveMaintenanceService {
         rule.setUpdatedAt(LocalDateTime.now());
 
         return MaintenanceRuleResponse.from(ruleRepository.save(rule), resolveEquipmentName(rule));
+    }
+
+    @Transactional
+    public MaintenanceRuleResponse updateRuleStatus(
+            Long id,
+            MaintenanceRuleStatusRequest request,
+            Authentication authentication) {
+
+        Long hospitalId = getHospitalForUser(authentication).getId();
+
+        MaintenancePolicyRule rule = ruleRepository.findByIdAndHospitalId(id, hospitalId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Maintenance rule not found or access denied"));
+
+        MaintenancePolicyStatus currentStatus = rule.getStatus();
+        MaintenancePolicyStatus targetStatus = request.getStatus();
+
+        if (currentStatus == targetStatus) {
+            throw new IllegalArgumentException(
+                    "Maintenance rule is already in " + targetStatus + " status");
+        }
+
+        if (!isValidStatusTransition(currentStatus, targetStatus)) {
+            throw new IllegalArgumentException(
+                    "Invalid maintenance rule status transition: "
+                            + currentStatus + " -> " + targetStatus);
+        }
+
+        rule.setStatus(targetStatus);
+        rule.setActive(targetStatus == MaintenancePolicyStatus.ACTIVE);
+        rule.setUpdatedAt(LocalDateTime.now());
+
+        MaintenancePolicyRule savedRule = ruleRepository.save(rule);
+
+        log.info(
+                "Maintenance rule {} transitioned from {} to {} for hospital {}",
+                rule.getId(),
+                currentStatus,
+                targetStatus,
+                hospitalId);
+
+        return MaintenanceRuleResponse.from(
+                savedRule,
+                resolveEquipmentName(savedRule));
     }
 
     @Transactional
@@ -304,6 +351,35 @@ public class PreventiveMaintenanceService {
         Hospital hospital = getHospitalForUser(authentication);
         return refreshSlaForHospital(hospital);
     }
+    private boolean isValidStatusTransition(
+            MaintenancePolicyStatus currentStatus,
+            MaintenancePolicyStatus targetStatus) {
+
+        if (currentStatus == null || targetStatus == null) {
+            return false;
+        }
+
+        return switch (currentStatus) {
+            case DRAFT ->
+                    targetStatus == MaintenancePolicyStatus.ACTIVE
+                            || targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case ACTIVE ->
+                    targetStatus == MaintenancePolicyStatus.PAUSED
+                            || targetStatus == MaintenancePolicyStatus.COMPLETED
+                            || targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case PAUSED ->
+                    targetStatus == MaintenancePolicyStatus.ACTIVE
+                            || targetStatus == MaintenancePolicyStatus.COMPLETED
+                            || targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case COMPLETED ->
+                    targetStatus == MaintenancePolicyStatus.ARCHIVED;
+
+            case ARCHIVED -> false;
+        };
+    }
 
     /**
      * Hospital-agnostic entry point for {@link MaintenanceSlaAlertScheduler}: recomputes SLA
@@ -340,23 +416,21 @@ public class PreventiveMaintenanceService {
                 .toList();
         User hospitalUser = hospital.getUser();
         for (MaintenanceTask task : breachedCritical) {
-            if (task.getSlaState() != SlaState.ESCALATED) {
-                task.setSlaState(SlaState.ESCALATED);
-                task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
-                taskRepository.save(task);
-                activityService.recordSystemCreated(task, "escalated due to critical SLA breach");
-            }
+            task.setSlaState(SlaState.ESCALATED);
+            task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
+            taskRepository.save(task);
+            activityService.recordSystemCreated(task, "escalated due to critical SLA breach");
+            publishSlaEscalatedEvent(task);
         }
 
         // Escalate unassigned high-priority tasks that are already breached.
         for (MaintenanceTask task : taskRepository.findUnassignedByPriority(
                 hospitalId, MaintenanceStatus.COMPLETED, SUGGESTION_PRIORITIES)) {
-            if (task.getSlaState() == SlaState.BREACHED && task.getEscalatedTo() == null) {
-                task.setSlaState(SlaState.ESCALATED);
-                task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
-                taskRepository.save(task);
-                activityService.recordSystemCreated(task, "escalated due to unassigned SLA breach");
-            }
+            task.setSlaState(SlaState.ESCALATED);
+            task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
+            taskRepository.save(task);
+            activityService.recordSystemCreated(task, "escalated due to unassigned SLA breach");
+            publishSlaEscalatedEvent(task);
         }
 
         return buildSlaSummary(hospitalId);
@@ -657,13 +731,20 @@ public class PreventiveMaintenanceService {
             LocalDate latestGeneratedDeadline) {
         validateWindow(start, end);
         List<LocalDate> dueDates = new ArrayList<>();
-        LocalDate cursor = latestGeneratedDeadline == null
-                ? start
-                : nextOccurrence(latestGeneratedDeadline, rule);
+
+        // Every occurrence is measured from a fixed anchor rather than from the previous
+        // occurrence. Chaining loses the anchor's day of month the first time it is clamped: a
+        // monthly rule anchored on the 31st produces 31 Jan -> 28 Feb, and chaining from 28 Feb
+        // then yields 28 Mar, so the schedule slips three days permanently after one February.
+        // Anchoring gives 31 Jan, 28 Feb, 31 Mar, which is what a monthly schedule means.
+        LocalDate anchor = latestGeneratedDeadline == null ? start : latestGeneratedDeadline;
+        int step = latestGeneratedDeadline == null ? 0 : 1;
+        LocalDate cursor = occurrenceAt(anchor, rule, step);
         int safety = 0;
 
         while (cursor.isBefore(start) && safety < MAX_OCCURRENCES_PER_EQUIPMENT) {
-            cursor = nextOccurrence(cursor, rule);
+            step++;
+            cursor = occurrenceAt(anchor, rule, step);
             safety++;
         }
         if (cursor.isBefore(start)) {
@@ -674,7 +755,8 @@ public class PreventiveMaintenanceService {
         }
         while (!cursor.isAfter(end) && safety < MAX_OCCURRENCES_PER_EQUIPMENT) {
             dueDates.add(cursor);
-            cursor = nextOccurrence(cursor, rule);
+            step++;
+            cursor = occurrenceAt(anchor, rule, step);
             safety++;
         }
         if (!cursor.isAfter(end)) {
@@ -686,39 +768,27 @@ public class PreventiveMaintenanceService {
         return List.copyOf(dueDates);
     }
 
-    private LocalDate nextOccurrence(LocalDate current, MaintenancePolicyRule rule) {
-        private LocalDate nextOccurrence(
-                LocalDate current,
-                MaintenancePolicyRule rule) {
-
-            RecurrenceFrequency frequency = rule.getFrequency();
-
-            if (frequency == null) {
-                return current.plusDays(1);
-            }
-
-            return switch (frequency) {
-                case DAILY -> current.plusDays(1);
-
-                case WEEKLY -> current.plusWeeks(1);
-
-                case BIWEEKLY -> current.plusWeeks(2);
-
-                case MONTHLY -> current.plusMonths(1);
-
-                case QUARTERLY -> current.plusMonths(3);
-
-                case SEMIANNUAL -> current.plusMonths(6);
-
-                case YEARLY -> current.plusYears(1);
-
-                case CUSTOM -> current.plusDays(
-                        rule.getCustomIntervalDays() != null
-                                ? rule.getCustomIntervalDays()
-                                : 7
-                );
-            };
+    /**
+     * The occurrence {@code step} intervals after {@code anchor}.
+     *
+     * <p>Offsetting from the anchor rather than from the previous occurrence is what keeps a
+     * month-end schedule on the month end. {@link LocalDate#plusMonths} clamps into a short month
+     * but keeps the anchor's day for every later month, so an anchor of 31 January yields
+     * 28 February and then 31 March.</p>
+     */
+    private LocalDate occurrenceAt(LocalDate anchor, MaintenancePolicyRule rule, int step) {
+        RecurrenceFrequency frequency = rule.getFrequency();
+        if (frequency == null) {
+            return anchor.plusDays(step);
         }
+        return switch (frequency) {
+            case DAILY -> anchor.plusDays(step);
+            case WEEKLY -> anchor.plusWeeks(step);
+            case MONTHLY -> anchor.plusMonths(step);
+            case QUARTERLY -> anchor.plusMonths(3L * step);
+            case YEARLY -> anchor.plusYears(step);
+            case CUSTOM -> anchor.plusDays(
+                    (long) step * (rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7));
         };
     }
 
