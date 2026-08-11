@@ -687,19 +687,38 @@ public class PreventiveMaintenanceService {
     }
 
     private LocalDate nextOccurrence(LocalDate current, MaintenancePolicyRule rule) {
-        RecurrenceFrequency frequency = rule.getFrequency();
-        if (frequency == null) {
-            return current.plusDays(1);
+        private LocalDate nextOccurrence(
+                LocalDate current,
+                MaintenancePolicyRule rule) {
+
+            RecurrenceFrequency frequency = rule.getFrequency();
+
+            if (frequency == null) {
+                return current.plusDays(1);
+            }
+
+            return switch (frequency) {
+                case DAILY -> current.plusDays(1);
+
+                case WEEKLY -> current.plusWeeks(1);
+
+                case BIWEEKLY -> current.plusWeeks(2);
+
+                case MONTHLY -> current.plusMonths(1);
+
+                case QUARTERLY -> current.plusMonths(3);
+
+                case SEMIANNUAL -> current.plusMonths(6);
+
+                case YEARLY -> current.plusYears(1);
+
+                case CUSTOM -> current.plusDays(
+                        rule.getCustomIntervalDays() != null
+                                ? rule.getCustomIntervalDays()
+                                : 7
+                );
+            };
         }
-        return switch (frequency) {
-            case DAILY -> current.plusDays(1);
-            case WEEKLY -> current.plusWeeks(1);
-            case MONTHLY -> current.with(TemporalAdjusters.firstDayOfNextMonth());
-            case QUARTERLY -> current.with(TemporalAdjusters.firstDayOfNextMonth())
-                    .plusMonths(2);
-            case YEARLY -> current.with(TemporalAdjusters.firstDayOfNextMonth())
-                    .plusMonths(11);
-            case CUSTOM -> current.plusDays(rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7);
         };
     }
 
