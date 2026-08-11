@@ -14,10 +14,13 @@ import com.medtrack.model.EquipmentLifecycleActionType;
 import com.medtrack.model.EquipmentLifecycleStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.MaintenanceWorkOrder;
+import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentLifecycleActionRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import com.medtrack.util.DisposalCertificatePdf;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,6 +32,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Decommissioning / disposal workflow (issue #744).
@@ -46,11 +50,23 @@ public class EquipmentDisposalService {
     private static final List<EquipmentStatus> RETIRED_STATUSES =
             List.of(EquipmentStatus.RETIRED, EquipmentStatus.DISPOSED);
 
+    /**
+     * Work-order states that still represent work someone is expected to carry out. An asset cannot
+     * be decommissioned while any of these are open against it, or a technician stays dispatched to
+     * a device that is no longer in the building.
+     */
+    private static final List<MaintenanceWorkOrderStatus> LIVE_WORK_ORDER_STATUSES = List.of(
+            MaintenanceWorkOrderStatus.OPEN,
+            MaintenanceWorkOrderStatus.ASSIGNED,
+            MaintenanceWorkOrderStatus.IN_PROGRESS,
+            MaintenanceWorkOrderStatus.ON_HOLD);
+
     private final EquipmentDisposalRepository disposalRepository;
     private final EquipmentLifecycleActionRepository lifecycleRepository;
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final MaintenanceWorkOrderRepository workOrderRepository;
     private final DisposalCertificatePdf certificatePdf;
 
     /**
@@ -191,6 +207,21 @@ public class EquipmentDisposalService {
                     "Data sanitisation must be confirmed before this asset can be decommissioned");
         }
 
+        // Work orders outlive the asset otherwise: completing a disposal previously left every
+        // OPEN, ASSIGNED, IN_PROGRESS and ON_HOLD work order exactly as it was, still assigned,
+        // still due and still counted on the dashboard, for a device that is no longer on the
+        // floor. Refusing here rather than cancelling them silently keeps the decision - and the
+        // cancellation reason each one requires - with the person who owns the work.
+        List<MaintenanceWorkOrder> liveWorkOrders = liveWorkOrdersFor(disposal);
+        if (!liveWorkOrders.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has maintenance work outstanding and cannot be decommissioned "
+                            + "until it is closed or cancelled: "
+                            + liveWorkOrders.stream()
+                                    .map(MaintenanceWorkOrder::getWorkOrderCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
         Equipment equipment = disposal.getEquipment();
         equipment.setStatus(EquipmentStatus.DISPOSED);
         equipmentRepository.save(equipment);
@@ -261,6 +292,20 @@ public class EquipmentDisposalService {
         return notes.toString();
     }
 
+    /** Work orders still expecting attention on the asset behind this disposal. */
+    private List<MaintenanceWorkOrder> liveWorkOrdersFor(EquipmentDisposal disposal) {
+        Equipment equipment = disposal.getEquipment();
+        if (equipment == null || equipment.getId() == null || disposal.getHospital() == null) {
+            return List.of();
+        }
+        return workOrderRepository
+                .findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(
+                        disposal.getHospital().getId(), equipment.getId())
+                .stream()
+                .filter(workOrder -> LIVE_WORK_ORDER_STATUSES.contains(workOrder.getStatus()))
+                .toList();
+    }
+
     private boolean isRetired(Equipment equipment) {
         return equipment.getStatus() == EquipmentStatus.RETIRED
                 || equipment.getStatus() == EquipmentStatus.DISPOSED;
@@ -287,7 +332,12 @@ public class EquipmentDisposalService {
     }
 
     private Hospital getHospitalForUser(String username) {
-        User user = userRepository.findByUsername(username)
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username or email is required");
+        }
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));

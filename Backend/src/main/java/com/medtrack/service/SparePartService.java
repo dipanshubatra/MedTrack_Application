@@ -2,6 +2,10 @@ package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.dto.SparePartCreateRequest;
+import com.medtrack.dto.SparePartResponse;
+import com.medtrack.dto.SparePartStockRequest;
+import com.medtrack.dto.SparePartUpdateRequest;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.SparePart;
@@ -23,37 +27,104 @@ public class SparePartService {
     private final UserRepository userRepository;
 
     private Hospital getHospitalForUser(String username) {
-        User user = userRepository.findByUsername(username)
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username is required");
+        }
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
     }
 
-    public List<SparePart> getAllSpareParts(String username) {
+    public List<SparePartResponse> getAllSpareParts(String username) {
         Hospital hospital = getHospitalForUser(username);
-        return sparePartRepository.findByHospitalId(hospital.getId());
+        return sparePartRepository.findByHospitalId(hospital.getId()).stream()
+                .map(SparePartResponse::from)
+                .toList();
     }
 
-    public List<SparePart> getLowStockAlerts(String username) {
+    public List<SparePartResponse> getLowStockAlerts(String username) {
         Hospital hospital = getHospitalForUser(username);
-        return sparePartRepository.findLowStockPartsByHospitalId(hospital.getId());
+        return sparePartRepository.findLowStockPartsByHospitalId(hospital.getId()).stream()
+                .map(SparePartResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    public SparePartResponse createSparePart(SparePartCreateRequest request, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        validateUpsert(null, request.getPartNumber(), request.getDescription(), request.getStockLevel(),
+                request.getReorderPoint(), request.getUnitCost(), hospital.getId());
+
+        SparePart sparePart = SparePart.builder()
+                .hospitalId(hospital.getId())
+                .partNumber(request.getPartNumber().trim())
+                .description(request.getDescription().trim())
+                .compatibleModels(trimToNull(request.getCompatibleModels()))
+                .stockLevel(request.getStockLevel())
+                .reorderPoint(request.getReorderPoint())
+                .unitCost(request.getUnitCost())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        return SparePartResponse.from(sparePartRepository.save(sparePart));
     }
 
     @Transactional
     public SparePart createSparePart(SparePart sparePart, String username) {
+        if (sparePart == null) throw new IllegalArgumentException("Spare part details are required");
         Hospital hospital = getHospitalForUser(username);
+        validateSparePart(sparePart);
+
+        String trimmedPartNumber = sparePart.getPartNumber().trim();
+        if (sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(hospital.getId(), trimmedPartNumber)) {
+            throw new IllegalArgumentException("Spare part with part number already exists: " + trimmedPartNumber);
+        }
+
         sparePart.setHospitalId(hospital.getId());
+        sparePart.setPartNumber(trimmedPartNumber);
+        sparePart.setDescription(sparePart.getDescription().trim());
         return sparePartRepository.save(sparePart);
     }
 
     @Transactional
-    public SparePart updateSparePart(Long id, SparePart updateRequest, String username) {
+    public SparePartResponse updateSparePart(Long id, SparePartUpdateRequest request, String username) {
         Hospital hospital = getHospitalForUser(username);
-        SparePart existing = sparePartRepository.findByIdAndHospitalId(id, hospital.getId())
+        SparePart existing = sparePartRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Spare Part not found or access denied"));
 
-        existing.setPartNumber(updateRequest.getPartNumber());
-        existing.setDescription(updateRequest.getDescription());
+        validateUpsert(id, request.getPartNumber(), request.getDescription(), request.getStockLevel(),
+                request.getReorderPoint(), request.getUnitCost(), hospital.getId());
+
+        existing.setPartNumber(request.getPartNumber().trim());
+        existing.setDescription(request.getDescription().trim());
+        existing.setCompatibleModels(trimToNull(request.getCompatibleModels()));
+        existing.setStockLevel(request.getStockLevel());
+        existing.setReorderPoint(request.getReorderPoint());
+        existing.setUnitCost(request.getUnitCost());
+
+        return SparePartResponse.from(sparePartRepository.save(existing));
+    }
+
+    @Transactional
+    public SparePart updateSparePart(Long id, SparePart updateRequest, String username) {
+        if (updateRequest == null) throw new IllegalArgumentException("Update details are required");
+        Hospital hospital = getHospitalForUser(username);
+        SparePart existing = sparePartRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Spare Part not found or access denied"));
+
+        validateSparePart(updateRequest);
+
+        String updatedPartNumber = updateRequest.getPartNumber().trim();
+        if (!existing.getPartNumber().equalsIgnoreCase(updatedPartNumber)
+                && sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(hospital.getId(), updatedPartNumber)) {
+            throw new IllegalArgumentException("Spare part with part number already exists: " + updatedPartNumber);
+        }
+
+        existing.setPartNumber(updatedPartNumber);
+        existing.setDescription(updateRequest.getDescription().trim());
         existing.setCompatibleModels(updateRequest.getCompatibleModels());
         existing.setStockLevel(updateRequest.getStockLevel());
         existing.setReorderPoint(updateRequest.getReorderPoint());
@@ -65,7 +136,7 @@ public class SparePartService {
     @Transactional
     public void deleteSparePart(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
-        SparePart existing = sparePartRepository.findByIdAndHospitalId(id, hospital.getId())
+        SparePart existing = sparePartRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Spare Part not found or access denied"));
 
         existing.setDeleted(true);
@@ -75,19 +146,116 @@ public class SparePartService {
     }
 
     @Transactional
-    public void deductStock(String partNumber, int quantity, String username) {
-        Hospital hospital = getHospitalForUser(username);
-        List<SparePart> parts = sparePartRepository.findByHospitalId(hospital.getId());
-        SparePart partToDeduct = parts.stream()
-                .filter(p -> p.getPartNumber().equals(partNumber))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Spare part not found: " + partNumber));
+    public SparePartResponse deductStock(SparePartStockRequest request, String username) {
+        return adjustStock(request, username, StockAdjustment.DEDUCT);
+    }
 
-        if (partToDeduct.getStockLevel() < quantity) {
-            throw new IllegalArgumentException("Insufficient stock for part: " + partNumber);
+    @Transactional
+    public SparePartResponse restockSparePart(SparePartStockRequest request, String username) {
+        return adjustStock(request, username, StockAdjustment.RESTOCK);
+    }
+
+    private SparePartResponse adjustStock(
+            SparePartStockRequest request,
+            String username,
+            StockAdjustment adjustment) {
+        if (request == null) {
+            throw new IllegalArgumentException("Stock request details are required");
         }
-        
-        partToDeduct.setStockLevel(partToDeduct.getStockLevel() - quantity);
-        sparePartRepository.save(partToDeduct);
+        if (request.getPartNumber() == null || request.getPartNumber().isBlank()) {
+            throw new IllegalArgumentException("Part number is required for stock adjustment");
+        }
+        if (request.getQuantity() == null || request.getQuantity() <= 0) {
+            throw new IllegalArgumentException("Stock adjustment quantity must be greater than zero");
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+        String partNumber = request.getPartNumber().trim();
+
+        SparePart part = sparePartRepository
+                .findActiveByHospitalIdAndPartNumberForUpdate(hospital.getId(), partNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Active spare part not found: " + partNumber));
+
+        int updatedLevel;
+        if (adjustment == StockAdjustment.DEDUCT) {
+            if (part.getStockLevel() < request.getQuantity()) {
+                throw new IllegalArgumentException("Insufficient stock for part: " + partNumber
+                        + ". Available: " + part.getStockLevel()
+                        + ", Requested: " + request.getQuantity());
+            }
+            updatedLevel = part.getStockLevel() - request.getQuantity();
+        } else {
+            try {
+                updatedLevel = Math.addExact(part.getStockLevel(), request.getQuantity());
+            } catch (ArithmeticException exception) {
+                throw new IllegalArgumentException("Stock level exceeds supported maximum for part: "
+                        + partNumber, exception);
+            }
+        }
+
+        part.setStockLevel(updatedLevel);
+        return SparePartResponse.from(sparePartRepository.save(part));
+    }
+
+    private void validateSparePart(SparePart sparePart) {
+        if (sparePart == null) {
+            throw new IllegalArgumentException("Spare part payload is required");
+        }
+        if (sparePart.getPartNumber() == null || sparePart.getPartNumber().isBlank()) {
+            throw new IllegalArgumentException("Part number is required");
+        }
+        if (sparePart.getDescription() == null || sparePart.getDescription().isBlank()) {
+            throw new IllegalArgumentException("Description is required");
+        }
+        if (sparePart.getStockLevel() == null || sparePart.getStockLevel() < 0) {
+            throw new IllegalArgumentException("Stock level cannot be negative");
+        }
+        if (sparePart.getReorderPoint() == null || sparePart.getReorderPoint() < 0) {
+            throw new IllegalArgumentException("Reorder point cannot be negative");
+        }
+        if (sparePart.getUnitCost() == null
+                || !Double.isFinite(sparePart.getUnitCost())
+                || sparePart.getUnitCost() < 0.0) {
+            throw new IllegalArgumentException("Unit cost must be a finite non-negative value");
+        }
+    }
+
+    private void validateUpsert(
+            Long id,
+            String partNumber,
+            String description,
+            Integer stockLevel,
+            Integer reorderPoint,
+            Double unitCost,
+            Long hospitalId) {
+        validateSparePart(SparePart.builder()
+                .partNumber(partNumber)
+                .description(description)
+                .stockLevel(stockLevel)
+                .reorderPoint(reorderPoint)
+                .unitCost(unitCost)
+                .build());
+        String normalizedPartNumber = partNumber.trim();
+        boolean duplicate = id == null
+                ? sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(
+                        hospitalId, normalizedPartNumber)
+                : sparePartRepository.existsByHospitalIdAndPartNumberAndIdNotAndDeletedFalse(
+                        hospitalId, normalizedPartNumber, id);
+        if (duplicate) {
+            throw new IllegalArgumentException(
+                    "Spare part with part number already exists: " + normalizedPartNumber);
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private enum StockAdjustment {
+        DEDUCT,
+        RESTOCK
     }
 }
