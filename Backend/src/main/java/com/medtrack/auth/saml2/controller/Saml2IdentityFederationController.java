@@ -110,6 +110,24 @@ public class Saml2IdentityFederationController {
     }
 
     /**
+     * SAML 2.0 Single Logout (SLO) Endpoint
+     */
+    @GetMapping("/slo-logout")
+    public ResponseEntity<?> initiateSingleLogout(
+            @RequestParam String idpEntityId,
+            @RequestParam String nameId) {
+        try {
+            Map<String, String> logoutInfo = samlService.generateSingleLogoutRequest(idpEntityId, nameId);
+            return ResponseEntity.ok(logoutInfo);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "slo_failed");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+    }
+
+    /**
      * Get SAML 2.0 Audit Metrics
      */
     @GetMapping("/audit-metrics")
@@ -118,3 +136,4 @@ public class Saml2IdentityFederationController {
         return ResponseEntity.ok(metrics);
     }
 }
+

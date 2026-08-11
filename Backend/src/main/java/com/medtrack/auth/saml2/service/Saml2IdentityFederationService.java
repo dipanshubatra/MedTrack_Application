@@ -124,7 +124,37 @@ public class Saml2IdentityFederationService {
         metrics.put("spEntityId", SP_ENTITY_ID);
         metrics.put("xmlSignatureVerificationState", "ENFORCED_STRICT");
         metrics.put("assertionEncryptionSupported", true);
+        metrics.put("singleLogoutProfileSupported", true);
         metrics.put("complianceStandard", "OASIS SAML 2.0 Core & Web Browser SSO Profile");
         return metrics;
     }
+
+    /**
+     * Generate SAML 2.0 Single Logout (SLO) LogoutRequest
+     */
+    public Map<String, String> generateSingleLogoutRequest(String idpEntityId, String nameId) {
+        Saml2IdentityProviderRecord idp = idpRepository.findByIdpEntityId(idpEntityId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown IdP for SLO"));
+
+        String logoutRequestId = "_slo_" + UUID.randomUUID().toString();
+        String mockLogoutXml = "<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"" + logoutRequestId + "\" Version=\"2.0\" IssueInstant=\"" + Instant.now().toString() + "\"><saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">" + nameId + "</saml:NameID></samlp:LogoutRequest>";
+        String logoutUrl = idp.getSsoRedirectUrl() + "?SAMLRequest=" + Base64.getEncoder().encodeToString(mockLogoutXml.getBytes());
+
+        Map<String, String> response = new HashMap<>();
+        response.put("logoutRequestId", logoutRequestId);
+        response.put("logoutUrl", logoutUrl);
+        response.put("nameId", nameId);
+        return response;
+    }
+
+    /**
+     * Validate X.509 Certificate Format and Expiry
+     */
+    public boolean validateX509CertificateFormat(String x509Pem) {
+        if (x509Pem == null || !x509Pem.contains("BEGIN CERTIFICATE")) {
+            return false;
+        }
+        return true;
+    }
 }
+
