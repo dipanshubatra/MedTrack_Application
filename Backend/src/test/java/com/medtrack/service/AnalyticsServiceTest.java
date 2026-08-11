@@ -158,8 +158,9 @@ public class AnalyticsServiceTest {
         when(equipmentRepository.countByHospitalId(hospitalId)).thenReturn(2L);
         when(equipmentRepository.countByHospitalIdAndStatus(
                 hospitalId, EquipmentStatus.UNDER_MAINTENANCE)).thenReturn(1L);
-        when(equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
-                eq(hospitalId), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
+        when(equipmentRepository.countAlertableByHospitalIdAndWarrantyExpiryBetween(
+                eq(hospitalId), any(LocalDate.class), any(LocalDate.class),
+                eq(EquipmentStatus.DECOMMISSIONED))).thenReturn(1L);
         when(equipmentRepository.findNameAndCategoryByHospitalId(hospitalId))
                 .thenReturn(Collections.emptyList());
         when(taskRepository.findCompletedTasksWithTimestamps(
