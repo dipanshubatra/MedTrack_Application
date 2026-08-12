@@ -62,13 +62,27 @@ public class OrderService {
 
 
     private String getCurrentUserOrganization() {
+        return getCurrentHospitalUser().getOrganization();
+    }
+
+    /**
+     * The authenticated hospital user, resolved once for both identities an order may carry.
+     *
+     * <p>{@code EquipmentOrder.hospital} is free text and the application writes two different
+     * things into it: {@link #placeOrder} writes {@code User.organization}, while
+     * {@code ProcurementService.acceptQuote} writes the {@code Hospital} profile name. Nothing ties
+     * those two strings together, so filtering on the organisation alone - which is what every read
+     * here used to do - hid every order the procurement flow created for the very hospital that
+     * raised the request. The repository matches both, which needs the caller's email as well as
+     * their organisation.</p>
+     */
+    private User getCurrentHospitalUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new RuntimeException("User not authenticated");
         }
         String email = authentication.getName();
         return userRepository.findByEmail(email)
-                .map(User::getOrganization)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
@@ -131,7 +145,9 @@ public class OrderService {
             Long supplierId = supplierAccessGuard.resolveCallerId(getCurrentAuthentication());
             return orderRepository.findBySupplierId(supplierId, pageable);
         }
-        return orderRepository.findByHospital(getCurrentUserOrganization(), pageable);
+        User caller = getCurrentHospitalUser();
+        return orderRepository.findVisibleToHospitalUser(
+                caller.getOrganization(), caller.getEmail(), pageable);
     }
 
     /**
@@ -148,20 +164,20 @@ public class OrderService {
             Long supplierId = supplierAccessGuard.resolveCallerId(getCurrentAuthentication());
             return orderRepository.findBySupplierId(supplierId);
         }
-        return orderRepository.findByHospital(getCurrentUserOrganization());
+        User caller = getCurrentHospitalUser();
+        return orderRepository.findVisibleToHospitalUser(caller.getOrganization(), caller.getEmail());
     }
 
     public EquipmentOrder getOrderById(Long id) {
         if (isSupplier()) {
             return getSupplierOrderById(id, getCurrentAuthentication());
         }
-        EquipmentOrder order = orderRepository.findById(id)
+        User caller = getCurrentHospitalUser();
+        // Scoped in the query rather than loaded and then compared, so an order belonging to
+        // another hospital is indistinguishable from an id that does not exist.
+        return orderRepository.findVisibleToHospitalUserById(
+                        id, caller.getOrganization(), caller.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
-        String hospital = getCurrentUserOrganization();
-        if (!order.getHospital().equals(hospital)) {
-            throw new ResourceNotFoundException("Order not found with id: " + id);
-        }
-        return order;
     }
 
     public EquipmentOrder placeOrder(PlaceOrderRequest request, Authentication authentication) {

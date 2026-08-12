@@ -52,6 +52,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -381,11 +382,13 @@ public class ProcurementService {
                 .equipmentId(request.getEquipmentCode())
                 .equipmentName(request.getEquipmentName())
                 .quantity(request.getQuantity())
-                .unitCost(quote.getQuoteAmount())
-                .hospital(hospital.hospital().getName())
+                .unitCost(unitCostFrom(quote.getQuoteAmount(), request.getQuantity()))
+                .totalCost(quote.getQuoteAmount())
+                .hospital(orderHospitalLabel(hospital))
                 .createdBy(hospital.user().getEmail())
                 .status("PENDING")
                 .shippingStatus("Processing")
+                .approvalStatus(EquipmentOrder.APPROVAL_APPROVED)
                 .orderDate(LocalDateTime.now())
                 .build());
 
@@ -813,6 +816,49 @@ public class ProcurementService {
                 .reserved(reserved)
                 .available(total.subtract(reserved))
                 .build();
+    }
+
+    /**
+     * The label an order is stamped with so the hospital that raised the request can see it.
+     *
+     * <p>{@code EquipmentOrder.hospital} is free text and {@code OrderService} filters it by the
+     * caller's {@code User.organization}. This flow used to write {@code Hospital.name} instead, a
+     * different field with nothing tying the two together, so an order created by accepting a quote
+     * was missing from the order list, the order detail endpoint and the archive of the hospital
+     * that had just approved and paid for it.</p>
+     *
+     * <p>The profile name remains the fallback for a user with no organisation on record - the
+     * column is {@code nullable = false} and an order has to carry something.</p>
+     */
+    private String orderHospitalLabel(HospitalAccess hospital) {
+        String organization = trimToNull(hospital.user().getOrganization());
+        if (organization != null) {
+            return organization;
+        }
+        String profileName = trimToNull(hospital.hospital().getName());
+        if (profileName != null) {
+            return profileName;
+        }
+        throw new IllegalArgumentException(
+                "Cannot raise an order: the hospital account has neither an organisation nor a profile name");
+    }
+
+    /**
+     * Splits an accepted quote back into a per-unit cost.
+     *
+     * <p>{@code SupplierQuote.quoteAmount} is what the supplier quoted for the whole request. It was
+     * written straight into {@code EquipmentOrder.unitCost} while {@code totalCost} - the column
+     * spend analytics sums - was left null, so the order card showed the entire quote as the price
+     * of one unit and the purchase contributed nothing to the hospital's spend.</p>
+     */
+    private BigDecimal unitCostFrom(BigDecimal quoteAmount, Integer quantity) {
+        if (quoteAmount == null) {
+            return null;
+        }
+        if (quantity == null || quantity <= 0) {
+            return quoteAmount;
+        }
+        return quoteAmount.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP);
     }
 
     private void validateRequest(ProcurementRequestRequest request) {

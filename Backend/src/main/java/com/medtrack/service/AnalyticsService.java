@@ -33,8 +33,11 @@ public class AnalyticsService {
     private final HospitalRepository hospitalRepository;
 
     public HospitalAnalyticsDto getHospitalAnalytics(Long hospitalId) {
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with id: " + hospitalId));
+        // Existence guard: every figure below is keyed on the id, so an unknown hospital has to be
+        // reported here rather than silently returning a dashboard full of zeroes.
+        if (!hospitalRepository.existsById(hospitalId)) {
+            throw new ResourceNotFoundException("Hospital not found with id: " + hospitalId);
+        }
 
         // 1. Downtime Percentage — database-level aggregation
         long totalEquipment = equipmentRepository.countByHospitalId(hospitalId);
@@ -75,13 +78,17 @@ public class AnalyticsService {
                 hospitalId, MaintenanceStatus.COMPLETED, "Critical");
 
         // 5. Total Spend & Category Spend — DB-level filtered orders + lightweight category mapping
-        String hospitalName = hospital.getName();
-        BigDecimal totalSpend = orderRepository.sumTotalCostByHospitalAndShippingStatus(
-                hospitalName, "Delivered");
+        //
+        // Matched on the hospital id rather than on the profile name. EquipmentOrder.hospital is
+        // free text and the two flows that create orders label it differently - placeOrder writes
+        // the user's organisation, acceptQuote writes the profile name - so filtering on the name
+        // alone counted only whichever half happened to match.
+        BigDecimal totalSpend = orderRepository.sumTotalCostByHospitalIdAndShippingStatus(
+                hospitalId, "Delivered");
         if (totalSpend == null) totalSpend = BigDecimal.ZERO;
 
-        List<EquipmentOrder> deliveredOrders = orderRepository.findByHospitalAndShippingStatus(
-                hospitalName, "Delivered");
+        List<EquipmentOrder> deliveredOrders = orderRepository.findByHospitalIdAndShippingStatus(
+                hospitalId, "Delivered");
 
         List<Object[]> nameCategoryPairs = equipmentRepository.findNameAndCategoryByHospitalId(hospitalId);
         Map<String, String> equipmentCategoryMap = new HashMap<>();

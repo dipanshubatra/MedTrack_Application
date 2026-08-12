@@ -235,7 +235,8 @@ public class OrderServiceTest {
      void generateInvoicePdf_ReturnsPdfBytes() {
         authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
-         when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
+         when(orderRepository.findVisibleToHospitalUserById(
+                 1L, "City Hospital", "admin@cityhospital.com")).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);
 
          byte[] result = orderService.generateInvoicePdf(1L);
@@ -249,7 +250,8 @@ public class OrderServiceTest {
      void emailInvoice_TriggersEmailService() {
         authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
-         when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
+         when(orderRepository.findVisibleToHospitalUserById(
+                 1L, "City Hospital", "admin@cityhospital.com")).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);
 
          orderService.emailInvoice(1L);

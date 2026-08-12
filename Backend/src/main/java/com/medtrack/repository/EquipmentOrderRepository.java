@@ -21,6 +21,62 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
 
     Page<EquipmentOrder> findByHospital(String hospital, Pageable pageable);
 
+    // ------------------------------------------------------------------
+    // Hospital-visible orders
+    //
+    // EquipmentOrder.hospital is a free-text label and two writers disagree about what belongs in
+    // it: OrderService.placeOrder writes User.organization, ProcurementService.acceptQuote writes
+    // Hospital.name. Nothing constrains those two strings to match, so matching on either one alone
+    // hides half of a hospital's orders. These queries accept both identities, which also keeps the
+    // rows already written the other way reachable instead of stranding them.
+    // ------------------------------------------------------------------
+
+    String HOSPITAL_IDENTITY_MATCH =
+            "(LOWER(TRIM(o.hospital)) = LOWER(TRIM(:organization)) "
+                    + "OR LOWER(TRIM(o.hospital)) = "
+                    + "(SELECT LOWER(TRIM(h.name)) FROM Hospital h WHERE LOWER(h.user.email) = LOWER(:email)))";
+
+    @Query("SELECT o FROM EquipmentOrder o WHERE " + HOSPITAL_IDENTITY_MATCH)
+    Page<EquipmentOrder> findVisibleToHospitalUser(
+            @Param("organization") String organization,
+            @Param("email") String email,
+            Pageable pageable);
+
+    @Query("SELECT o FROM EquipmentOrder o WHERE " + HOSPITAL_IDENTITY_MATCH)
+    List<EquipmentOrder> findVisibleToHospitalUser(
+            @Param("organization") String organization,
+            @Param("email") String email);
+
+    @Query("SELECT o FROM EquipmentOrder o WHERE o.id = :id AND " + HOSPITAL_IDENTITY_MATCH)
+    Optional<EquipmentOrder> findVisibleToHospitalUserById(
+            @Param("id") Long id,
+            @Param("organization") String organization,
+            @Param("email") String email);
+
+    /**
+     * The same pair of identities, resolved from a hospital id instead of from the caller.
+     *
+     * <p>Analytics has the {@code Hospital} rather than the authenticated user, so it matches on the
+     * profile name and on the owning user's organisation. Two scalar subqueries rather than an
+     * {@code IN} list because JPQL has no {@code UNION}.</p>
+     */
+    String HOSPITAL_ID_IDENTITY_MATCH =
+            "(LOWER(TRIM(o.hospital)) = (SELECT LOWER(TRIM(h.name)) FROM Hospital h WHERE h.id = :hospitalId) "
+                    + "OR LOWER(TRIM(o.hospital)) = "
+                    + "(SELECT LOWER(TRIM(h.user.organization)) FROM Hospital h WHERE h.id = :hospitalId))";
+
+    @Query("SELECT SUM(o.totalCost) FROM EquipmentOrder o "
+            + "WHERE LOWER(o.shippingStatus) = LOWER(:shippingStatus) AND " + HOSPITAL_ID_IDENTITY_MATCH)
+    BigDecimal sumTotalCostByHospitalIdAndShippingStatus(
+            @Param("hospitalId") Long hospitalId,
+            @Param("shippingStatus") String shippingStatus);
+
+    @Query("SELECT o FROM EquipmentOrder o "
+            + "WHERE LOWER(o.shippingStatus) = LOWER(:shippingStatus) AND " + HOSPITAL_ID_IDENTITY_MATCH)
+    List<EquipmentOrder> findByHospitalIdAndShippingStatus(
+            @Param("hospitalId") Long hospitalId,
+            @Param("shippingStatus") String shippingStatus);
+
     @Query("SELECT order FROM EquipmentOrder order "
             + "WHERE EXISTS (SELECT shipment FROM ShipmentTracking shipment "
             + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId)")
