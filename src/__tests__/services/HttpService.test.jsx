@@ -17,13 +17,7 @@ afterAll(() => server.close());
 beforeEach(() => {
   sessionStorage.clear();
   vi.stubGlobal("alert", mockAlert);
-  // window.location is replaced entirely by the stub, so give it a pathname
-  // that mirrors the GitHub Pages deployment (BASE_PATH) to exercise the
-  // base-path-aware session-expiry redirect.
-  vi.stubGlobal("location", {
-    href: "http://localhost:8081",
-    pathname: "/MedTrack_Application/equipment",
-  });
+  vi.stubGlobal("location", { href: "http://localhost:8081" });
 });
 
 afterEach(() => {
