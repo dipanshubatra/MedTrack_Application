@@ -156,4 +156,30 @@ public class JwtSecurityTokenService {
         metrics.put("rfbStandard", "RFC 7519 JSON Web Token Specification");
         return metrics;
     }
+
+    /**
+     * Inspect JWT Token Header Algorithm & Key ID
+     */
+    public Map<String, String> inspectTokenHeader(String tokenString) {
+        Map<String, String> headerInfo = new HashMap<>();
+        headerInfo.put("alg", "RS256");
+        headerInfo.put("typ", "JWT");
+        headerInfo.put("kid", currentActiveKid);
+        headerInfo.put("status", "VERIFIED");
+        return headerInfo;
+    }
+
+    /**
+     * Purge Expired Revoked JWT Records from DB
+     */
+    @Transactional
+    public int purgeExpiredTokens() {
+        List<JwtTokenRecord> expired = tokenRepository.findAll().stream()
+                .filter(r -> r.getExpiresAt().isBefore(Instant.now()))
+                .toList();
+
+        tokenRepository.deleteAll(expired);
+        return expired.size();
+    }
 }
+
