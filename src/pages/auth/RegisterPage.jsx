@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { registerUser } from "../../services/AuthService";
+import { buildHref } from "../../routes/routeRegistry";
 import MedTrackLogo from "../../components/common/MedTrackLogo";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -350,7 +351,7 @@ export default function RegisterPage({ onNavigate, defaultRole }) {
             <span>
               I agree to the{" "}
               <a
-                href="/terms"
+                href={buildHref("terms")}
                 onClick={(e) => {
                   if (onNavigate) {
                     e.preventDefault();
@@ -363,7 +364,7 @@ export default function RegisterPage({ onNavigate, defaultRole }) {
               </a>{" "}
               and{" "}
               <a
-                href="/privacy"
+                href={buildHref("privacy")}
                 onClick={(e) => {
                   if (onNavigate) {
                     e.preventDefault();
@@ -385,7 +386,7 @@ export default function RegisterPage({ onNavigate, defaultRole }) {
         <footer className="auth-footer" style={{ marginTop: "24px" }}>
           <span>Already have an account?</span>
           <a
-            href="/login"
+            href={buildHref("login")}
             className="split-footer-link"
             onClick={(e) => {
               if (onNavigate) {

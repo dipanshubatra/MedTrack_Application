@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, ChevronDown, Hospital, Layers, Lock, Mail, Wrench } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { loginUser } from "../../services/AuthService";
+import { buildHref } from "../../routes/routeRegistry";
 import MedTrackLogo from "../../components/common/MedTrackLogo";
 import "./auth.css";
 
@@ -165,7 +166,7 @@ export default function LoginPage({ onNavigate }) {
         <footer className="auth-footer" style={{ marginTop: "24px" }}>
           <span>Not a member?</span>
           <a
-            href="/register"
+            href={buildHref("register")}
             className="split-footer-link"
             onClick={(e) => {
               if (onNavigate) {
