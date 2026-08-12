@@ -1,9 +1,8 @@
 package com.medtrack.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,37 +11,22 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
-import static com.medtrack.validation.MaintenanceValidationLimits.AMENDMENT_REASON_MAX_LENGTH;
-import static com.medtrack.validation.MaintenanceValidationLimits.SHORT_TEXT_MAX_LENGTH;
+import static com.medtrack.validation.MaintenanceValidationLimits.NOTES_MAX_LENGTH;
 
-/** Hospital-controlled changes to a scheduled work order. */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class MaintenanceScheduleAmendmentRequest {
 
-    @FutureOrPresent(message = "Amended deadline cannot be in the past")
-    private LocalDate deadline;
-
-    @Size(max = SHORT_TEXT_MAX_LENGTH,
-            message = "Maintenance type must not exceed 255 characters")
-    private String maintenanceType;
-
-    @Size(max = SHORT_TEXT_MAX_LENGTH,
-            message = "Description must not exceed 255 characters")
-    private String description;
-
-    @Size(max = SHORT_TEXT_MAX_LENGTH,
-            message = "Priority must not exceed 255 characters")
-    private String priority;
-
-    @PositiveOrZero(message = "Recurrence period cannot be negative")
-    private Integer recurrencePeriodDays;
+    @NotNull(message = "New deadline is required")
+    @Future(message = "New deadline must be in the future")
+    private LocalDate newDeadline;
 
     @NotBlank(message = "Amendment reason is required")
-    @Size(max = AMENDMENT_REASON_MAX_LENGTH,
-            message = "Amendment reason must not exceed 1000 characters")
+    @Size(
+            max = NOTES_MAX_LENGTH,
+            message = "Amendment reason must not exceed 16000 characters"
+    )
     private String reason;
 }
