@@ -75,7 +75,7 @@ export default function LoginPage({ onNavigate }) {
     <main className="split-auth-container">
       <section className="split-form-section" style={{ position: 'relative' }}>
         <button 
-          onClick={() => onNavigate ? onNavigate('home') : window.location.href = '/'} 
+          onClick={() => onNavigate ? onNavigate('landing') : window.location.href = buildHref('landing')} 
           style={{ position: 'absolute', top: '40px', left: '40px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '500' }}
         >
           <ArrowLeft size={20} /> Back
