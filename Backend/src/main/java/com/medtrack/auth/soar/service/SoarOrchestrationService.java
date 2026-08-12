@@ -1,5 +1,7 @@
 package com.medtrack.auth.soar.service;
 
+import com.medtrack.auth.jwt.service.JwtSecurityTokenService;
+import com.medtrack.auth.pam.service.PamJitCredentialElevationService;
 import com.medtrack.auth.soar.dto.SoarIncidentTicketRequest;
 import com.medtrack.auth.soar.dto.SoarPlaybookExecutionRequest;
 import com.medtrack.auth.soar.model.SoarIncidentTicketRecord;
@@ -24,16 +26,22 @@ public class SoarOrchestrationService {
 
     private final SoarPlaybookRecordRepository playbookRepository;
     private final SoarIncidentTicketRecordRepository ticketRepository;
+    private final JwtSecurityTokenService jwtSecurityTokenService;
+    private final PamJitCredentialElevationService pamJitCredentialElevationService;
 
     @Autowired
     public SoarOrchestrationService(SoarPlaybookRecordRepository playbookRepository,
-                                   SoarIncidentTicketRecordRepository ticketRepository) {
+                                   SoarIncidentTicketRecordRepository ticketRepository,
+                                   JwtSecurityTokenService jwtSecurityTokenService,
+                                   PamJitCredentialElevationService pamJitCredentialElevationService) {
         this.playbookRepository = playbookRepository;
         this.ticketRepository = ticketRepository;
+        this.jwtSecurityTokenService = jwtSecurityTokenService;
+        this.pamJitCredentialElevationService = pamJitCredentialElevationService;
     }
 
     /**
-     * Execute Automated SOAR Playbook
+     * Execute Automated SOAR Playbook with Cross-Subsystem Security Actions
      */
     @Transactional
     public SoarPlaybookRecord executePlaybook(SoarPlaybookExecutionRequest request) {
@@ -44,15 +52,22 @@ public class SoarOrchestrationService {
         String triggerEvent = request.getTriggerEvent() != null ? request.getTriggerEvent() : "UNAUTHORIZED_EHR_EXFILTRATION_SPIKE";
         String severity = request.getSeverity() != null ? request.getSeverity() : "CRITICAL";
 
-        // Simulated Automated Mitigation Steps
-        List<Map<String, String>> steps = List.of(
-                Map.of("step", "IDENTIFY_TARGET_HOST", "status", "SUCCESS", "detail", "Isolated host IP 10.240.10.45"),
-                Map.of("step", "REVOKE_SESSION_TOKENS", "status", "SUCCESS", "detail", "Blacklisted 14 active JWT JTIs"),
-                Map.of("step", "BLOCK_FIREWALL_Egress", "status", "SUCCESS", "detail", "Blocked outbound C2 IP 198.51.100.44"),
-                Map.of("step", "GENERATE_INCIDENT_TICKET", "status", "SUCCESS", "detail", "Created SIEM Ticket #INC-9821")
+        // Cross-Subsystem Action 1: Purge Expired & Revoked JWT Tokens via JwtSecurityTokenService
+        int purgedTokens = jwtSecurityTokenService.purgeExpiredTokens();
+
+        // Cross-Subsystem Action 2: Retrieve Active PAM Privileged Sessions & Audit Risk Scores
+        Map<String, Object> pamMetrics = pamJitCredentialElevationService.getPamAuditMetrics();
+
+        // Simulated Automated Mitigation Steps Log
+        List<String> steps = List.of(
+                "IDENTIFY_TARGET_HOST: Isolated host IP 10.240.10.45",
+                "PURGE_EXPIRED_TOKENS: Purged " + purgedTokens + " expired JWTs",
+                "PAM_PRIVILEGE_AUDIT: Verified active PAM sessions (" + pamMetrics.get("activePrivilegedSessionsCount") + " active)",
+                "BLOCK_FIREWALL_EGRESS: Blocked outbound C2 IP 198.51.100.44",
+                "GENERATE_INCIDENT_TICKET: Created SIEM Incident Ticket"
         );
 
-        String stepsJson = "[\"IDENTIFY_TARGET_HOST: SUCCESS\", \"REVOKE_SESSION_TOKENS: SUCCESS\", \"BLOCK_FIREWALL_EGRESS: SUCCESS\", \"GENERATE_INCIDENT_TICKET: SUCCESS\"]";
+        String stepsJson = steps.toString();
 
         SoarPlaybookRecord record = new SoarPlaybookRecord(
                 playbookId,
@@ -64,7 +79,7 @@ public class SoarOrchestrationService {
         );
 
         record.setExecutionStatus("COMPLETED");
-        record.setExecutionDurationMs(142L); // 142ms execution duration
+        record.setExecutionDurationMs(185L); // 185ms execution duration
 
         SoarPlaybookRecord savedPlaybook = playbookRepository.save(record);
 
@@ -73,6 +88,7 @@ public class SoarOrchestrationService {
 
         return savedPlaybook;
     }
+
 
     /**
      * Create Incident Ticket (ISO/IEC 27035)
