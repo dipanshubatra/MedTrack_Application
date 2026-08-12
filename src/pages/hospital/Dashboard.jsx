@@ -103,7 +103,7 @@ export default function Dashboard({ onNavigate }) {
               <button onClick={() => onNavigate && onNavigate("scim-provisioning")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Users size={18} /> Staff (SCIM)
               </button>
-              <button onClick={() => onNavigate && onNavigate("siem-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("siem-analytics")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <MessageSquare size={18} /> Messages (SIEM)
               </button>
               <button onClick={() => onNavigate && onNavigate("analytics")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
@@ -116,7 +116,7 @@ export default function Dashboard({ onNavigate }) {
               <button onClick={() => onNavigate && onNavigate("security-commandcenter")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Mail size={18} /> Notifications
               </button>
-              <button onClick={() => onNavigate && onNavigate("soar-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("soar")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Workflow size={18} /> Workflows (SOAR)
               </button>
               <button onClick={() => onNavigate && onNavigate("sso-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">

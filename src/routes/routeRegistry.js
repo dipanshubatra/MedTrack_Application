@@ -33,6 +33,11 @@ const GuidesPage = lazy(() => import("../pages/GuidesPage"));
 const SecurityPage = lazy(() => import("../pages/SecurityPage"));
 const SystemStatusPage = lazy(() => import("../pages/SystemStatusPage"));
 const DualRangeSliderStudio = lazy(() => import("../components/common/DualRangeSliderStudio"));
+const ResearchPage = lazy(() => import("../pages/ResearchPage"));
+const SupplierCentrePage = lazy(() => import("../pages/SupplierCentrePage"));
+const PrivacyPage = lazy(() => import("../pages/PrivacyPage"));
+const CookieConsentPage = lazy(() => import("../pages/CookieConsentPage"));
+const DoNotSellPage = lazy(() => import("../pages/DoNotSellPage"));
 
 const LoginPage = lazy(() => import("../pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("../pages/auth/RegisterPage"));
@@ -141,6 +146,11 @@ export const ROUTES = [
   { page: "help", slugs: ["help", "help-center"], component: HelpCenterPage, access: PUBLIC },
   { page: "awards", slugs: ["awards"], component: AwardsPage, access: PUBLIC },
   { page: "terms", slugs: ["terms"], component: TermsPage, access: PUBLIC },
+  { page: "privacy", slugs: ["privacy"], component: PrivacyPage, access: PUBLIC },
+  { page: "cookies", slugs: ["cookies", "cookie-consent"], component: CookieConsentPage, access: PUBLIC },
+  { page: "do-not-sell", slugs: ["do-not-sell"], component: DoNotSellPage, access: PUBLIC },
+  { page: "research", slugs: ["research"], component: ResearchPage, access: PUBLIC },
+  { page: "supplier-centre", slugs: ["supplier-centre"], component: SupplierCentrePage, access: PUBLIC },
   { page: "guides", slugs: ["guides"], component: GuidesPage, access: PUBLIC },
   { page: "security", slugs: ["security"], component: SecurityPage, access: PUBLIC },
   { page: "status", slugs: ["status"], component: SystemStatusPage, access: PUBLIC },

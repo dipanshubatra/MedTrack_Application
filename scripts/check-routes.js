@@ -187,6 +187,36 @@ function main() {
     }
   }
 
+  // 6. Every onNavigate target in the codebase must be a registered page key. This is what let
+  //    'home' (the Login/Register back buttons) and the SIEM/SOAR dashboard shortcuts slip
+  //    through: they looked like routes, but no such page key existed, so clicking them rendered
+  //    the 404 page on every deployment. Static scan, same as the checks above - no React runtime.
+  const registeredKeys = new Set(routes.map((route) => route.page));
+  const navTargetPattern = /onNavigate\s*\(\s*["']([a-zA-Z0-9_-]+)["']/g;
+  function walkSource(directory) {
+    const entries = fs.readdirSync(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (!['node_modules', 'build', 'dist', 'coverage', '.git'].includes(entry.name)) {
+          walkSource(absolute);
+        }
+      } else if (/\.(js|jsx)$/.test(entry.name)) {
+        const source = fs
+          .readFileSync(absolute, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '') // strip block comments
+          .replace(/\/\/[^\n]*/g, ''); // strip line comments
+        let match;
+        while ((match = navTargetPattern.exec(source)) !== null) {
+          if (!registeredKeys.has(match[1])) {
+            fail(`onNavigate("${match[1]}") in ${path.relative(projectRoot, absolute)} is not a registered page key`);
+          }
+        }
+      }
+    }
+  }
+  walkSource(path.join(projectRoot, 'src'));
+
   if (failures.length > 0) {
     console.error(`\ncheck-routes: ${failures.length} problem(s) found.\n`);
     failures.forEach((message) => console.error(`  - ${message}`));
