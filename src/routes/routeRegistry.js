@@ -318,6 +318,20 @@ export function buildPath(page, data) {
 }
 
 /**
+ * Builds a full, base-path-aware URL for a navigation target.
+ *
+ * The app is served from a sub-path on GitHub Pages (BASE_PATH, e.g.
+ * "/MedTrack_Application"), so a bare path like "/login" bypasses it and
+ * 404s. Mirror App.jsx's base-path detection so fallback navigation (plain
+ * <a href> targets and window.location redirects used when onNavigate is
+ * unavailable) lands on the real route in both dev and the deployed site.
+ */
+export function buildHref(page, data) {
+  const basePath = window.location.pathname.includes(BASE_PATH) ? BASE_PATH : "";
+  return `${basePath}${buildPath(page, data)}`;
+}
+
+/**
  * The page that will actually be rendered for a request.
  *
  * AppRoutes substitutes the login screen for an unauthenticated hit on a protected route, and the
