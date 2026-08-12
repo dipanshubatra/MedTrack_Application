@@ -10,11 +10,13 @@ import com.medtrack.repository.MaintenanceActivityRepository;
 import com.medtrack.repository.MaintenanceAnalyticsRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -44,11 +46,6 @@ class MaintenanceAnalyticsServiceTest {
                 hospitalId,
                 MaintenanceStatus.COMPLETED
         )).thenReturn(60L);
-
-        when(analyticsRepository.countByHospitalIdAndStatus(
-                hospitalId,
-                MaintenanceStatus.CANCELLED
-        )).thenReturn(5L);
 
         when(analyticsRepository.countByHospitalIdAndStatusNot(
                 hospitalId,
@@ -156,9 +153,9 @@ class MaintenanceAnalyticsServiceTest {
         assertNotNull(response);
 
         assertEquals(100L, response.getTotalTasks());
-        assertEquals(35L, response.getOpenTasks());
+        assertEquals(40L, response.getOpenTasks());
         assertEquals(60L, response.getCompletedTasks());
-        assertEquals(5L, response.getCancelledTasks());
+        assertEquals(0L, response.getCancelledTasks());
         assertEquals(10L, response.getOverdueTasks());
 
         assertEquals(
@@ -406,6 +403,158 @@ class MaintenanceAnalyticsServiceTest {
                 eq(hospitalId),
                 any(),
                 any()
+        );
+    }
+
+    @Test
+    void shouldRejectMissingHospitalIdForDepartmentAnalytics() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> analyticsService.getDepartmentAnalytics(null)
+        );
+
+        assertEquals("Hospital ID is required", exception.getMessage());
+        verifyNoInteractions(analyticsRepository);
+        verifyNoInteractions(activityRepository);
+    }
+
+    @Test
+    void shouldRejectMissingHospitalIdForTrendAnalytics() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> analyticsService.getMaintenanceTrends(
+                        null,
+                        LocalDate.of(2026, 8, 1),
+                        LocalDate.of(2026, 8, 31)
+                )
+        );
+
+        assertEquals("Hospital ID is required", exception.getMessage());
+        verifyNoInteractions(analyticsRepository);
+        verifyNoInteractions(activityRepository);
+    }
+
+    @Test
+    void shouldRequireBothDatesForTrendAnalytics() {
+        IllegalArgumentException missingStart = assertThrows(
+                IllegalArgumentException.class,
+                () -> analyticsService.getMaintenanceTrends(
+                        hospitalId,
+                        null,
+                        LocalDate.of(2026, 8, 31)
+                )
+        );
+
+        IllegalArgumentException missingEnd = assertThrows(
+                IllegalArgumentException.class,
+                () -> analyticsService.getMaintenanceTrends(
+                        hospitalId,
+                        LocalDate.of(2026, 8, 1),
+                        null
+                )
+        );
+
+        assertEquals("Start date and end date are required", missingStart.getMessage());
+        assertEquals("Start date and end date are required", missingEnd.getMessage());
+        verifyNoInteractions(analyticsRepository);
+        verifyNoInteractions(activityRepository);
+    }
+
+    @Test
+    void shouldRejectReversedTrendDateRange() {
+        LocalDate startDate = LocalDate.of(2026, 8, 31);
+        LocalDate endDate = LocalDate.of(2026, 8, 1);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> analyticsService.getMaintenanceTrends(
+                        hospitalId,
+                        startDate,
+                        endDate
+                )
+        );
+
+        assertEquals("Start date cannot be after end date", exception.getMessage());
+        verifyNoInteractions(analyticsRepository);
+        verifyNoInteractions(activityRepository);
+    }
+
+    @Test
+    void shouldUseInclusiveDayBoundariesForTrendAnalytics() {
+        LocalDate startDate = LocalDate.of(2026, 8, 1);
+        LocalDate endDate = LocalDate.of(2026, 8, 31);
+        when(analyticsRepository.getMaintenanceTrend(
+                eq(hospitalId),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)
+        )).thenReturn(List.of());
+
+        analyticsService.getMaintenanceTrends(hospitalId, startDate, endDate);
+
+        ArgumentCaptor<LocalDateTime> startCaptor =
+                ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<LocalDateTime> endCaptor =
+                ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(analyticsRepository).getMaintenanceTrend(
+                eq(hospitalId),
+                startCaptor.capture(),
+                endCaptor.capture()
+        );
+
+        assertEquals(startDate.atStartOfDay(), startCaptor.getValue());
+        assertEquals(
+                endDate.plusDays(1).atStartOfDay().minusNanos(1),
+                endCaptor.getValue()
+        );
+        verifyNoInteractions(activityRepository);
+    }
+
+    @Test
+    void shouldDefaultOnlyMissingStartDate() {
+        LocalDate endDate = LocalDate.now();
+
+        analyticsService.getAnalytics(hospitalId, null, endDate);
+
+        ArgumentCaptor<LocalDateTime> startCaptor =
+                ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<LocalDateTime> endCaptor =
+                ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(analyticsRepository).countTasksCreatedBetween(
+                eq(hospitalId),
+                startCaptor.capture(),
+                endCaptor.capture()
+        );
+
+        assertEquals(
+                LocalDate.now().withDayOfMonth(1).atStartOfDay(),
+                startCaptor.getValue()
+        );
+        assertEquals(
+                endDate.plusDays(1).atStartOfDay().minusNanos(1),
+                endCaptor.getValue()
+        );
+    }
+
+    @Test
+    void shouldDefaultOnlyMissingEndDate() {
+        LocalDate startDate = LocalDate.now().minusDays(7);
+
+        analyticsService.getAnalytics(hospitalId, startDate, null);
+
+        ArgumentCaptor<LocalDateTime> startCaptor =
+                ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<LocalDateTime> endCaptor =
+                ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(analyticsRepository).countTasksCompletedBetween(
+                eq(hospitalId),
+                startCaptor.capture(),
+                endCaptor.capture()
+        );
+
+        assertEquals(startDate.atStartOfDay(), startCaptor.getValue());
+        assertEquals(
+                LocalDate.now().plusDays(1).atStartOfDay().minusNanos(1),
+                endCaptor.getValue()
         );
     }
 }

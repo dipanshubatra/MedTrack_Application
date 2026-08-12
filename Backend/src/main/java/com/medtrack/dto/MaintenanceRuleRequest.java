@@ -85,15 +85,4 @@ public class MaintenanceRuleRequest {
     private Integer leadTimeDays;
 
     private Boolean active;
-
-    @Positive(message = "Lead time must be positive")
-    private Integer leadTimeDays;
-
-    private Long assignedTechnicianId;
-
-    @Size(max = SHORT_TEXT_MAX_LENGTH,
-            message = "Assigned technician must not exceed 255 characters")
-    private String assignedTechnician;
-
-    private Boolean active;
 }
