@@ -175,7 +175,7 @@ class UserResolutionServiceTest {
             when(userRepository.findByUsername("hospital@medtrack.com")).thenReturn(Optional.empty());
             when(userRepository.findByEmail("hospital@medtrack.com")).thenReturn(Optional.of(sampleUser));
             when(hospitalRepository.findByUserId(42L)).thenReturn(Optional.of(sampleHospital));
-            when(sparePartRepository.findByHospitalId(100L)).thenReturn(Collections.emptyList());
+            when(sparePartRepository.findByHospitalIdAndDeletedFalse(100L)).thenReturn(Collections.emptyList());
 
             var result = service.getAllSpareParts("hospital@medtrack.com");
 
