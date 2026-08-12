@@ -122,7 +122,9 @@ public class OrderServiceTest {
                 1L, "Shipped", "Dispatched to delivery terminal", supplierAuth);
 
         assertNotNull(updated);
-        assertEquals("Shipped", updated.getStatus());
+        // The two columns carry two vocabularies: the workflow status and the supplier-facing
+        // shipping label. Assigning the caller's raw string to both is the bug this now avoids.
+        assertEquals("DISPATCHED", updated.getStatus());
         assertEquals("Shipped", updated.getShippingStatus());
         assertNotNull(updated.getDispatchedAt());
         assertNotNull(updated.getTrackingNo());
@@ -133,7 +135,7 @@ public class OrderServiceTest {
     @Test
     void updateOrderStatus_Delivered_SetsDeliveredAt() {
         mockOrder.setShippingStatus("Shipped");
-        mockOrder.setStatus("Shipped");
+        mockOrder.setStatus("DISPATCHED");
         mockOrder.setDispatchedAt(LocalDateTime.now().minusDays(3));
 
         when(supplierAccessGuard.resolveCallerId(supplierAuth)).thenReturn(7L);
@@ -144,7 +146,7 @@ public class OrderServiceTest {
                 1L, "Delivered", "Handed over to facilities desk", supplierAuth);
 
         assertNotNull(updated);
-        assertEquals("Delivered", updated.getStatus());
+        assertEquals("DELIVERED", updated.getStatus());
         assertEquals("Delivered", updated.getShippingStatus());
         assertNotNull(updated.getDeliveredAt());
         verify(orderRepository).save(mockOrder);
@@ -170,7 +172,8 @@ public class OrderServiceTest {
         EquipmentOrder updated = orderService.updateOrderStatus(1L, "Shipped", "notes", supplierAuth);
 
         assertNotNull(updated);
-        assertEquals("Shipped", updated.getStatus());
+        assertEquals("DISPATCHED", updated.getStatus());
+        assertEquals("Shipped", updated.getShippingStatus());
     }
 
     @Test

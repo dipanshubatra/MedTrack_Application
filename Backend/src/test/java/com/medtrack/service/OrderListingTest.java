@@ -206,8 +206,8 @@ class OrderListingTest {
         }
 
         @Test
-        @DisplayName("reports 100% on time when nothing has been delivered yet")
-        void emptyHistoryDefaultsToFullyOnTime() {
+        @DisplayName("reports no on-time record when nothing has been delivered yet")
+        void emptyHistoryHasNoOnTimeRecord() {
             authenticateAs("supplier@medsupply.com", "Global Suppliers", "ROLE_SUPPLIER");
             when(supplierAccessGuard.resolveCallerId(any())).thenReturn(41L);
             when(orderRepository.findBySupplierId(41L)).thenReturn(List.of());
@@ -216,7 +216,9 @@ class OrderListingTest {
 
             assertEquals(0, metrics.getTotalOrders());
             assertEquals(0, metrics.getDeliveredOrders());
-            assertEquals(100.0, metrics.getOnTimeRate());
+            // Was 100.0. A supplier who has delivered nothing has no on-time record, and opening
+            // a brand-new scorecard on a perfect score is a claim the data does not support.
+            assertEquals(0.0, metrics.getOnTimeRate());
             assertEquals(0.0, metrics.getAverageDeliveryDays());
         }
     }
