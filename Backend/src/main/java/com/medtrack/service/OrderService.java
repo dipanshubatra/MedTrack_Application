@@ -12,6 +12,8 @@ import com.medtrack.util.PurchaseOrderPdf;
 import com.medtrack.dto.PlaceOrderRequest;
 import com.medtrack.dto.SupplierMetricsDto;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,6 +34,8 @@ import com.medtrack.auth.service.EmailService;
 @Service
 @RequiredArgsConstructor
 public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     private final EquipmentOrderRepository orderRepository;
     private final EquipmentRepository equipmentRepository;
@@ -233,27 +237,29 @@ public class OrderService {
     @Transactional
     public EquipmentOrder archiveOrder(Long id, String deletedBy) {
         EquipmentOrder order = getOrderById(id);
-        
+
         order.setDeleted(true);
         order.setDeletedAt(LocalDateTime.now());
         order.setDeletedBy(deletedBy);
-        
+
         EquipmentOrder savedOrder = orderRepository.save(order);
-        
-        // Log the archival
-        System.out.println("Order archived | User: " + deletedBy + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
-        
+
+        log.info("Order archived | user={} | hospital={} | orderId={} | orderCode={}",
+                deletedBy, order.getHospital(), id, order.getOrderCode());
+
         return savedOrder;
     }
 
     /**
-     * Restores an archived order (admin only).
-     * Only available within 90 days of archival.
+     * Restores an archived order belonging to the caller's hospital.
+     *
+     * <p>Only available within 90 days of archival. An archived order owned by another hospital is
+     * reported as not found rather than as forbidden, so the endpoint cannot be used to find out
+     * which order ids exist.</p>
      */
     @Transactional
     public EquipmentOrder restoreOrder(Long id, String username) {
-        EquipmentOrder order = orderRepository.findByIdAndDeletedTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Archived order not found"));
+        EquipmentOrder order = getArchivedOrderForCaller(id);
 
         // Check if 90 days have passed since archival
         if (order.getDeletedAt() != null && order.getDeletedAt().isBefore(LocalDateTime.now().minusDays(90))) {
@@ -266,30 +272,34 @@ public class OrderService {
 
         EquipmentOrder savedOrder = orderRepository.save(order);
 
-        // Log the restoration
-        System.out.println("Order restored | User: " + username + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
+        log.info("Order restored | user={} | hospital={} | orderId={} | orderCode={}",
+                username, order.getHospital(), id, order.getOrderCode());
 
         return savedOrder;
     }
 
     /**
-     * Gets paginated archived orders for the current user's hospital.
+     * Gets paginated archived orders visible to the caller.
+     *
+     * <p>A hospital sees its own archive; a supplier sees only the archived orders they are
+     * assigned to through a shipment record, matching how {@link #getAllOrders(Pageable)} scopes
+     * the live listing.</p>
      */
     public Page<EquipmentOrder> getArchivedOrders(Pageable pageable) {
         if (isSupplier()) {
-            return orderRepository.findByDeletedTrue(pageable);
+            Long supplierId = supplierAccessGuard.resolveCallerId(getCurrentAuthentication());
+            return orderRepository.findBySupplierIdAndDeletedTrue(supplierId, pageable);
         }
         return orderRepository.findByHospitalAndDeletedTrue(getCurrentUserOrganization(), pageable);
     }
 
     /**
-     * Permanently deletes an archived order (admin only).
+     * Permanently deletes an archived order belonging to the caller's hospital.
      * Only callable after 90 days from archival.
      */
     @Transactional
     public void permanentlyDeleteOrder(Long id) {
-        EquipmentOrder order = orderRepository.findByIdAndDeletedTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Archived order not found"));
+        EquipmentOrder order = getArchivedOrderForCaller(id);
 
         // Check if 90 days have passed since archival
         if (order.getDeletedAt() != null && order.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
@@ -298,7 +308,28 @@ public class OrderService {
 
         orderRepository.delete(order);
 
-        System.out.println("Order permanently deleted | User: " + getCurrentUsername() + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
+        log.info("Order permanently deleted | user={} | hospital={} | orderId={} | orderCode={}",
+                getCurrentUsername(), order.getHospital(), id, order.getOrderCode());
+    }
+
+    /**
+     * Resolves one archived order the caller is allowed to act on.
+     *
+     * <p>The archive queries are native - {@link EquipmentOrder} carries a class-level
+     * {@code @SQLRestriction("deleted = false")} that would otherwise hide every archived row - and
+     * a native query gets no tenant handling from Hibernate. Restore and permanent delete both went
+     * through {@code findByIdAndDeletedTrue(id)}, which scoped on nothing at all, so any hospital
+     * account could restore or purge any other hospital's archived order by id. Suppliers have no
+     * archive administration at all: the controller restricts both endpoints to {@code ROLE_HOSPITAL}
+     * and this method refuses a supplier caller rather than relying on that alone.</p>
+     */
+    private EquipmentOrder getArchivedOrderForCaller(Long id) {
+        if (isSupplier()) {
+            throw new AccessDeniedException("Suppliers cannot administer the hospital order archive");
+        }
+        String hospital = getCurrentUserOrganization();
+        return orderRepository.findByIdAndHospitalAndDeletedTrue(id, hospital)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived order not found"));
     }
 
     public SupplierMetricsDto getSupplierMetrics() {

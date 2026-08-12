@@ -101,14 +101,11 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
     // criteria query for the entity. As derived queries these asked for `deleted = true AND
     // deleted = false` and could never return a row, so an archived order could not be listed,
     // restored or purged.
-
-    @Query(value = "SELECT * FROM equipment_orders WHERE deleted = TRUE", nativeQuery = true)
-    List<EquipmentOrder> findByDeletedTrue();
-
-    @Query(value = "SELECT * FROM equipment_orders WHERE deleted = TRUE",
-            countQuery = "SELECT COUNT(*) FROM equipment_orders WHERE deleted = TRUE",
-            nativeQuery = true)
-    Page<EquipmentOrder> findByDeletedTrue(Pageable pageable);
+    //
+    // Being native also means Hibernate applies nothing else either - no tenant filter comes for
+    // free here, so every archive query below carries its own owner predicate. An archive lookup
+    // that takes only an id is not offered, because the two callers that need one (restore and
+    // permanent delete) both act on the row they find.
 
     @Query(value = "SELECT * FROM equipment_orders WHERE deleted = TRUE AND hospital = :hospital",
             countQuery = "SELECT COUNT(*) FROM equipment_orders WHERE deleted = TRUE AND hospital = :hospital",
@@ -117,6 +114,33 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
             @Param("hospital") String hospital,
             Pageable pageable);
 
-    @Query(value = "SELECT * FROM equipment_orders WHERE id = :id AND deleted = TRUE", nativeQuery = true)
-    Optional<EquipmentOrder> findByIdAndDeletedTrue(@Param("id") Long id);
+    /**
+     * The archived orders one supplier is assigned to, through a shipment record.
+     *
+     * <p>Mirrors {@link #findBySupplierId(Long, Pageable)} for the archive. The unscoped
+     * {@code findByDeletedTrue(Pageable)} this replaces returned every archived order in the
+     * deployment to any supplier caller.</p>
+     */
+    @Query(value = "SELECT o.* FROM equipment_orders o WHERE o.deleted = TRUE "
+            + "AND EXISTS (SELECT 1 FROM shipment_trackings s "
+            + "WHERE s.order_id = o.id AND s.supplier_id = :supplierId)",
+            countQuery = "SELECT COUNT(*) FROM equipment_orders o WHERE o.deleted = TRUE "
+                    + "AND EXISTS (SELECT 1 FROM shipment_trackings s "
+                    + "WHERE s.order_id = o.id AND s.supplier_id = :supplierId)",
+            nativeQuery = true)
+    Page<EquipmentOrder> findBySupplierIdAndDeletedTrue(
+            @Param("supplierId") Long supplierId,
+            Pageable pageable);
+
+    /**
+     * One archived order, scoped to the hospital that owns it.
+     *
+     * <p>The owner predicate is in the query rather than in a caller-side check so that restore and
+     * permanent delete cannot reach another tenant's archive by id alone.</p>
+     */
+    @Query(value = "SELECT * FROM equipment_orders WHERE id = :id AND deleted = TRUE "
+            + "AND hospital = :hospital", nativeQuery = true)
+    Optional<EquipmentOrder> findByIdAndHospitalAndDeletedTrue(
+            @Param("id") Long id,
+            @Param("hospital") String hospital);
 }
