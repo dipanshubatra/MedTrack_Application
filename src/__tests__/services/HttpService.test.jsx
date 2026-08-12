@@ -17,7 +17,13 @@ afterAll(() => server.close());
 beforeEach(() => {
   sessionStorage.clear();
   vi.stubGlobal("alert", mockAlert);
-  vi.stubGlobal("location", { href: "" });
+  // window.location is replaced entirely by the stub, so give it a pathname
+  // that mirrors the GitHub Pages deployment (BASE_PATH) to exercise the
+  // base-path-aware session-expiry redirect.
+  vi.stubGlobal("location", {
+    href: "http://localhost:8081",
+    pathname: "/MedTrack_Application/equipment",
+  });
 });
 
 afterEach(() => {
@@ -25,8 +31,7 @@ afterEach(() => {
 });
 
 async function getInterceptorBehavior() {
-  const HttpService = (await import("../../services/HttpService")).default;
-  return HttpService;
+  return await import("../../services/HttpService");
 }
 
 it("attaches JWT Bearer token from sessionStorage", async () => {
@@ -34,7 +39,7 @@ it("attaches JWT Bearer token from sessionStorage", async () => {
     id: "u1", token: "my-jwt-token",
   }));
 
-  const API = await getInterceptorBehavior();
+  const { default: API } = await getInterceptorBehavior();
 
   let capturedHeaders;
   server.use(
@@ -48,10 +53,11 @@ it("attaches JWT Bearer token from sessionStorage", async () => {
   expect(capturedHeaders.get("Authorization")).toBe("Bearer my-jwt-token");
 });
 
-it("handles 401 by clearing sessionStorage and redirecting", async () => {
+it("handles 401 by clearing sessionStorage, toasting and redirecting under the base path", async () => {
   sessionStorage.setItem("medtrack_user", JSON.stringify({ id: "u1", token: "tok" }));
 
-  const API = await getInterceptorBehavior();
+  const { default: API, errorEmitter } = await getInterceptorBehavior();
+  const dispatchSpy = vi.spyOn(errorEmitter, "dispatchEvent");
 
   server.use(
     http.get(`${BASE_URL}/api/test`, () => HttpResponse.json(null, { status: 401 })),
@@ -60,14 +66,19 @@ it("handles 401 by clearing sessionStorage and redirecting", async () => {
   await expect(API.get("/api/test")).rejects.toThrow();
 
   expect(sessionStorage.getItem("medtrack_user")).toBeNull();
-  expect(mockAlert).toHaveBeenCalledWith("Session expired. Please login again.");
-  expect(window.location.href).toBe("/login");
+  expect(dispatchSpy).toHaveBeenCalledWith(
+    expect.objectContaining({
+      detail: { message: "Session expired. Please login again.", type: "error" },
+    }),
+  );
+  expect(window.location.href).toBe("/MedTrack_Application/login");
 });
 
-it("handles 403 without redirect", async () => {
+it("handles 403 with a toast and without redirect", async () => {
   sessionStorage.setItem("medtrack_user", JSON.stringify({ id: "u1", token: "tok" }));
 
-  const API = await getInterceptorBehavior();
+  const { default: API, errorEmitter } = await getInterceptorBehavior();
+  const dispatchSpy = vi.spyOn(errorEmitter, "dispatchEvent");
 
   server.use(
     http.get(`${BASE_URL}/api/test`, () => HttpResponse.json(null, { status: 403 })),
@@ -76,14 +87,16 @@ it("handles 403 without redirect", async () => {
   await expect(API.get("/api/test")).rejects.toThrow();
 
   expect(sessionStorage.getItem("medtrack_user")).not.toBeNull();
-  expect(mockAlert).toHaveBeenCalledWith(
-    "Access denied: You are not authorised to perform this action.",
+  expect(dispatchSpy).toHaveBeenCalledWith(
+    expect.objectContaining({
+      detail: { message: "Access denied: You are not authorised to perform this action.", type: "error" },
+    }),
   );
-  expect(window.location.href).not.toBe("/login");
+  expect(window.location.href).toBe("http://localhost:8081");
 });
 
 it("does not attach token when no user in sessionStorage", async () => {
-  const API = await getInterceptorBehavior();
+  const { default: API } = await getInterceptorBehavior();
 
   let capturedHeaders;
   server.use(
