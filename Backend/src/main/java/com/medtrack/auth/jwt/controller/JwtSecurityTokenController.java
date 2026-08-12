@@ -108,4 +108,17 @@ public class JwtSecurityTokenController {
         Map<String, Object> metrics = jwtService.getJwtAuditMetrics();
         return ResponseEntity.ok(metrics);
     }
+
+    /**
+     * Purge Expired JWT Tokens
+     */
+    @DeleteMapping("/purge-expired")
+    public ResponseEntity<Map<String, Object>> purgeExpiredTokens() {
+        int purgedCount = jwtService.purgeExpiredTokens();
+        Map<String, Object> result = new HashMap<>();
+        result.put("status", "SUCCESS");
+        result.put("purgedTokenCount", purgedCount);
+        return ResponseEntity.ok(result);
+    }
 }
+
