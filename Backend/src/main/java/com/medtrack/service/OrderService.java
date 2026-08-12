@@ -7,12 +7,12 @@ import com.medtrack.model.EquipmentOrder;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.repository.EquipmentOrderRepository;
 import com.medtrack.repository.EquipmentRepository;
-import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.util.PurchaseOrderPdf;
 import com.medtrack.dto.PlaceOrderRequest;
 import com.medtrack.dto.SupplierMetricsDto;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -39,7 +39,6 @@ public class OrderService {
     private final SupplierInvoicePdf supplierInvoicePdf;
     private final EmailService emailService;
     private final UserRepository userRepository;
-    private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final SupplierAccessGuard supplierAccessGuard;
 
     public byte[] generateInvoicePdf(Long id) {
@@ -78,10 +77,27 @@ public class OrderService {
     }
 
     private boolean isSupplier() {
+        return isSupplier(getCurrentAuthentication());
+    }
+
+    private Authentication getCurrentAuthentication() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AccessDeniedException("User is not authenticated");
+        }
+        return authentication;
+    }
+
+    private EquipmentOrder getSupplierOrderById(Long id, Authentication authentication) {
+        Long supplierId = supplierAccessGuard.resolveCallerId(authentication);
+        return orderRepository.findByIdAndSupplierId(id, supplierId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
+    }
+
+    private boolean isSupplier(Authentication authentication) {
         if (authentication == null) return false;
         return authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPPLIER"));
+                .anyMatch(authority -> "ROLE_SUPPLIER".equals(authority.getAuthority()));
     }
 
     private String getCurrentUsername() {
@@ -95,7 +111,8 @@ public class OrderService {
     /**
      * Returns one page of orders visible to the caller.
      *
-     * <p>Suppliers see every order; a hospital user sees only their own organisation's orders.
+     * <p>Suppliers see only orders assigned to them through a shipment record; a hospital user
+     * sees only their own organisation's orders.
      * The {@code Pageable} is required: {@link com.medtrack.controller.OrderController} supplies a
      * {@code @PageableDefault}, so callers never have to construct one themselves.</p>
      *
@@ -107,7 +124,8 @@ public class OrderService {
             throw new IllegalArgumentException("Pageable is required");
         }
         if (isSupplier()) {
-            return orderRepository.findAll(pageable);
+            Long supplierId = supplierAccessGuard.resolveCallerId(getCurrentAuthentication());
+            return orderRepository.findBySupplierId(supplierId, pageable);
         }
         return orderRepository.findByHospital(getCurrentUserOrganization(), pageable);
     }
@@ -123,19 +141,21 @@ public class OrderService {
      */
     public List<EquipmentOrder> getAllOrdersUnpaged() {
         if (isSupplier()) {
-            return orderRepository.findAll();
+            Long supplierId = supplierAccessGuard.resolveCallerId(getCurrentAuthentication());
+            return orderRepository.findBySupplierId(supplierId);
         }
         return orderRepository.findByHospital(getCurrentUserOrganization());
     }
 
     public EquipmentOrder getOrderById(Long id) {
+        if (isSupplier()) {
+            return getSupplierOrderById(id, getCurrentAuthentication());
+        }
         EquipmentOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
-        if (!isSupplier()) {
-            String hospital = getCurrentUserOrganization();
-            if (!order.getHospital().equals(hospital)) {
-                throw new ResourceNotFoundException("Order not found with id: " + id);
-            }
+        String hospital = getCurrentUserOrganization();
+        if (!order.getHospital().equals(hospital)) {
+            throw new ResourceNotFoundException("Order not found with id: " + id);
         }
         return order;
     }
@@ -168,18 +188,10 @@ public class OrderService {
 
     public EquipmentOrder updateOrderStatus(Long id, String status, String supplierNotes,
                                              Authentication authentication) {
-        EquipmentOrder order = orderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-
-        // Mirrors the ownership check enforced on the newer supplier-order-update path:
-        // once a supplier has been assigned to this order (a shipment tracking record
-        // exists), only that supplier - or a HOSPITAL admin - may advance its status here.
-        // An order with no shipment record yet has no assigned supplier to check against,
-        // same as the newer path.
-        Long callerSupplierId = supplierAccessGuard.resolveCallerId(authentication);
-        shipmentTrackingRepository.findByOrderId(id).ifPresent(existingShipment ->
-                supplierAccessGuard.assertSelfOrHospitalAdmin(authentication, callerSupplierId,
-                        existingShipment.getSupplierId()));
+        if (!isSupplier(authentication)) {
+            throw new AccessDeniedException("Only suppliers may update order status");
+        }
+        EquipmentOrder order = getSupplierOrderById(id, authentication);
 
         order.setStatus(status);
         order.setShippingStatus(status);
