@@ -1,7 +1,9 @@
 package com.medtrack.repository;
 
+import com.medtrack.dto.MaintenanceDepartmentAnalytics;
 import com.medtrack.dto.MaintenanceEquipmentAnalytics;
 import com.medtrack.dto.MaintenanceTechnicianAnalytics;
+import com.medtrack.dto.MaintenanceTrendAnalytics;
 import com.medtrack.dto.MaintenanceTypeAnalytics;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
@@ -206,7 +208,7 @@ public interface MaintenanceAnalyticsRepository
     @Query("""
             SELECT COALESCE(
                 AVG(
-                    FUNCTION('DATEDIFF', t.completedAt, t.createdAt)
+                    TIMESTAMPDIFF(day, t.createdAt, t.completedAt)
                 ),
                 0
             )
@@ -247,10 +249,15 @@ public interface MaintenanceAnalyticsRepository
               AND t.deadline >= :startDate
               AND t.deadline <= :endDate
             """)
+    long countTasksDueBetween(
+            @Param("hospitalId") Long hospitalId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 
     @Query("""
         SELECT
-            t.department AS department,
+            e.department AS department,
             COUNT(t) AS taskCount,
             SUM(
                 CASE
@@ -269,8 +276,9 @@ public interface MaintenanceAnalyticsRepository
             ) AS overdueCount,
             COALESCE(AVG(t.hoursWorked), 0) AS averageHours
         FROM MaintenanceTask t
+        JOIN t.equipmentRecord e
         WHERE t.hospitalId = :hospitalId
-        GROUP BY t.department
+        GROUP BY e.department
         ORDER BY COUNT(t) DESC
         """)
     List<MaintenanceDepartmentAnalytics> getDepartmentAnalytics(
@@ -301,10 +309,5 @@ public interface MaintenanceAnalyticsRepository
             @Param("hospitalId") Long hospitalId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
-    );
-    long countTasksDueBetween(
-            @Param("hospitalId") Long hospitalId,
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate
     );
 }

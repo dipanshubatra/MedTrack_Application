@@ -802,8 +802,10 @@ public class PreventiveMaintenanceService {
         return switch (frequency) {
             case DAILY -> anchor.plusDays(step);
             case WEEKLY -> anchor.plusWeeks(step);
+            case BIWEEKLY -> anchor.plusWeeks(2L * step);
             case MONTHLY -> anchor.plusMonths(step);
             case QUARTERLY -> anchor.plusMonths(3L * step);
+            case SEMIANNUAL -> anchor.plusMonths(6L * step);
             case YEARLY -> anchor.plusYears(step);
             case CUSTOM -> anchor.plusDays(
                     (long) step * (rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7));
