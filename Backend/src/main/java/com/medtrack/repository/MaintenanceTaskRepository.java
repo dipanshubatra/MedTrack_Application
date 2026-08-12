@@ -42,6 +42,17 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             + "JOIN equipment e ON e.id = mt.equipment_record_id "
             + "WHERE mt.deleted = FALSE "
             + "AND mt.hospital_id = :hospitalId "
+            + "AND mt.equipment_record_id = :equipmentRecordId "
+            + "AND e.hospital_id = :hospitalId",
+            nativeQuery = true)
+    List<MaintenanceTask> findByHospitalIdAndEquipmentRecordId(
+            @Param("hospitalId") Long hospitalId,
+            @Param("equipmentRecordId") Long equipmentRecordId);
+
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId "
             + "AND e.hospital_id = :hospitalId "
             + "AND (:status IS NULL OR mt.status = :status) "
             + "AND (:equipmentId IS NULL OR mt.equipment_id = :equipmentId) "
