@@ -329,29 +329,40 @@ public class MaintenanceService {
                 && savedTask.getRecurrencePeriodDays() > 0
                 && isEquipmentEligibleForRecurrence(savedTask)) {
 
-            User recurringTechnician = resolveRecurringTechnician(savedTask);
-            MaintenanceTask nextTask = MaintenanceTask.builder()
-                    .taskCode("MNT-" + UUID.randomUUID())
-                    .equipmentId(savedTask.getEquipmentId())
-                    .equipment(savedTask.getEquipment())
-                    .equipmentRecord(savedTask.getEquipmentRecord())
-                    .hospital(savedTask.getHospital())
-                    .hospitalId(savedTask.getHospitalId())
-                    .maintenanceType(savedTask.getMaintenanceType() != null ? savedTask.getMaintenanceType() : "Recurring Preventive Maintenance")
-                    .deadline(java.time.LocalDate.now().plusDays(savedTask.getRecurrencePeriodDays()))
-                    .assignedTechnician(recurringTechnician != null ? recurringTechnician.getEmail() : null)
-                    .assignedTechnicianRecord(recurringTechnician)
-                    .description("Auto-scheduled recurring maintenance task based on completion of task: " + savedTask.getTaskCode())
-                    .priority(savedTask.getPriority())
-                    .status(MaintenanceStatus.SCHEDULED)
-                    .recurrencePeriodDays(savedTask.getRecurrencePeriodDays())
-                    .createdAt(LocalDateTime.now())
-                    .build();
+            String nextType = savedTask.getMaintenanceType() != null ? savedTask.getMaintenanceType().trim() : "Recurring Preventive Maintenance";
+            boolean hasDuplicate = savedTask.getEquipmentRecord() != null && taskRepository.existsActiveTaskForEquipmentWithCode(
+                    savedTask.getHospitalId(),
+                    savedTask.getEquipmentRecord().getId(),
+                    savedTask.getEquipmentId(),
+                    nextType,
+                    List.of(MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS, MaintenanceStatus.NEEDS_PART, MaintenanceStatus.ON_HOLD)
+            );
 
-            validateOwnershipInvariant(nextTask);
-            MaintenanceTask savedNextTask = taskRepository.save(nextTask);
-            activityService.recordCreated(
-                    savedNextTask, technician, "from recurring task " + savedTask.getTaskCode());
+            if (!hasDuplicate) {
+                User recurringTechnician = resolveRecurringTechnician(savedTask);
+                MaintenanceTask nextTask = MaintenanceTask.builder()
+                        .taskCode("MNT-" + UUID.randomUUID())
+                        .equipmentId(savedTask.getEquipmentId())
+                        .equipment(savedTask.getEquipment())
+                        .equipmentRecord(savedTask.getEquipmentRecord())
+                        .hospital(savedTask.getHospital())
+                        .hospitalId(savedTask.getHospitalId())
+                        .maintenanceType(nextType)
+                        .deadline(java.time.LocalDate.now().plusDays(savedTask.getRecurrencePeriodDays()))
+                        .assignedTechnician(recurringTechnician != null ? recurringTechnician.getEmail() : null)
+                        .assignedTechnicianRecord(recurringTechnician)
+                        .description("Auto-scheduled recurring maintenance task based on completion of task: " + savedTask.getTaskCode())
+                        .priority(savedTask.getPriority())
+                        .status(MaintenanceStatus.SCHEDULED)
+                        .recurrencePeriodDays(savedTask.getRecurrencePeriodDays())
+                        .createdAt(LocalDateTime.now())
+                        .build();
+
+                validateOwnershipInvariant(nextTask);
+                MaintenanceTask savedNextTask = taskRepository.save(nextTask);
+                activityService.recordCreated(
+                        savedNextTask, technician, "from recurring task " + savedTask.getTaskCode());
+            }
         }
 
         return savedTask;
@@ -413,21 +424,26 @@ public class MaintenanceService {
     }
 
     private void validateNoDuplicateActiveTask(Long hospitalId, Equipment equipment, String maintenanceType) {
+        if (hospitalId == null || equipment == null || maintenanceType == null || maintenanceType.isBlank()) {
+            return;
+        }
         List<MaintenanceStatus> activeStatuses = List.of(
                 MaintenanceStatus.SCHEDULED,
                 MaintenanceStatus.IN_PROGRESS,
                 MaintenanceStatus.NEEDS_PART,
                 MaintenanceStatus.ON_HOLD
         );
-        boolean duplicateExists = taskRepository.existsActiveTaskForEquipment(
+        String normalizedType = maintenanceType.trim();
+        boolean duplicateExists = taskRepository.existsActiveTaskForEquipmentWithCode(
                 hospitalId,
                 equipment.getId(),
-                maintenanceType,
+                equipment.getEquipmentCode(),
+                normalizedType,
                 activeStatuses
         );
         if (duplicateExists) {
             throw new IllegalArgumentException(
-                    "An active maintenance task of type '" + maintenanceType
+                    "An active maintenance task of type '" + normalizedType
                             + "' already exists for equipment '" + equipment.getEquipmentCode() + "'");
         }
     }

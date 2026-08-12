@@ -5,6 +5,8 @@ import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest;
+import com.medtrack.supplier.dto.BulkShipmentConfirmationRequest;
 import com.medtrack.supplier.dto.CreateShipmentRequest;
 import com.medtrack.supplier.dto.ShipmentTrackingResponse;
 import com.medtrack.supplier.dto.UpdateShipmentStatusRequest;
@@ -13,6 +15,7 @@ import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.supplier.validation.ShipmentRequestValidator;
+import com.medtrack.supplier.workflow.ShipmentWorkflowOrchestrator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +35,7 @@ public class ShipmentTrackingService {
     private final EquipmentOrderRepository orderRepository;
     private final SupplierAccessGuard supplierAccessGuard;
     private final ShipmentRequestValidator validator;
+    private final ShipmentWorkflowOrchestrator orchestrator;
 
     @Transactional
     public ShipmentTrackingResponse createShipment(CreateShipmentRequest request, Authentication authentication) {
@@ -41,7 +47,8 @@ public class ShipmentTrackingService {
 
         // 2. Prevent duplicate shipment creation for same order
         shipmentTrackingRepository.findByOrderId(request.getOrderId()).ifPresent(s -> {
-            throw new IllegalArgumentException("Shipment tracking already exists for Order ID: " + request.getOrderId());
+            throw new IllegalArgumentException(
+                    "Shipment tracking already exists for Order ID: " + request.getOrderId());
         });
 
         // 3. Ensure tracking number uniqueness
@@ -97,13 +104,7 @@ public class ShipmentTrackingService {
         }
 
         ShipmentStatus currentStatus = shipment.getShipmentStatus();
-        if (newStatus == currentStatus) {
-            throw new InvalidStatusTransitionException("Shipment is already in " + currentStatus + " status");
-        }
-        if (newStatus.ordinal() < currentStatus.ordinal()) {
-            throw new InvalidStatusTransitionException(
-                    "Cannot revert status from " + currentStatus + " to " + newStatus);
-        }
+        orchestrator.validateStateTransition(currentStatus, newStatus);
 
         // 3. Update shipment record
         shipment.setShipmentStatus(newStatus);
@@ -137,6 +138,27 @@ public class ShipmentTrackingService {
         orderRepository.save(order);
 
         return mapToResponse(updatedShipment);
+    }
+
+    @Transactional
+    public List<ShipmentTrackingResponse> bulkConfirmShipments(BulkShipmentConfirmationRequest request,
+                                                               Authentication authentication) {
+        return request.getShipments().stream()
+                .map(shipment -> createShipment(shipment, authentication))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<ShipmentTrackingResponse> bulkConfirmDeliveries(BulkDeliveryConfirmationRequest request,
+                                                                Authentication authentication) {
+        UpdateShipmentStatusRequest updateRequest = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("DELIVERED")
+                .supplierNotes("Bulk delivery confirmation")
+                .build();
+
+        return request.getShipmentIds().stream()
+                .map(id -> updateShipmentStatus(id, updateRequest, authentication))
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)

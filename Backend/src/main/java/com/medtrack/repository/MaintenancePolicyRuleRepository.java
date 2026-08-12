@@ -16,6 +16,7 @@ import java.util.Optional;
 public interface MaintenancePolicyRuleRepository extends JpaRepository<MaintenancePolicyRule, Long> {
 
     List<MaintenancePolicyRule> findByHospitalId(Long hospitalId);
+    List<MaintenancePolicyRule> findByActiveTrueAndDeletedFalse();
 
     Optional<MaintenancePolicyRule> findByIdAndHospitalId(Long id, Long hospitalId);
 

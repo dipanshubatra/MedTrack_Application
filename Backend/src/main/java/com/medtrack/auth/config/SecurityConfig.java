@@ -327,6 +327,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/procurement/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/procurement/**").hasRole("HOSPITAL")
 
+                // Multi-supplier tender / e-auction workflow boundaries:
+                // Reads (tenders, bids, audit): authorized users, with per-record visibility
+                // enforced in TenderService. Bid submission/withdrawal: suppliers only.
+                // Publish, rounds, award, and cancel: Hospital admins only.
+                .requestMatchers(HttpMethod.GET, "/api/tenders/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/tenders/*/bids").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/tenders/*/bids/*/withdraw").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/tenders/**").hasRole("HOSPITAL")
+
                 // Maintenance schedules boundaries:
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
@@ -355,9 +364,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/shipments/**").hasRole("SUPPLIER")
 
                 // Real-time operations event stream boundaries:
-                // WebSocket/SSE endpoint for authenticated users.
+                // The Activity Center is hospital-scoped; suppliers and technicians have no
+                // hospital profile with which to authorize a stream subscription.
                 // REST endpoints for event history and read receipts.
-                .requestMatchers("/api/events/stream/**").authenticated()
+                .requestMatchers("/api/events/stream/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.GET, "/api/events/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/events/**").authenticated()
 

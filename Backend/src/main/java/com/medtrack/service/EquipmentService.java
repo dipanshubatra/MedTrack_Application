@@ -74,6 +74,7 @@ public class EquipmentService {
     private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
     private final FacilityLocationRepository facilityLocationRepository;
     private final EventPublisherService eventPublisherService;
+    private final EquipmentAuditService equipmentAuditService;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -93,7 +94,12 @@ public class EquipmentService {
     };
 
     private Hospital getHospitalForUser(String username) {
-        User user = userRepository.findByUsername(username)
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username or email is required");
+        }
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
@@ -1701,13 +1707,7 @@ public class EquipmentService {
     @Transactional
     public Equipment restoreEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
-        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
-
-        // Verify it belongs to the user's hospital
-        if (!equipment.getHospital().getId().equals(hospital.getId())) {
-            throw new ResourceNotFoundException("Archived equipment not found or you don't have access");
-        }
+        Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());
 
         equipment.setDeleted(false);
         equipment.setDeletedAt(null);
@@ -1739,13 +1739,25 @@ public class EquipmentService {
      */
     @Transactional
     public void permanentlyDeleteEquipment(Long id, String username) {
-        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());
 
-        // Check if 90 days have passed since archival
-        if (equipment.getDeletedAt() != null && equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
+        // Missing archive metadata must never shorten the retention window. A malformed or legacy
+        // row is retained until its archive timestamp is repaired explicitly.
+        if (equipment.getDeletedAt() == null
+                || equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
             throw new IllegalStateException("Equipment cannot be permanently deleted until 90 days after archival");
         }
+
+        equipmentAuditService.logAction(
+                equipment,
+                equipment.getHospital(),
+                username,
+                "DELETE",
+                "ALL",
+                "Equipment existed",
+                "Deleted"
+        );
 
         equipmentRepository.delete(equipment);
 
@@ -1755,5 +1767,11 @@ public class EquipmentService {
                 id,
                 equipment.getName()
         );
+    }
+
+    private Equipment getOwnedArchivedEquipment(Long id, Long hospitalId) {
+        return equipmentRepository.findArchivedByIdAndHospitalId(id, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Archived equipment not found or you don't have access"));
     }
 }

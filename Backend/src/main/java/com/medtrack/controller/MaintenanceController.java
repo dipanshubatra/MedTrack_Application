@@ -8,6 +8,8 @@ import com.medtrack.dto.MaintenanceScheduleRevisionPageResponse;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
+import com.medtrack.dto.MaintenanceRuleStatusRequest;
+import com.medtrack.dto.MaintenanceRuleResponse;
 import com.medtrack.service.MaintenanceScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -212,22 +214,16 @@ public class MaintenanceController {
         }
     }
 
-    @PutMapping("/{id}/schedule")
-    public ResponseEntity<MaintenanceTask> amendSchedule(
+    @PatchMapping("/rules/{id}/status")
+    public ResponseEntity<MaintenanceRuleResponse> updateRuleStatus(
             @PathVariable Long id,
-            @Valid @RequestBody MaintenanceScheduleAmendmentRequest request,
+            @Valid @RequestBody MaintenanceRuleStatusRequest request,
             Authentication authentication) {
 
         return ResponseEntity.ok(
-                maintenanceService.amendSchedule(id, request, authentication));
-    }
-
-    @GetMapping("/{id}/schedule/amendments")
-    public ResponseEntity<List<MaintenanceScheduleAmendmentResponse>> getScheduleAmendmentHistory(
-            @PathVariable Long id,
-            Authentication authentication) {
-
-        return ResponseEntity.ok(
-                maintenanceService.getScheduleAmendmentHistory(id, authentication));
+                preventiveMaintenanceService.updateRuleStatus(
+                        id,
+                        request,
+                        authentication));
     }
 }
