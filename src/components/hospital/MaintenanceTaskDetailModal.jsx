@@ -5,10 +5,11 @@ import { X, Calendar, User, Wrench, ShieldAlert, CheckCircle, Clock } from 'luci
  * MaintenanceTaskDetailModal - Quick inspection & status update modal.
  */
 export const MaintenanceTaskDetailModal = ({ task, onClose, onUpdateStatus, onAssignTechnician }) => {
-  if (!task) return null;
+  // Hooks must run unconditionally (Rules of Hooks) before any early return.
+  const [currentStatus, setCurrentStatus] = useState(task?.status);
+  const [tech, setTech] = useState(task?.assignedTechnician || 'Unassigned');
 
-  const [currentStatus, setCurrentStatus] = useState(task.status);
-  const [tech, setTech] = useState(task.assignedTechnician || 'Unassigned');
+  if (!task) return null;
 
   const handleSave = () => {
     if (onUpdateStatus && currentStatus !== task.status) {
