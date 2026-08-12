@@ -18,7 +18,13 @@
  *
  * Collapsing the three lists into one registry removes the drift by construction. This script
  * closes the remaining gap: it fails the build when the registry itself is inconsistent, or when a
- * page is added to src/pages/auth/ and never registered.
+ * page component under src/pages/ is never registered. It used to audit only src/pages/auth/ -
+ * the directory that had already bit us - but that let a whole second class of orphans through:
+ * pages outside src/pages/auth (public marketing pages, hospital and supplier pages) that existed
+ * as files, were linked to from the footer, navbar or cookie banner, and still resolved to the
+ * 404 page because nobody had added them to the registry. So the audit now walks every *.jsx
+ * file under src/pages/ (test files excluded) and requires each one to be either registered or
+ * listed in UNROUTED_PAGES below with a reason.
  *
  * It works by static analysis rather than by importing the registry, so it needs no React runtime,
  * no JSDOM and no test framework, and it runs in well under a second from `prebuild`.
@@ -33,7 +39,31 @@ const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
 const registryPath = path.join(projectRoot, 'src', 'routes', 'routeRegistry.js');
-const authPagesDir = path.join(projectRoot, 'src', 'pages', 'auth');
+const pagesRoot = path.join(projectRoot, 'src', 'pages');
+
+/**
+ * Page components under src/pages/ that intentionally have no route. Keep this list small and
+ * give every entry a reason: a page that can be reached from a URL belongs in ROUTES instead.
+ *
+ *   - ActivityCenter and InvoiceModal are not pages at all - components that live in src/pages/
+ *     and are rendered inline by Navbar / OrdersList respectively.
+ *   - HelpPage and CookiePage are superseded by HelpCenterPage (route "help") and
+ *     CookieConsentPage (route "cookies"), which were both registered; the duplicates remain on
+ *     disk as dead files.
+ *   - The five procurement workflow pages are drafts: complete components, but nothing links to
+ *     them yet, so they are parked here until the procurement flow is wired into navigation.
+ */
+const UNROUTED_PAGES = {
+  ActivityCenter: 'rendered inline inside the Navbar (imported directly), not as a route',
+  InvoiceModal: 'modal component rendered inside src/pages/supplier/OrdersList.jsx, not a page',
+  HelpPage: 'superseded by HelpCenterPage, which serves the "help" route',
+  CookiePage: 'superseded by CookieConsentPage, which serves the "cookies" route',
+  ReceivingScreen: 'procurement workflow draft - no link reaches it yet',
+  SparePartsCatalog: 'procurement workflow draft - no link reaches it yet',
+  RfqQuoteComparison: 'procurement workflow draft - no link reaches it yet',
+  DuplicateDetection: 'procurement workflow draft - no link reaches it yet',
+  ProcurementLifecycleTimeline: 'procurement workflow draft - no link reaches it yet',
+};
 
 const failures = [];
 
@@ -173,18 +203,34 @@ function main() {
     }
   }
 
-  // 5. Every security console under src/pages/auth/ must be reachable. This is what left fourteen
-  //    pages with no URL at all.
+  // 5. Every page component under src/pages/ must be reachable. Originally this audit covered
+  //    only src/pages/auth/ - the directory that had already produced fourteen unreachable
+  //    consoles - but pages elsewhere drifted the same way: ResearchPage, SupplierCentrePage,
+  //    PrivacyPage, CookieConsentPage and DoNotSellPage existed as files and were linked from the
+  //    footer or cookie banner while resolving to NotFoundPage, and the rewritten Equipment
+  //    Lifecycle page had no route at all. Walking the whole tree (excluding *.test.jsx) closes
+  //    the gap; UNROUTED_PAGES is the explicit, reason-carrying list of files that are allowed to
+  //    stay unrouted.
   const registered = new Set(routes.map((route) => route.component));
-  const authPages = fs
-    .readdirSync(authPagesDir)
-    .filter((file) => file.endsWith('Page.jsx'))
-    .map((file) => file.replace('.jsx', ''));
-
-  for (const page of authPages) {
-    if (!registered.has(page)) {
-      fail(`${page} exists in src/pages/auth/ but is not registered, so no URL reaches it`);
+  const pageFiles = [];
+  (function walk(dir, relative) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        walk(path.join(dir, entry.name), `${relative}/${entry.name}`);
+      } else if (entry.isFile() && entry.name.endsWith('.jsx') && !entry.name.endsWith('.test.jsx')) {
+        pageFiles.push({ name: entry.name.replace('.jsx', ''), relative });
+      }
     }
+  })(pagesRoot, 'src/pages');
+
+  for (const { name, relative } of pageFiles) {
+    if (registered.has(name)) {
+      continue;
+    }
+    if (UNROUTED_PAGES[name]) {
+      continue;
+    }
+    fail(`${name} exists in ${relative}/ but is not registered, so no URL reaches it`);
   }
 
   if (failures.length > 0) {
@@ -197,7 +243,7 @@ function main() {
   console.log(
     `check-routes: ${routes.length} routes, ${seenSlugs.size} slugs, `
     + `${seenParameterisedSlugs.size} parameterised, `
-    + `${authPages.length} security consoles - all consistent.`
+    + `${pageFiles.length} page components under src/pages/ - all consistent.`
   );
 }
 
