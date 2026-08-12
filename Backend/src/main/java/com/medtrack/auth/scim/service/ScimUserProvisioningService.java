@@ -148,4 +148,39 @@ public class ScimUserProvisioningService {
         metrics.put("scimProtocolVersion", "RFC 7643 / RFC 7644 SCIM 2.0");
         return metrics;
     }
+
+    /**
+     * Partial Attribute Update (PATCH under RFC 7644)
+     */
+    @Transactional
+    public ScimUserDto patchScimUser(String scimId, Map<String, Object> patchOp) {
+        ScimUserRecord record = repository.findByScimId(scimId)
+                .orElseThrow(() -> new NoSuchElementException("SCIM User not found for ID: " + scimId));
+
+        if (patchOp.containsKey("active")) {
+            Boolean activeState = (Boolean) patchOp.get("active");
+            record.setActive(activeState != null ? activeState : record.isActive());
+        }
+        if (patchOp.containsKey("department")) {
+            record.setDepartment((String) patchOp.get("department"));
+        }
+        if (patchOp.containsKey("title")) {
+            record.setTitle((String) patchOp.get("title"));
+        }
+        record.setLastModifiedAt(Instant.now());
+
+        ScimUserRecord updated = repository.save(record);
+        return mapToDto(updated);
+    }
+
+    /**
+     * Lookup SCIM User by External ID (Okta/Azure GUID)
+     */
+    @Transactional(readOnly = true)
+    public ScimUserDto getScimUserByExternalId(String externalId) {
+        ScimUserRecord record = repository.findByExternalId(externalId)
+                .orElseThrow(() -> new NoSuchElementException("SCIM User not found for External ID: " + externalId));
+        return mapToDto(record);
+    }
 }
+
