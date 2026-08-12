@@ -10,6 +10,7 @@ import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.dto.MaintenanceWorkOrderStatusRequest;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentStatus;
+import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
@@ -38,6 +39,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class MaintenanceWorkOrderService {
+
+    private static final List<MaintenanceWorkOrderStatus> ACTIVE_WORK_ORDER_STATUSES = List.of(
+            MaintenanceWorkOrderStatus.OPEN,
+            MaintenanceWorkOrderStatus.ASSIGNED,
+            MaintenanceWorkOrderStatus.IN_PROGRESS,
+            MaintenanceWorkOrderStatus.ON_HOLD
+    );
 
     private final MaintenanceWorkOrderRepository workOrderRepository;
 
@@ -96,6 +104,24 @@ public class MaintenanceWorkOrderService {
                     maintenanceTask,
                     hospitalId
             );
+
+            boolean activeWorkOrderExists = workOrderRepository
+                    .existsByHospitalIdAndMaintenanceTaskIdAndStatusIn(
+                            hospitalId,
+                            request.getMaintenanceTaskId(),
+                            ACTIVE_WORK_ORDER_STATUSES
+                    );
+
+            workOrderValidator.validateNoActiveWorkOrderForTask(
+                    activeWorkOrderExists,
+                    request.getMaintenanceTaskId()
+            );
+
+            boolean isTaskCompleted = maintenanceTask.getStatus() == MaintenanceStatus.COMPLETED;
+            workOrderValidator.validateTaskEligibilityForWorkOrder(isTaskCompleted);
+
+            Long taskEqId = maintenanceTask.getEquipmentRecord() != null ? maintenanceTask.getEquipmentRecord().getId() : null;
+            workOrderValidator.validateEquipmentTaskMatching(equipment.getId(), taskEqId);
         }
 
         User assignedUser = null;
@@ -352,9 +378,9 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, MaintenanceWorkOrderStatus.IN_PROGRESS);
+        return toResponse(saved);
     }
 
     /**
@@ -452,9 +478,9 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, MaintenanceWorkOrderStatus.COMPLETED);
+        return toResponse(saved);
     }
 
     /**
@@ -509,9 +535,9 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, MaintenanceWorkOrderStatus.CANCELLED);
+        return toResponse(saved);
     }
 
     /**
@@ -611,9 +637,61 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, target);
+        return toResponse(saved);
+    }
+
+    /**
+     * Synchronizes status with the associated MaintenanceTask and Equipment entities.
+     */
+    private void synchronizeLinkedTaskAndEquipment(
+            MaintenanceWorkOrder workOrder,
+            MaintenanceWorkOrderStatus targetStatus
+    ) {
+        if (workOrder == null) {
+            return;
+        }
+
+        MaintenanceTask task = workOrder.getMaintenanceTask();
+        if (task != null) {
+            if (targetStatus == MaintenanceWorkOrderStatus.IN_PROGRESS) {
+                task.setStatus(MaintenanceStatus.IN_PROGRESS);
+                maintenanceTaskRepository.save(task);
+            } else if (targetStatus == MaintenanceWorkOrderStatus.COMPLETED) {
+                task.setStatus(MaintenanceStatus.COMPLETED);
+                task.setCompletedAt(
+                        workOrder.getCompletedAt() != null
+                                ? workOrder.getCompletedAt()
+                                : LocalDateTime.now()
+                );
+                maintenanceTaskRepository.save(task);
+            } else if (targetStatus == MaintenanceWorkOrderStatus.CANCELLED) {
+                task.setStatus(MaintenanceStatus.ON_HOLD);
+                maintenanceTaskRepository.save(task);
+            }
+        }
+
+        Equipment equipment = workOrder.getEquipment();
+        if (equipment != null && equipment.getId() != null && workOrder.getHospitalId() != null) {
+            if (targetStatus == MaintenanceWorkOrderStatus.IN_PROGRESS) {
+                if (equipment.getStatus() == EquipmentStatus.ACTIVE) {
+                    equipment.setStatus(EquipmentStatus.UNDER_MAINTENANCE);
+                    equipmentRepository.save(equipment);
+                }
+            } else if (targetStatus == MaintenanceWorkOrderStatus.COMPLETED
+                    || targetStatus == MaintenanceWorkOrderStatus.CANCELLED) {
+                long activeCount = workOrderRepository.countByHospitalIdAndEquipmentIdAndStatusIn(
+                        workOrder.getHospitalId(),
+                        equipment.getId(),
+                        ACTIVE_WORK_ORDER_STATUSES
+                );
+                if (activeCount == 0 && equipment.getStatus() == EquipmentStatus.UNDER_MAINTENANCE) {
+                    equipment.setStatus(EquipmentStatus.ACTIVE);
+                    equipmentRepository.save(equipment);
+                }
+            }
+        }
     }
 
     /**

@@ -152,4 +152,45 @@ public class MaintenanceWorkOrderValidator {
         return workOrder.getDueDate()
                 .isBefore(LocalDate.now());
     }
+
+    /**
+     * Validates that no active work order exists for the specified maintenance task.
+     */
+    public void validateNoActiveWorkOrderForTask(
+            boolean activeWorkOrderExists,
+            Long taskId
+    ) {
+        if (activeWorkOrderExists) {
+            throw new IllegalArgumentException(
+                    "An active work order already exists for maintenance task ID: " + taskId
+            );
+        }
+    }
+
+    /**
+     * Validates that equipment ID and maintenance task equipment ID match when creating a work order.
+     */
+    public void validateEquipmentTaskMatching(
+            Long equipmentId,
+            Long taskEquipmentId
+    ) {
+        if (equipmentId != null && taskEquipmentId != null && !equipmentId.equals(taskEquipmentId)) {
+            throw new IllegalArgumentException(
+                    "Equipment ID " + equipmentId + " does not match task equipment ID " + taskEquipmentId
+            );
+        }
+    }
+
+    /**
+     * Validates that maintenance task is eligible for work order binding.
+     */
+    public void validateTaskEligibilityForWorkOrder(
+            boolean isCompleted
+    ) {
+        if (isCompleted) {
+            throw new IllegalArgumentException(
+                    "Cannot create a work order for an already completed maintenance task"
+            );
+        }
+    }
 }
