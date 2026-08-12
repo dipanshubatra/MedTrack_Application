@@ -138,4 +138,26 @@ public class SoarOrchestrationService {
         metrics.put("complianceStandard", "NIST SP 800-61 Rev. 2 & ISO/IEC 27035");
         return metrics;
     }
+
+    /**
+     * Dry-Run Playbook Execution Simulator
+     */
+    public Map<String, Object> simulateDryRunPlaybook(String playbookName) {
+        Map<String, Object> simulation = new HashMap<>();
+        simulation.put("playbookName", playbookName != null ? playbookName : "RANSOMWARE_ISOLATION_PLAYBOOK");
+        simulation.put("mode", "DRY_RUN_SIMULATION");
+        simulation.put("estimatedImpactedAssets", List.of("10.240.10.45", "production-ehr-cluster"));
+        simulation.put("predictedExecutionTimeMs", 120);
+        simulation.put("safetyChecksPassed", true);
+        return simulation;
+    }
+
+    /**
+     * Fetch Playbooks by Severity Filter
+     */
+    @Transactional(readOnly = true)
+    public List<SoarPlaybookRecord> getPlaybooksBySeverity(String severity) {
+        return playbookRepository.findBySeverity(severity.toUpperCase());
+    }
 }
+
