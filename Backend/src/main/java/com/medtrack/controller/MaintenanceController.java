@@ -16,6 +16,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.medtrack.dto.MaintenanceScheduleAmendmentRequest;
+import com.medtrack.dto.MaintenanceScheduleAmendmentResponse;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -207,5 +210,24 @@ public class MaintenanceController {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("Invalid resource ID.");
         }
+    }
+
+    @PutMapping("/{id}/schedule")
+    public ResponseEntity<MaintenanceTask> amendSchedule(
+            @PathVariable Long id,
+            @Valid @RequestBody MaintenanceScheduleAmendmentRequest request,
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                maintenanceService.amendSchedule(id, request, authentication));
+    }
+
+    @GetMapping("/{id}/schedule/amendments")
+    public ResponseEntity<List<MaintenanceScheduleAmendmentResponse>> getScheduleAmendmentHistory(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                maintenanceService.getScheduleAmendmentHistory(id, authentication));
     }
 }
