@@ -13,12 +13,15 @@ import com.medtrack.model.EquipmentDisposalMethod;
 import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,6 +74,9 @@ class EquipmentDisposalWorkflowTest {
 
     @Autowired
     private MaintenanceWorkOrderRepository workOrderRepository;
+
+    @Autowired
+    private MaintenanceTaskRepository taskRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -332,5 +338,263 @@ class EquipmentDisposalWorkflowTest {
 
         assertEquals(EquipmentDisposalStatus.COMPLETED,
                 disposalService.completeDisposal(disposal.getId(), username).getStatus());
+    }
+
+    private MaintenanceTask maintenanceTask(Equipment asset, String code, MaintenanceStatus status) {
+        return taskRepository.saveAndFlush(MaintenanceTask.builder()
+                .taskCode(code)
+                .equipmentId(asset.getEquipmentCode())
+                .equipment(asset.getName())
+                .equipmentRecord(asset)
+                .hospital("Disposal Trust")
+                .hospitalId(hospital.getId())
+                .maintenanceType("Preventive")
+                .deadline(LocalDate.now().plusDays(5))
+                .description("Scheduled preventive maintenance task")
+                .priority("Normal")
+                .status(status)
+                .deleted(false)
+                .createdAt(LocalDateTime.now())
+                .build());
+    }
+
+    @Test
+    @DisplayName("an asset with scheduled maintenance tasks remaining cannot be decommissioned")
+    void completionIsRefusedWhilePreventiveMaintenanceTasksAreLive() {
+        Equipment asset = liveAsset("EQ-DISP-TASK-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        maintenanceTask(asset, "PM-TASK-001", MaintenanceStatus.SCHEDULED);
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username));
+
+        assertTrue(refused.getMessage().contains("PM-TASK-001"),
+                "The refusal message must specify the active task code: " + refused.getMessage());
+        assertEquals(EquipmentStatus.ACTIVE,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus(),
+                "The asset status must remain active when scheduled tasks are outstanding");
+    }
+
+    @Test
+    @DisplayName("every live maintenance task state blocks equipment decommissioning")
+    void everyLiveTaskStatusBlocksCompletion() {
+        for (MaintenanceStatus status : List.of(
+                MaintenanceStatus.SCHEDULED,
+                MaintenanceStatus.IN_PROGRESS,
+                MaintenanceStatus.NEEDS_PART,
+                MaintenanceStatus.ON_HOLD)) {
+
+            Equipment asset = liveAsset("EQ-DISP-TSK-" + status.name());
+            EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                    asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+            disposalService.approveDisposal(disposal.getId(), username);
+            maintenanceTask(asset, "PM-TSK-00" + status.ordinal(), status);
+
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                    () -> disposalService.completeDisposal(disposal.getId(), username),
+                    status + " task state must block equipment decommissioning");
+
+            assertTrue(exception.getMessage().contains("PM-TSK-00" + status.ordinal()));
+        }
+    }
+
+    @Test
+    @DisplayName("completed maintenance tasks do not block equipment decommissioning")
+    void completedTasksDoNotBlockDecommissioning() {
+        Equipment asset = liveAsset("EQ-DISP-TASK-2");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        maintenanceTask(asset, "PM-TASK-100", MaintenanceStatus.COMPLETED);
+
+        EquipmentDisposalResponse completed = disposalService.completeDisposal(disposal.getId(), username);
+
+        assertEquals(EquipmentDisposalStatus.COMPLETED, completed.getStatus());
+        assertEquals(EquipmentStatus.DISPOSED,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("active tasks on a different equipment record do not block this disposal")
+    void taskOnAnotherAssetDoesNotBlockCompletion() {
+        Equipment asset = liveAsset("EQ-DISP-TASK-3");
+        Equipment neighbour = liveAsset("EQ-DISP-TASK-4");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        maintenanceTask(neighbour, "PM-TASK-200", MaintenanceStatus.SCHEDULED);
+
+        assertEquals(EquipmentDisposalStatus.COMPLETED,
+                disposalService.completeDisposal(disposal.getId(), username).getStatus());
+    }
+
+    @Test
+    @DisplayName("both active work orders and active maintenance tasks block equipment decommissioning")
+    void bothWorkOrdersAndTasksBlockDecommissioning() {
+        Equipment asset = liveAsset("EQ-DISP-DUAL-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        workOrder(asset, "WO-DUAL-001", MaintenanceWorkOrderStatus.IN_PROGRESS);
+        maintenanceTask(asset, "PM-DUAL-001", MaintenanceStatus.IN_PROGRESS);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username));
+
+        assertTrue(exception.getMessage().contains("WO-DUAL-001") || exception.getMessage().contains("PM-DUAL-001"),
+                "Either outstanding work order or task must cause decommissioning refusal");
+    }
+
+    @Test
+    @DisplayName("decommissioning exception explicitly formats multiple open task codes")
+    void taskValidationMessageFormatsMultipleOpenTaskCodes() {
+        Equipment asset = liveAsset("EQ-DISP-MULTI-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        maintenanceTask(asset, "PM-M-01", MaintenanceStatus.SCHEDULED);
+        maintenanceTask(asset, "PM-M-02", MaintenanceStatus.NEEDS_PART);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username));
+
+        assertTrue(exception.getMessage().contains("PM-M-01"), "Error message should contain PM-M-01");
+        assertTrue(exception.getMessage().contains("PM-M-02"), "Error message should contain PM-M-02");
+    }
+
+    @Test
+    @DisplayName("soft deleted maintenance tasks do not block equipment decommissioning")
+    void softDeletedTasksDoNotBlockDecommissioning() {
+        Equipment asset = liveAsset("EQ-DISP-DEL-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        MaintenanceTask task = maintenanceTask(asset, "PM-DEL-01", MaintenanceStatus.SCHEDULED);
+        task.setDeleted(true);
+        task.setDeletedAt(LocalDateTime.now());
+        task.setDeletedBy(username);
+        taskRepository.saveAndFlush(task);
+
+        EquipmentDisposalResponse completed = disposalService.completeDisposal(disposal.getId(), username);
+
+        assertEquals(EquipmentDisposalStatus.COMPLETED, completed.getStatus());
+        assertEquals(EquipmentStatus.DISPOSED,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("data sanitization can be recorded while tasks are pending but completion fails until tasks resolve")
+    void dataSanitizationCanBeConfirmedPriorToTaskResolution() {
+        Equipment asset = liveAsset("EQ-DISP-SAN-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.DONATION, true), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        DataSanitizationRequest sanitization = new DataSanitizationRequest();
+        sanitization.setDetails("Patient data wiped from NVMe SSD");
+        EquipmentDisposalResponse sanitised =
+                disposalService.recordDataSanitization(disposal.getId(), sanitization, username);
+        assertTrue(sanitised.getDataSanitizationConfirmed());
+
+        MaintenanceTask activeTask = maintenanceTask(asset, "PM-SAN-01", MaintenanceStatus.IN_PROGRESS);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username),
+                "Completion must fail while active tasks exist even if data sanitization is confirmed");
+
+        activeTask.setStatus(MaintenanceStatus.COMPLETED);
+        activeTask.setCompletedAt(LocalDateTime.now());
+        taskRepository.saveAndFlush(activeTask);
+
+        EquipmentDisposalResponse completed = disposalService.completeDisposal(disposal.getId(), username);
+        assertEquals(EquipmentDisposalStatus.COMPLETED, completed.getStatus());
+        assertEquals(EquipmentStatus.DISPOSED,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("task in NEEDS_PART state blocks equipment decommissioning")
+    void taskInNeedsPartStateBlocksDecommissioning() {
+        Equipment asset = liveAsset("EQ-DISP-PART-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        maintenanceTask(asset, "PM-PART-01", MaintenanceStatus.NEEDS_PART);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username));
+
+        assertTrue(exception.getMessage().contains("PM-PART-01"));
+        assertEquals(EquipmentStatus.ACTIVE,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("task in ON_HOLD state blocks equipment decommissioning")
+    void taskInOnHoldStateBlocksDecommissioning() {
+        Equipment asset = liveAsset("EQ-DISP-HOLD-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        maintenanceTask(asset, "PM-HOLD-01", MaintenanceStatus.ON_HOLD);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username));
+
+        assertTrue(exception.getMessage().contains("PM-HOLD-01"));
+        assertEquals(EquipmentStatus.ACTIVE,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("MaintenanceTaskRepository query returns only tasks matching hospital and equipment record")
+    void repositoryQueryFiltersCorrectlyByHospitalAndEquipmentRecord() {
+        Equipment asset = liveAsset("EQ-DISP-REPO-1");
+        Equipment targetAsset = liveAsset("EQ-DISP-REPO-2");
+
+        maintenanceTask(asset, "PM-REPO-01", MaintenanceStatus.SCHEDULED);
+        MaintenanceTask targetTask = maintenanceTask(targetAsset, "PM-REPO-02", MaintenanceStatus.SCHEDULED);
+
+        List<MaintenanceTask> tasks = taskRepository
+                .findByHospitalIdAndEquipmentRecordId(hospital.getId(), targetAsset.getId());
+
+        assertEquals(1, tasks.size());
+        assertEquals(targetTask.getId(), tasks.get(0).getId());
+        assertEquals("PM-REPO-02", tasks.get(0).getTaskCode());
+    }
+
+    @Test
+    @DisplayName("completing decommissioning after resolving all active tasks succeeds and mints certificate")
+    void completingDisposalAfterResolvingTasksSucceedsAndMintsCertificate() {
+        Equipment asset = liveAsset("EQ-DISP-RESOLVE-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SALE, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        MaintenanceTask task1 = maintenanceTask(asset, "PM-RES-01", MaintenanceStatus.SCHEDULED);
+        MaintenanceTask task2 = maintenanceTask(asset, "PM-RES-02", MaintenanceStatus.IN_PROGRESS);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> disposalService.completeDisposal(disposal.getId(), username));
+
+        task1.setStatus(MaintenanceStatus.COMPLETED);
+        task1.setCompletedAt(LocalDateTime.now());
+        task2.setStatus(MaintenanceStatus.COMPLETED);
+        task2.setCompletedAt(LocalDateTime.now());
+        taskRepository.saveAndFlush(task1);
+        taskRepository.saveAndFlush(task2);
+
+        EquipmentDisposalResponse completed = disposalService.completeDisposal(disposal.getId(), username);
+
+        assertEquals(EquipmentDisposalStatus.COMPLETED, completed.getStatus());
+        assertNotNull(completed.getCertificateNumber());
+        assertTrue(completed.getCertificateNumber().startsWith("DSP-"));
+        assertEquals(EquipmentStatus.DISPOSED,
+                equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
     }
 }
