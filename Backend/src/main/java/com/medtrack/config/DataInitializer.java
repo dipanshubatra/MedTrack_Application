@@ -6,29 +6,41 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.model.*;
 import com.medtrack.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import com.medtrack.model.EquipmentStatus;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
 import java.time.LocalDate;
+import java.util.Locale;
 
 /**
- * Bootstraps initial state for the local and testing H2 database environments on application startup.
+ * Bootstraps demo state for explicitly enabled local and test H2 environments.
  * Provides default users with different authorization roles (admin, technician, supplier),
  * sample medical equipment profiles, maintenance schedules, and initial equipment procurement orders.
  *
- * Designed with idempotent business-key checks to prevent data duplication across system restarts.
+ * <p>The initializer contains repository-known credentials and must never run implicitly or against
+ * a persistent production database. Bean creation therefore requires an explicit configuration
+ * flag, and {@link #run(String...)} verifies the live JDBC connection is H2 before the first write.
+ * Business-key checks keep intentional demo initialization idempotent across restarts.</p>
  */
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(
         name = "app.data-initializer.enabled",
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 public class DataInitializer implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
@@ -36,9 +48,12 @@ public class DataInitializer implements CommandLineRunner {
     private final MaintenanceTaskRepository maintenanceTaskRepository;
     private final EquipmentOrderRepository equipmentOrderRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DataSource dataSource;
 
     @Override
     public void run(String... args) {
+        assertDemoDatabase();
+
         // 1. Seed Users (Roles: Admin, Technician, Supplier)
         // Ensure default accounts exist for localized developer testing.
         // Hashing passwords using PasswordEncoder to ensure security best practices even in transient H2 databases.
@@ -101,7 +116,7 @@ public class DataInitializer implements CommandLineRunner {
                     .serialNumber("SN-9921-A")
                     .department("Radiology")
                     .status(EquipmentStatus.ACTIVE)
-                    .category("Imaging")
+                    .category(EquipmentCategory.IMAGING)
                     .purchaseDate(LocalDate.now().minusYears(2))
                     .hospital(hospital)
                     .build());
@@ -115,7 +130,7 @@ public class DataInitializer implements CommandLineRunner {
                     .serialNumber("SN-1102-B")
                     .department("ICU")
                     .status(EquipmentStatus.UNDER_MAINTENANCE)
-                    .category("Respiratory")
+                    .category(EquipmentCategory.RESPIRATORY)
                     .purchaseDate(LocalDate.now().minusMonths(6))
                     .hospital(hospital)
                     .build());
@@ -129,6 +144,8 @@ public class DataInitializer implements CommandLineRunner {
                     .orElseThrow(() -> new IllegalStateException("Seed MRI equipment was not created"));
             Equipment ventilator = equipmentRepository.findByEquipmentCode("EQ-1002")
                     .orElseThrow(() -> new IllegalStateException("Seed ventilator equipment was not created"));
+            User technician = userRepository.findByEmail("tech@medtrack.com")
+                    .orElseThrow(() -> new IllegalStateException("Seed technician user was not created"));
 
             maintenanceTaskRepository.save(MaintenanceTask.builder()
                     .taskCode("MNT-5001")
@@ -157,6 +174,7 @@ public class DataInitializer implements CommandLineRunner {
                     .priority("Critical")
                     .status(MaintenanceStatus.IN_PROGRESS)
                     .assignedTechnician("tech@medtrack.com")
+                    .assignedTechnicianRecord(technician)
                     .description("Oxygen sensor failure reported. Requires calibration.")
                     .build());
         }
@@ -176,6 +194,26 @@ public class DataInitializer implements CommandLineRunner {
                     .build());
         }
 
-        System.out.println(">> Database Seeded Successfully!");
+        log.info("Database seeded successfully!");
+    }
+
+    /**
+     * Rejects accidental demo initialization on persistent databases before any repository is used.
+     * The URL comes from the active JDBC connection rather than configuration text, so aliases,
+     * environment overrides, and runtime routing cannot bypass the check.
+     */
+    private void assertDemoDatabase() {
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metadata = connection.getMetaData();
+            String jdbcUrl = metadata == null ? null : metadata.getURL();
+            if (jdbcUrl == null || !jdbcUrl.toLowerCase(Locale.ROOT).startsWith("jdbc:h2:")) {
+                throw new IllegalStateException(
+                        "Demo data initialization is restricted to H2 databases; active JDBC URL was "
+                                + (jdbcUrl == null ? "unavailable" : jdbcUrl));
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException(
+                    "Unable to verify the database before demo data initialization", exception);
+        }
     }
 }

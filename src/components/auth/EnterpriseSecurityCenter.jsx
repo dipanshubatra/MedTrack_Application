@@ -32,7 +32,37 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
-  AlertCircle
+  AlertCircle,
+  Award,
+  Network,
+  Package,
+  BrainCircuit,
+  Binary,
+  Radio,
+  FileHeart,
+  Skull,
+  Cloud,
+  Usb,
+  UserCheck,
+  HeartPulse,
+  Route,
+  Dna,
+  Brain,
+  Boxes,
+  Siren,
+  Atom,
+  Stamp,
+  Share2,
+  Radar,
+  IdCard,
+  Power,
+  RotateCw,
+  SlidersHorizontal,
+  Target,
+  Bot,
+  Cpu,
+  HardDrive,
+  ClipboardCheck
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -47,6 +77,50 @@ import SiemSecurityAnalyticsPanel from "./SiemSecurityAnalyticsPanel";
 import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
+import SbomPanel from "./SbomPanel";
+import HipaaDeidentificationPanel from "./HipaaDeidentificationPanel";
+import ZeroTrustGovernancePanel from "./ZeroTrustGovernancePanel";
+import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
+import AiModelGovernancePanel from "./AiModelGovernancePanel";
+import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
+import IotSecurityPanel from "./IotSecurityPanel";
+import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
+import ThreatIntelPanel from "./ThreatIntelPanel";
+import HealthcareCspmPanel from "./HealthcareCspmPanel";
+import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
+import PamSessionPanel from "./PamSessionPanel";
+import RpmTelemetryPanel from "./RpmTelemetryPanel";
+import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
+import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
+import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
+import BiomedicalBlockchainPanel from "./BiomedicalBlockchainPanel";
+import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
+import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
+import QkdKeyDistributionPanel from "./QkdKeyDistributionPanel";
+import BiomedicalAiWatermarkPanel from "./BiomedicalAiWatermarkPanel";
+import HomomorphicEncryptionPanel from "./HomomorphicEncryptionPanel";
+import BiomedicalMpcHsmPanel from "./BiomedicalMpcHsmPanel";
+import HealthcareCtemPanel from "./HealthcareCtemPanel";
+import BiomedicalSovereignIdentityPanel from "./BiomedicalSovereignIdentityPanel";
+import BiomedicalIncidentCommandPanel from "./BiomedicalIncidentCommandPanel";
+import BiomedicalDataMeshPanel from "./BiomedicalDataMeshPanel";
+import BiomedicalKeyLifecyclePanel from "./BiomedicalKeyLifecyclePanel";
+import BiomedicalSecureEnclavePanel from "./BiomedicalSecureEnclavePanel";
+import BiomedicalDifferentialPrivacyPanel from "./BiomedicalDifferentialPrivacyPanel";
+import BiomedicalBasPenetrationTestingPanel from "./BiomedicalBasPenetrationTestingPanel";
+import BiomedicalAiAgentGovernancePanel from "./BiomedicalAiAgentGovernancePanel";
+import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
+import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
+import BiomedicalCtiStixTaxiiPanel from "./BiomedicalCtiStixTaxiiPanel";
+import BiomedicalContinuousCompliancePanel from "./BiomedicalContinuousCompliancePanel";
+import BiomedicalFheMpcTelemetryPanel from "./BiomedicalFheMpcTelemetryPanel";
+import BiomedicalAiWatermarkC2paPanel from "./BiomedicalAiWatermarkC2paPanel";
+import BiomedicalQkdPqcVpnPanel from "./BiomedicalQkdPqcVpnPanel";
+import BiomedicalZeroTrustEbpfPanel from "./BiomedicalZeroTrustEbpfPanel";
+import BiomedicalIncidentCommandDrPanel from "./BiomedicalIncidentCommandDrPanel";
+import BiomedicalZeroTrustDataMeshPanel from "./BiomedicalZeroTrustDataMeshPanel";
+import BiomedicalKeyLifecyclePqcPanel from "./BiomedicalKeyLifecyclePqcPanel";
+import BiomedicalConfidentialComputePanel from "./BiomedicalConfidentialComputePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -379,7 +453,52 @@ export default function EnterpriseSecurityCenter() {
           { id: "siem", label: "SIEM & Log Analytics", icon: Activity },
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
-          { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network }
+          { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
+          { id: "grc", label: "GRC & Audit Ledger", icon: Award },
+          { id: "sbom", label: "SBOM & Supply Chain", icon: Package },
+          { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff },
+          { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders },
+          { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
+          { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
+          { id: "iot", label: "IoMT & Medical Device Security", icon: Radio },
+          { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart },
+          { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull },
+          { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud },
+          { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb },
+          { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck },
+          { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse },
+          { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route },
+          { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna },
+          { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain },
+          { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes },
+          { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network },
+          { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren },
+          { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom },
+          { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp },
+          { id: "fhe", label: "Homomorphic FHE & Confidential Compute", icon: Lock },
+          { id: "mpchsm", label: "Sovereign MPC HSM Key Custody", icon: Share2 },
+          { id: "ctem", label: "Healthcare CTEM & Attack Surface", icon: Radar },
+          { id: "didvc", label: "Sovereign Identity (W3C DID/VC)", icon: IdCard },
+          { id: "incidentcommand", label: "Incident Command & Air-Gap DR", icon: Power },
+          { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes },
+          { id: "keylifecycle", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
+          { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu },
+          { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal },
+          { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target },
+          { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot },
+          { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound },
+          { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive },
+          { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar },
+          { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck },
+          { id: "fhempc", label: "FHE & Multi-Party Compute Telemetry", icon: Cpu },
+          { id: "aiwatermarkc2pa", label: "AI Watermark & C2PA Provenance", icon: Stamp },
+          { id: "qkdppcvpn", label: "QKD & Post-Quantum VPN Tunnels", icon: Radio },
+          { id: "ztebpf", label: "Zero-Trust & eBPF Perimeter Defense", icon: Network },
+          { id: "icdr", label: "Incident Command & Air-Gap DR Vaults", icon: Power },
+          { id: "ztdatamesh", label: "Zero-Trust Data Mesh & ODRL Policies", icon: Boxes },
+          { id: "keylifecyclepqc", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
+          { id: "ccenclave", label: "Confidential Compute & Enclaves", icon: Cpu },
+          { id: "dpsynthetic", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -768,6 +887,10 @@ export default function EnterpriseSecurityCenter() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
       {/* TAB 7: THREAT ENGINE & SOAR */}
       {selectedTab === "threats" && (
         <ThreatDetectionSoarPanel />
@@ -791,6 +914,231 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 11: ZTNA & MICROSEGMENTATION */}
       {selectedTab === "ztna" && (
         <ZeroTrustNetworkPanel />
+      )}
+
+      {/* TAB 12: GRC & CONTINUOUS AUDIT LEDGER */}
+      {selectedTab === "grc" && (
+        <GrcAuditCompliancePanel />
+      )}
+
+      {/* TAB 13: SBOM & SUPPLY CHAIN SECURITY */}
+      {selectedTab === "sbom" && (
+        <SbomPanel />
+      )}
+
+      {/* TAB 14: HIPAA ANONYMIZATION & PHI DE-IDENTIFICATION */}
+      {selectedTab === "deidentification" && (
+        <HipaaDeidentificationPanel />
+      )}
+
+      {/* TAB 15: ZERO TRUST IDENTITY GOVERNANCE */}
+      {selectedTab === "ztgovernance" && (
+        <ZeroTrustGovernancePanel />
+      )}
+
+      {/* TAB 16: AI MODEL RISK & ALGORITHMIC BIAS GOVERNANCE */}
+      {selectedTab === "aimodel" && (
+        <AiModelGovernancePanel />
+      )}
+
+      {/* TAB 17: POST-QUANTUM CRYPTOGRAPHY & QUANTUM SECURITY ENGINE */}
+      {selectedTab === "pqc" && (
+        <PostQuantumCryptoPanel />
+      )}
+
+      {/* TAB 18: IOMT MEDICAL DEVICE CYBERSECURITY CONSOLE */}
+      {selectedTab === "iot" && (
+        <IotSecurityPanel />
+      )}
+
+      {/* TAB 19: FHIR R4 INTEROPERABILITY & EHR SECURITY CONSOLE */}
+      {selectedTab === "fhir" && (
+        <FhirEhrSecurityPanel />
+      )}
+
+      {/* TAB 20: STIX 2.1 / TAXII 2.1 BIOMEDICAL THREAT INTELLIGENCE CONSOLE */}
+      {selectedTab === "threatintel" && (
+        <ThreatIntelPanel />
+      )}
+
+      {/* TAB 21: HEALTHCARE CLOUD SECURITY POSTURE MANAGEMENT (CSPM) */}
+      {selectedTab === "cspm" && (
+        <HealthcareCspmPanel />
+      )}
+
+      {/* TAB 22: FIDO2 WEBAUTHN HARDWARE SECURITY KEYS & BIOMETRIC PASSKEYS */}
+      {selectedTab === "fido2" && (
+        <Fido2WebAuthnPanel />
+      )}
+
+      {/* TAB 23: PRIVILEGED ACCESS MANAGEMENT (PAM) & SESSION RECORDING */}
+      {selectedTab === "pam" && (
+        <PamSessionPanel />
+      )}
+
+      {/* TAB 24: REMOTE PATIENT MONITORING (RPM) & BIOMETRIC TELEMETRY */}
+      {selectedTab === "rpm" && (
+        <RpmTelemetryPanel />
+      )}
+
+      {/* TAB 25: HEALTHCARE API GATEWAY & OAUTH 2.1 TOKEN SECURITY */}
+      {selectedTab === "apigateway" && (
+        <ApiGatewaySecurityPanel />
+      )}
+
+      {/* TAB 26: GENOMIC EHR PRIVACY & DNA DATA CRYPTOGRAPHIC VAULT */}
+      {selectedTab === "genomics" && (
+        <GenomicDataVaultPanel />
+      )}
+
+      {/* TAB 27: CLINICAL AI MODEL SECURITY & ADVERSARIAL ATTACK DEFENSE */}
+      {selectedTab === "clinicalai" && (
+        <ClinicalAiDefensePanel />
+      )}
+
+      {/* TAB 28: BIOMEDICAL BLOCKCHAIN AUDIT & CRYPTOGRAPHIC PROVENANCE */}
+      {selectedTab === "blockchain" && (
+        <BiomedicalBlockchainPanel />
+      )}
+
+      {/* TAB 29: ZERO TRUST SOFTWARE-DEFINED PERIMETER (SDP) */}
+      {selectedTab === "sdp" && (
+        <ZeroTrustSdpPanel />
+      )}
+
+      {/* TAB 30: BIOMEDICAL SOAR & INCIDENT RESPONSE AUTOMATION */}
+      {selectedTab === "biomedsoar" && (
+        <BiomedicalSoarPanel />
+      )}
+
+      {/* TAB 31: QUANTUM KEY DISTRIBUTION (QKD) & POST-QUANTUM MESH */}
+      {selectedTab === "qkd" && (
+        <QkdKeyDistributionPanel />
+      )}
+
+      {/* TAB 32: BIOMEDICAL AI WATERMARKING & C2PA PROVENANCE */}
+      {selectedTab === "watermark" && (
+        <BiomedicalAiWatermarkPanel />
+      )}
+
+      {/* TAB 33: HOMOMORPHIC ENCRYPTION & CONFIDENTIAL COMPUTE */}
+      {selectedTab === "fhe" && (
+        <HomomorphicEncryptionPanel />
+      )}
+
+      {/* TAB 34: SOVEREIGN MPC KEY CUSTODY & FIPS 140-3 HSM */}
+      {selectedTab === "mpchsm" && (
+        <BiomedicalMpcHsmPanel />
+      )}
+
+      {/* TAB 35: HEALTHCARE CONTINUOUS THREAT EXPOSURE MANAGEMENT (CTEM) */}
+      {selectedTab === "ctem" && (
+        <HealthcareCtemPanel />
+      )}
+
+      {/* TAB 36: BIOMEDICAL SELF-SOVEREIGN IDENTITY (W3C DID / VC) */}
+      {selectedTab === "didvc" && (
+        <BiomedicalSovereignIdentityPanel />
+      )}
+
+      {/* TAB 37: BIOMEDICAL INCIDENT COMMAND & CYBER RESILIENCE */}
+      {selectedTab === "incidentcommand" && (
+        <BiomedicalIncidentCommandPanel />
+      )}
+
+      {/* TAB 38: BIOMEDICAL ZERO-TRUST DATA MESH & ODRL POLICIES */}
+      {selectedTab === "datamesh" && (
+        <BiomedicalDataMeshPanel />
+      )}
+
+      {/* TAB 39: BIOMEDICAL CRYPTOGRAPHIC KEY LIFECYCLE & PQC ZEROIZATION */}
+      {selectedTab === "keylifecycle" && (
+        <BiomedicalKeyLifecyclePanel />
+      )}
+
+      {/* TAB 40: BIOMEDICAL CONFIDENTIAL COMPUTE & HARDWARE ENCLAVES */}
+      {selectedTab === "secureenclave" && (
+        <BiomedicalSecureEnclavePanel />
+      )}
+
+      {/* TAB 41: BIOMEDICAL DIFFERENTIAL PRIVACY & SYNTHETIC HEALTH DATA */}
+      {selectedTab === "diffprivacy" && (
+        <BiomedicalDifferentialPrivacyPanel />
+      )}
+
+      {/* TAB 42: BIOMEDICAL AUTOMATED BAS & PENETRATION TESTING */}
+      {selectedTab === "baspentest" && (
+        <BiomedicalBasPenetrationTestingPanel />
+      )}
+
+      {/* TAB 43: BIOMEDICAL AUTONOMOUS AI AGENT GOVERNANCE */}
+      {selectedTab === "aiagent" && (
+        <BiomedicalAiAgentGovernancePanel />
+      )}
+
+      {/* TAB 44: BIOMEDICAL ZKP VERIFIABLE EHR & CREDENTIALS */}
+      {selectedTab === "zkpehr" && (
+        <BiomedicalZkpVerifiableEhrPanel />
+      )}
+
+      {/* TAB 45: BIOMEDICAL HSM KEY MANAGEMENT & FIPS ATTESTATION */}
+      {selectedTab === "hsmattest" && (
+        <BiomedicalHsmAttestationPanel />
+      )}
+
+      {/* TAB 46: BIOMEDICAL CTI & STIX/TAXII THREAT SHARING */}
+      {selectedTab === "ctistix" && (
+        <BiomedicalCtiStixTaxiiPanel />
+      )}
+
+      {/* TAB 47: BIOMEDICAL CONTINUOUS COMPLIANCE & AUDIT TRAILS */}
+      {selectedTab === "contcompliance" && (
+        <BiomedicalContinuousCompliancePanel />
+      )}
+
+      {/* TAB 48: BIOMEDICAL FHE & MULTI-PARTY COMPUTE TELEMETRY */}
+      {selectedTab === "fhempc" && (
+        <BiomedicalFheMpcTelemetryPanel />
+      )}
+
+      {/* TAB 49: BIOMEDICAL CLINICAL AI WATERMARKING & C2PA PROVENANCE */}
+      {selectedTab === "aiwatermarkc2pa" && (
+        <BiomedicalAiWatermarkC2paPanel />
+      )}
+
+      {/* TAB 50: BIOMEDICAL QKD & POST-QUANTUM VPN TUNNELS */}
+      {selectedTab === "qkdppcvpn" && (
+        <BiomedicalQkdPqcVpnPanel />
+      )}
+
+      {/* TAB 51: BIOMEDICAL ZERO-TRUST & eBPF PERIMETER DEFENSE */}
+      {selectedTab === "ztebpf" && (
+        <BiomedicalZeroTrustEbpfPanel />
+      )}
+
+      {/* TAB 52: BIOMEDICAL INCIDENT COMMAND & AIR-GAP DR VAULTS */}
+      {selectedTab === "icdr" && (
+        <BiomedicalIncidentCommandDrPanel />
+      )}
+
+      {/* TAB 53: BIOMEDICAL ZERO-TRUST DATA MESH & ODRL POLICIES */}
+      {selectedTab === "ztdatamesh" && (
+        <BiomedicalZeroTrustDataMeshPanel />
+      )}
+
+      {/* TAB 54: BIOMEDICAL KEY LIFECYCLE & PQC ZEROIZATION */}
+      {selectedTab === "keylifecyclepqc" && (
+        <BiomedicalKeyLifecyclePqcPanel />
+      )}
+
+      {/* TAB 55: BIOMEDICAL CONFIDENTIAL COMPUTE & HARDWARE SECURE ENCLAVES */}
+      {selectedTab === "ccenclave" && (
+        <BiomedicalConfidentialComputePanel />
+      )}
+
+      {/* TAB 56: BIOMEDICAL DIFFERENTIAL PRIVACY & SYNTHETIC DATA */}
+      {selectedTab === "dpsynthetic" && (
+        <BiomedicalDifferentialPrivacyPanel />
       )}
 
       {/* 4. MODALS */}

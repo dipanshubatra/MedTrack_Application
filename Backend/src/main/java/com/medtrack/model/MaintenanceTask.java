@@ -1,6 +1,7 @@
 package com.medtrack.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.medtrack.auth.model.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,6 +13,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLRestriction;
 import lombok.ToString;
 
 import java.time.LocalDate;
@@ -23,6 +25,7 @@ import static com.medtrack.validation.MaintenanceValidationLimits.SIGNATURE_MAX_
 
 @Entity
 @Table(name = "maintenance_tasks")
+@SQLRestriction("deleted = false")
 @Data
 @Builder
 @NoArgsConstructor
@@ -53,6 +56,12 @@ public class MaintenanceTask {
     @EqualsAndHashCode.Exclude
     private Equipment equipmentRecord;
 
+    // Read-only access to the relationship key lets ownership checks inspect the retained
+    // equipment row even when that equipment has been archived and its entity is SQL-restricted.
+    @Column(name = "equipment_record_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private Long equipmentRecordId;
+
     @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Hospital name must not exceed 255 characters")
     @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String hospital;
@@ -71,6 +80,15 @@ public class MaintenanceTask {
     @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Assigned technician must not exceed 255 characters")
     @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String assignedTechnician;
+
+    // Stable authorization identity. The email field above remains the API-facing value.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_technician_record_id")
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private User assignedTechnicianRecord;
+
     @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Description must not exceed 255 characters")
     @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String description;
@@ -109,6 +127,55 @@ public class MaintenanceTask {
     @PositiveOrZero(message = "Recurrence period cannot be negative")
     private Integer recurrencePeriodDays;
 
+    // Incremented for every hospital-approved schedule amendment.
+    @Builder.Default
+    @Column(name = "schedule_revision", nullable = false)
+    @JsonIgnore
+    private Integer scheduleRevision = 0;
+
+    // Preventive-maintenance automation linkage: which rule generated this task, and from which run.
+    // A null ruleId means the task was scheduled manually and is outside the automation engine.
+    @Column(name = "policy_rule_id")
+    private Long policyRuleId;
+
+    @Column(name = "generation_run_id")
+    private Long generationRunId;
+
+    /**
+     * SLA state of an open task, derived from the generating rule's warning/breach windows.
+     * Stored so queries and the frontend can filter without recomputing thresholds on every read.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sla_state", length = 50)
+    @Builder.Default
+    private SlaState slaState = SlaState.UPCOMING;
+
+    // The day the task is considered overdue. Computed from deadline + slaBreachDays.
+    @Column(name = "sla_breached_at")
+    private LocalDateTime slaBreachedAt;
+
+    // SLA timestamps persisted for compliance evidence and dashboards.
+    @Column(name = "sla_warning_at")
+    private LocalDateTime slaWarningAt;
+
+    // Who an escalated task was routed to (e.g. a hospital admin email).
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Escalated to must not exceed 255 characters")
+    @Column(name = "escalated_to", length = SHORT_TEXT_MAX_LENGTH)
+    private String escalatedTo;
+
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * Soft delete fields - records are never hard deleted for audit compliance
+     */
+    @Builder.Default
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
 }

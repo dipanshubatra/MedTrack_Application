@@ -1,12 +1,16 @@
 package com.medtrack.service;
 
+import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.dto.MaintenanceAssignmentRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
@@ -26,10 +30,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -47,6 +54,7 @@ public class MaintenanceService {
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
     private final EquipmentRepository equipmentRepository;
+    private final MaintenanceActivityService activityService;
 
     // The lifecycle is centralized here so every update path follows the same rules.
     private static final Map<MaintenanceStatus, Set<MaintenanceStatus>> ALLOWED_TRANSITIONS = Map.of(
@@ -59,14 +67,14 @@ public class MaintenanceService {
             MaintenanceStatus.ON_HOLD, EnumSet.of(MaintenanceStatus.IN_PROGRESS),
             MaintenanceStatus.COMPLETED, EnumSet.noneOf(MaintenanceStatus.class)
     );
-/// updates:-
     public List<MaintenanceTask> getAllTasks(Authentication authentication) {
-        // Scope lists from the trusted JWT identity instead of a client-supplied filter.
         if (hasRole(authentication, "HOSPITAL")) {
-            return taskRepository.findByHospitalId(getHospitalForUser(authentication.getName()).getId());
+            Long hospitalId = getHospitalForUser(authentication).getId();
+            return taskRepository.findByHospitalId(hospitalId);
         }
         if (hasRole(authentication, "TECHNICIAN")) {
-            return taskRepository.findByAssignedTechnician(authentication.getName());
+            return taskRepository.findByAssignedTechnicianId(
+                    getAuthenticatedTechnician(authentication).getId());
         }
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
@@ -82,13 +90,16 @@ public class MaintenanceService {
         Pageable pageable = resolvePageable(page, size);
 
         if (hasRole(authentication, "HOSPITAL")) {
-            Long hospitalId = getHospitalForUser(authentication.getName()).getId();
+            Long hospitalId = getHospitalForUser(authentication).getId();
             return taskRepository.findByHospitalIdWithFilters(
-                    hospitalId, status, normalizedEquipmentId, pageable);
+                    hospitalId, status, normalizedEquipmentId, pageable).getContent();
         }
         if (hasRole(authentication, "TECHNICIAN")) {
-            return taskRepository.findByAssignedTechnicianWithFilters(
-                    authentication.getName(), status, normalizedEquipmentId, pageable);
+            return taskRepository.findByAssignedTechnicianIdWithFilters(
+                    getAuthenticatedTechnician(authentication).getId(),
+                    status,
+                    normalizedEquipmentId,
+                    pageable).getContent();
         }
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
@@ -99,10 +110,12 @@ public class MaintenanceService {
 
     @Transactional
     public MaintenanceTask scheduleTask(MaintenanceCreateRequest request, Authentication authentication) {
-        Hospital hospital = getHospitalForUser(authentication.getName());
+        Hospital hospital = getHospitalForUser(authentication);
         validateSchedulingRequest(request);
         Equipment equipment = resolveOwnedEquipment(request.getEquipmentId().trim(), hospital.getId());
-        String assignedTechnician = resolveAssignedTechnician(request.getAssignedTechnician());
+        User assignedTechnician = resolveEligibleTechnician(request.getAssignedTechnician());
+
+        validateNoDuplicateActiveTask(hospital.getId(), equipment, request.getMaintenanceType().trim());
 
         MaintenanceTask task = MaintenanceTask.builder()
                 .taskCode("MNT-" + UUID.randomUUID())
@@ -113,7 +126,8 @@ public class MaintenanceService {
                 .hospitalId(hospital.getId())
                 .maintenanceType(request.getMaintenanceType().trim())
                 .deadline(request.getDeadline())
-                .assignedTechnician(assignedTechnician)
+                .assignedTechnician(assignedTechnician != null ? assignedTechnician.getEmail() : null)
+                .assignedTechnicianRecord(assignedTechnician)
                 .description(request.getDescription())
                 .priority(request.getPriority())
                 .image(request.getImage())
@@ -122,18 +136,58 @@ public class MaintenanceService {
                 .createdAt(LocalDateTime.now())
                 .build();
         validateOwnershipInvariant(task);
-        return taskRepository.save(task);
+        MaintenanceTask savedTask = taskRepository.save(task);
+        activityService.recordCreated(savedTask, hospital.getUser(), "manually");
+        return savedTask;
+    }
+
+    @Transactional
+    public MaintenanceTask assignTechnician(
+            Long id,
+            MaintenanceAssignmentRequest request,
+            Authentication authentication) {
+        if (request == null
+                || request.getAssignedTechnician() == null
+                || request.getAssignedTechnician().isBlank()) {
+            throw new IllegalArgumentException("Assigned technician is required");
+        }
+
+        Hospital hospital = getHospitalForUser(authentication);
+        MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Maintenance task not found or access denied"));
+        validateOwnershipInvariant(task);
+
+        if (task.getStatus() != MaintenanceStatus.SCHEDULED) {
+            throw new InvalidStatusTransitionException(
+                    "Technician assignment can only be changed while the task is Scheduled");
+        }
+
+        String previousAssignee = task.getAssignedTechnician();
+        User assignedTechnician = resolveEligibleTechnician(request.getAssignedTechnician());
+        task.setAssignedTechnician(assignedTechnician.getEmail());
+        task.setAssignedTechnicianRecord(assignedTechnician);
+        MaintenanceTask savedTask = taskRepository.save(task);
+        if (!Objects.equals(previousAssignee, savedTask.getAssignedTechnician())) {
+            activityService.recordAssignment(
+                    savedTask, hospital.getUser(), previousAssignee, savedTask.getAssignedTechnician());
+        }
+        return savedTask;
     }
 
     @Transactional
     public MaintenanceTask updateTask(Long id, MaintenanceUpdateRequest request, Authentication authentication) {
-        // A technician can update only a task explicitly assigned to their login email.
-        MaintenanceTask task = taskRepository.findByIdAndAssignedTechnicianForUpdate(id, authentication.getName())
+        // A technician can update only a task linked to their stable authenticated user ID.
+        User technician = getAuthenticatedTechnician(authentication);
+        MaintenanceTask task = taskRepository.findByIdAndAssignedTechnicianIdForUpdate(
+                        id, technician.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or not assigned to you"));
         validateOwnershipInvariant(task);
 
         MaintenanceStatus previousStatus = task.getStatus();
         validateTechnicianUpdate(task, request);
+
+        List<String> changedReportFields = changedReportFields(task, request);
 
         task.setStatus(request.getStatus());
         // Technician updates are partial: omitted optional report fields must not erase
@@ -159,34 +213,93 @@ public class MaintenanceService {
 
         MaintenanceTask savedTask = taskRepository.save(task);
 
+        if (previousStatus != savedTask.getStatus()) {
+            changedReportFields.add(0, "status");
+        }
+        activityService.recordTechnicianUpdate(
+                savedTask, technician, previousStatus, changedReportFields);
+
         // Generate recurrence only on the transition into COMPLETED, never on repeated saves.
         if (previousStatus != MaintenanceStatus.COMPLETED
                 && savedTask.getStatus() == MaintenanceStatus.COMPLETED
                 && savedTask.getRecurrencePeriodDays() != null
-                && savedTask.getRecurrencePeriodDays() > 0) {
+                && savedTask.getRecurrencePeriodDays() > 0
+                && isEquipmentEligibleForRecurrence(savedTask)) {
 
-            String recurringTechnician = resolveRecurringTechnician(savedTask.getAssignedTechnician());
-            MaintenanceTask nextTask = MaintenanceTask.builder()
-                    .taskCode("MNT-" + UUID.randomUUID())
-                    .equipmentId(savedTask.getEquipmentId())
-                    .equipment(savedTask.getEquipment())
-                    .equipmentRecord(savedTask.getEquipmentRecord())
-                    .hospital(savedTask.getHospital())
-                    .hospitalId(savedTask.getHospitalId())
-                    .maintenanceType(savedTask.getMaintenanceType() != null ? savedTask.getMaintenanceType() : "Recurring Preventive Maintenance")
-                    .deadline(java.time.LocalDate.now().plusDays(savedTask.getRecurrencePeriodDays()))
-                    .assignedTechnician(recurringTechnician)
-                    .description("Auto-scheduled recurring maintenance task based on completion of task: " + savedTask.getTaskCode())
-                    .priority(savedTask.getPriority())
-                    .status(MaintenanceStatus.SCHEDULED)
-                    .recurrencePeriodDays(savedTask.getRecurrencePeriodDays())
-                    .build();
+            String nextType = savedTask.getMaintenanceType() != null ? savedTask.getMaintenanceType().trim() : "Recurring Preventive Maintenance";
+            boolean hasDuplicate = savedTask.getEquipmentRecord() != null && taskRepository.existsActiveTaskForEquipmentWithCode(
+                    savedTask.getHospitalId(),
+                    savedTask.getEquipmentRecord().getId(),
+                    savedTask.getEquipmentId(),
+                    nextType,
+                    List.of(MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS, MaintenanceStatus.NEEDS_PART, MaintenanceStatus.ON_HOLD)
+            );
 
-            validateOwnershipInvariant(nextTask);
-            taskRepository.save(nextTask);
+            if (!hasDuplicate) {
+                User recurringTechnician = resolveRecurringTechnician(savedTask);
+                MaintenanceTask nextTask = MaintenanceTask.builder()
+                        .taskCode("MNT-" + UUID.randomUUID())
+                        .equipmentId(savedTask.getEquipmentId())
+                        .equipment(savedTask.getEquipment())
+                        .equipmentRecord(savedTask.getEquipmentRecord())
+                        .hospital(savedTask.getHospital())
+                        .hospitalId(savedTask.getHospitalId())
+                        .maintenanceType(nextType)
+                        .deadline(java.time.LocalDate.now().plusDays(savedTask.getRecurrencePeriodDays()))
+                        .assignedTechnician(recurringTechnician != null ? recurringTechnician.getEmail() : null)
+                        .assignedTechnicianRecord(recurringTechnician)
+                        .description("Auto-scheduled recurring maintenance task based on completion of task: " + savedTask.getTaskCode())
+                        .priority(savedTask.getPriority())
+                        .status(MaintenanceStatus.SCHEDULED)
+                        .recurrencePeriodDays(savedTask.getRecurrencePeriodDays())
+                        .createdAt(LocalDateTime.now())
+                        .build();
+
+                validateOwnershipInvariant(nextTask);
+                MaintenanceTask savedNextTask = taskRepository.save(nextTask);
+                activityService.recordCreated(
+                        savedNextTask, technician, "from recurring task " + savedTask.getTaskCode());
+            }
         }
 
         return savedTask;
+    }
+
+    private List<String> changedReportFields(
+        MaintenanceTask task,
+            MaintenanceUpdateRequest request) {
+        List<String> changedFields = new ArrayList<>();
+        if (request.getNotes() != null && !Objects.equals(request.getNotes(), task.getNotes())) {
+            changedFields.add("notes");
+        }
+        if (request.getHoursWorked() != null
+                && !Objects.equals(request.getHoursWorked(), task.getHoursWorked())) {
+            changedFields.add("hoursWorked");
+        }
+        if (request.getPartsUsed() != null
+                && !Objects.equals(request.getPartsUsed(), task.getPartsUsed())) {
+            changedFields.add("partsUsed");
+        }
+        if (request.getSignature() != null
+                && !Objects.equals(request.getSignature(), task.getSignature())) {
+            changedFields.add("signature");
+        }
+        if (task.getStatus() != MaintenanceStatus.COMPLETED
+                && request.getStatus() == MaintenanceStatus.COMPLETED) {
+            changedFields.add("completedAt");
+        }
+        return changedFields;
+    }
+
+    private boolean isEquipmentEligibleForRecurrence(MaintenanceTask completedTask) {
+        Long equipmentRecordId = completedTask.getEquipmentRecordId();
+        if (equipmentRecordId == null && completedTask.getEquipmentRecord() != null) {
+            equipmentRecordId = completedTask.getEquipmentRecord().getId();
+        }
+        return equipmentRecordId != null
+                && completedTask.getHospitalId() != null
+                && taskRepository.countSchedulableEquipment(
+                        equipmentRecordId, completedTask.getHospitalId()) == 1;
     }
 
     private void validateSchedulingRequest(MaintenanceCreateRequest request) {
@@ -204,6 +317,31 @@ public class MaintenanceService {
         }
         if (request.getRecurrencePeriodDays() != null && request.getRecurrencePeriodDays() < 0) {
             throw new IllegalArgumentException("Recurrence period cannot be negative");
+        }
+    }
+
+    private void validateNoDuplicateActiveTask(Long hospitalId, Equipment equipment, String maintenanceType) {
+        if (hospitalId == null || equipment == null || maintenanceType == null || maintenanceType.isBlank()) {
+            return;
+        }
+        List<MaintenanceStatus> activeStatuses = List.of(
+                MaintenanceStatus.SCHEDULED,
+                MaintenanceStatus.IN_PROGRESS,
+                MaintenanceStatus.NEEDS_PART,
+                MaintenanceStatus.ON_HOLD
+        );
+        String normalizedType = maintenanceType.trim();
+        boolean duplicateExists = taskRepository.existsActiveTaskForEquipmentWithCode(
+                hospitalId,
+                equipment.getId(),
+                equipment.getEquipmentCode(),
+                normalizedType,
+                activeStatuses
+        );
+        if (duplicateExists) {
+            throw new IllegalArgumentException(
+                    "An active maintenance task of type '" + normalizedType
+                            + "' already exists for equipment '" + equipment.getEquipmentCode() + "'");
         }
     }
 
@@ -257,6 +395,9 @@ public class MaintenanceService {
         if (equipment.getEquipmentCode() == null || equipment.getEquipmentCode().isBlank()) {
             throw new IllegalArgumentException("Selected equipment does not have an equipment code");
         }
+        if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
+            throw new IllegalArgumentException("Retired or disposed equipment cannot be scheduled for maintenance");
+        }
         return equipment;
     }
 
@@ -270,21 +411,56 @@ public class MaintenanceService {
         }
     }
 
-    private String resolveAssignedTechnician(String assignedTechnician) {
+    private User resolveEligibleTechnician(String assignedTechnician) {
         if (assignedTechnician == null || assignedTechnician.isBlank()) {
             return null;
         }
-        User technician = userRepository.findByEmail(assignedTechnician.trim())
+        String normalizedEmail = assignedTechnician.trim().toLowerCase(Locale.ROOT);
+        User technician = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new IllegalArgumentException("Assigned technician account does not exist"));
+        validateTechnicianEligibility(technician);
+        return technician;
+    }
+
+    private User getAuthenticatedTechnician(Authentication authentication) {
+        return getActiveUserForRole(authentication, "technician");
+    }
+
+    private User getActiveUserForRole(Authentication authentication, String expectedRole) {
+        if (authentication == null
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            throw new AccessDeniedException("An active " + expectedRole + " account is required");
+        }
+
+        String normalizedEmail = authentication.getName().trim().toLowerCase(Locale.ROOT);
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AccessDeniedException(
+                        "An active " + expectedRole + " account is required"));
+        if (!expectedRole.equalsIgnoreCase(user.getRole())
+                || user.getAccountStatus() != AccountStatus.ACTIVE) {
+            throw new AccessDeniedException("An active " + expectedRole + " account is required");
+        }
+        return user;
+    }
+
+    private void validateTechnicianEligibility(User technician) {
         if (!"technician".equalsIgnoreCase(technician.getRole())) {
             throw new IllegalArgumentException("Assigned user must have the technician role");
         }
-        return technician.getEmail();
+        if (technician.getAccountStatus() != AccountStatus.ACTIVE) {
+            throw new IllegalArgumentException("Assigned technician account must be active");
+        }
     }
 
-    private String resolveRecurringTechnician(String assignedTechnician) {
+    private User resolveRecurringTechnician(MaintenanceTask completedTask) {
         try {
-            return resolveAssignedTechnician(assignedTechnician);
+            User assignedTechnician = completedTask.getAssignedTechnicianRecord();
+            if (assignedTechnician != null) {
+                validateTechnicianEligibility(assignedTechnician);
+                return assignedTechnician;
+            }
+            return resolveEligibleTechnician(completedTask.getAssignedTechnician());
         } catch (IllegalArgumentException exception) {
             // Completion evidence must still be committed when the previous technician
             // account is no longer eligible. The hospital can assign the new task later.
@@ -293,6 +469,14 @@ public class MaintenanceService {
     }
 
     private void validateOwnershipInvariant(MaintenanceTask task) {
+        if (task.getId() != null && task.getEquipmentRecordId() != null) {
+            if (task.getHospitalId() == null
+                    || taskRepository.countValidOwnership(task.getId(), task.getHospitalId()) != 1) {
+                throw new IllegalStateException(
+                        "Maintenance task hospital ownership does not match its equipment");
+            }
+            return;
+        }
         Equipment equipment = task.getEquipmentRecord();
         if (task.getHospitalId() == null
                 || equipment == null
@@ -338,6 +522,9 @@ public class MaintenanceService {
     }
 
     public String exportTasksToICal(Authentication authentication) {
+        // The calendar feed is a subscription, not a page: a client fetches this URL and expects
+        // every scheduled task back. Deliberately the unpaged overload, so the feed can never be
+        // silently truncated to whatever the default page size happens to be.
         List<MaintenanceTask> tasks = getAllTasks(authentication);
         StringBuilder ical = new StringBuilder();
         ical.append("BEGIN:VCALENDAR\r\n")
@@ -356,7 +543,7 @@ public class MaintenanceService {
             String dtStart = task.getDeadline().format(basicDate);
             String dtEnd = task.getDeadline().plusDays(1).format(basicDate);
             String summary = (task.getEquipment() != null ? task.getEquipment() : "Equipment") + " - " + (task.getMaintenanceType() != null ? task.getMaintenanceType() : "Maintenance");
-            String status = task.getStatus() == com.medtrack.model.MaintenanceStatus.COMPLETED ? "COMPLETED" : "NEEDS-ACTION";
+            String maintenanceStatus = task.getStatus().name();
 
             String description = String.format("Task Code: %s\nStatus: %s\nTechnician: %s\nPriority: %s\nDescription: %s",
                     task.getTaskCode(),
@@ -374,7 +561,10 @@ public class MaintenanceService {
             appendICalLine(ical, "DTEND;VALUE=DATE:" + dtEnd);
             appendICalLine(ical, "SUMMARY:" + escapeICalText(summary));
             appendICalLine(ical, "DESCRIPTION:" + escapeICalText(description));
-            appendICalLine(ical, "STATUS:" + status);
+            // RFC 5545 allows TENTATIVE, CONFIRMED, or CANCELLED for VEVENT.
+            // Preserve the Maintenance lifecycle value in a standards-compliant extension.
+            appendICalLine(ical, "STATUS:CONFIRMED");
+            appendICalLine(ical, "X-MEDTRACK-STATUS:" + maintenanceStatus);
             appendICalLine(ical, "END:VEVENT");
         }
 
@@ -420,30 +610,44 @@ public class MaintenanceService {
     @Transactional
     public void deleteTask(Long id, Authentication authentication) {
         // Lock the owned row so deletion cannot race with technician completion.
+        Hospital hospital = getHospitalForUser(authentication);
         MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(
-                        id, getHospitalForUser(authentication.getName()).getId())
+                        id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
         if (task.getStatus() == MaintenanceStatus.COMPLETED) {
             throw new InvalidStatusTransitionException("Completed maintenance tasks cannot be deleted");
         }
-        taskRepository.delete(task);
+        task.setDeleted(true);
+        task.setDeletedAt(LocalDateTime.now());
+        task.setDeletedBy(authentication.getName().trim().toLowerCase(Locale.ROOT));
+        taskRepository.save(task);
+        activityService.recordArchived(task, hospital.getUser());
+    }
+
+    public MaintenanceActivityPageResponse getTaskActivity(
+            Long id,
+            String type,
+            Integer page,
+            Integer size,
+            Authentication authentication) {
+        return activityService.getHistory(id, type, page, size, authentication);
     }
 
     private MaintenanceTask findOwnedTask(Long id, Authentication authentication) {
         if (hasRole(authentication, "HOSPITAL")) {
-            return taskRepository.findByIdAndHospitalId(id, getHospitalForUser(authentication.getName()).getId())
+            return taskRepository.findByIdAndHospitalId(id, getHospitalForUser(authentication).getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
         }
         if (hasRole(authentication, "TECHNICIAN")) {
-            return taskRepository.findByIdAndAssignedTechnician(id, authentication.getName())
+            return taskRepository.findByIdAndAssignedTechnicianId(
+                            id, getAuthenticatedTechnician(authentication).getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or not assigned to you"));
         }
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
 
-    private Hospital getHospitalForUser(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    private Hospital getHospitalForUser(Authentication authentication) {
+        User user = getActiveUserForRole(authentication, "hospital");
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
     }

@@ -47,22 +47,26 @@ Seed tasks now use `MaintenanceStatus.SCHEDULED` and `MaintenanceStatus.IN_PROGR
 Ownership-scoped list queries accept the enum as an optional filter:
 
 ```java
-List<MaintenanceTask> findByHospitalIdWithFilters(
+Page<MaintenanceTask> findByHospitalIdWithFilters(
         Long hospitalId,
         MaintenanceStatus status,
         String equipmentId,
         Pageable pageable);
 ```
 
-The API also supports status filtering with either a display value such as `In Progress` or an
+The repository returns a Spring Data `Page` internally so bounded database pagination remains
+available. The service extracts its content before returning it through the existing JSON-array API
+contract. The API supports status filtering with either a display value such as `In Progress` or an
 enum name such as `IN_PROGRESS`. A global status-only repository lookup is intentionally not
 exposed because Maintenance list access must always retain hospital or technician ownership.
 
 ### Maintenance request DTOs
 
 `MaintenanceCreateRequest` does not expose `status`; every scheduled task starts as
-`SCHEDULED` under server control. `MaintenanceUpdateRequest` requires a valid
-`MaintenanceStatus` and carries only technician-owned partial report fields.
+`SCHEDULED` under server control. `MaintenanceAssignmentRequest` carries only the technician
+email and can be applied by the owning hospital only while the task remains `SCHEDULED`.
+`MaintenanceUpdateRequest` requires a valid `MaintenanceStatus` and carries only
+technician-owned partial report fields.
 
 The request DTOs and entity also share Maintenance-specific length constants. Short scheduling
 and report fields are limited to the existing 255-character persistence width, notes to 16,000
@@ -113,14 +117,25 @@ The migrations backfill the required `equipment_record_id` relationship and miss
 equipment foreign key. Migration fails when equipment or ownership cannot be restored, so
 operators must resolve invalid rows instead of silently deploying incomplete data.
 
-Flyway is enabled with `FLYWAY_ENABLED=true`. It remains disabled by default because the current local H2 workflow still lets Hibernate create a new development schema. Deployment and verification steps are recorded in `docs/maintenance-backend-migration.md`.
+Version `4` adds a nullable relationship from an assignment to `users.id`, backfills it using
+trimmed case-insensitive email matching, and retains the existing assignment email used by the
+API. Technician authorization uses the stable user ID. If the user is deleted, `ON DELETE SET
+NULL` clears the relationship without erasing the historical email.
+
+Version `5` adds a database check constraint containing exactly the five supported enum names.
+After version `1` normalizes recognized display values, migration fails if an unsupported legacy
+status remains. The same constraint rejects invalid direct database writes after deployment, so
+Hibernate cannot later encounter an unmappable status while reading Maintenance records.
+
+Flyway is enabled with `FLYWAY_ENABLED=true`. It remains disabled by default because the current local H2 workflow still lets Hibernate create a new development schema. Deployment and verification steps, including the unsupported-status precheck required before version `5`, are recorded in `docs/maintenance-backend-migration.md`.
 
 ## Remaining Work
 
 - Decide whether to add a `CANCELLED` status.
-- Consider replacing email-based technician assignment with a direct user relationship.
 
-Invalid JSON status values are covered by the maintenance controller integration tests. Migration persistence and unmatched-row behavior are covered by `MaintenanceMigrationIntegrationTest`.
+Invalid JSON status values are covered by the maintenance controller integration tests.
+`MaintenanceMigrationIntegrationTest` covers normalization, unsupported legacy statuses, and
+database rejection of invalid status writes.
 
 ## Lifecycle Enforcement
 
@@ -133,6 +148,31 @@ NEEDS_PART -> IN_PROGRESS
 ON_HOLD -> IN_PROGRESS
 ```
 
-Technicians may update report fields without changing a non-completed status, but completed tasks are immutable and cannot be deleted. Optional report fields use partial-update semantics: omitted or null values preserve the stored value, while an explicit empty string remains an update for text fields. Recurrence remains hospital-owned scheduling configuration: a technician payload may contain `recurrencePeriodDays` for compatibility, but it cannot overwrite the stored value used to generate the next task. The transition to `COMPLETED` requires a nonblank effective technician signature: the signature in the current payload when supplied, otherwise the previously stored signature. An explicit blank signature is rejected on completion. A successful transition records a server-controlled `completedAt` timestamp. Negative work hours are rejected, and recurring maintenance is generated only on the first transition to `COMPLETED`. Before copying the former assignment to a recurrence, the service verifies that the account still exists and has the technician role. An ineligible assignment is cleared on the new task without rolling back completion. Hospital deletion uses an ownership-scoped write lock so it cannot race with technician completion of the same task, and all scoped repository access requires task ownership to agree with linked-equipment ownership.
+Technicians may update report fields without changing a non-completed status, but completed tasks are immutable and cannot be deleted. Deleting an eligible non-completed task is an auditable soft delete: the row is retained with its deletion timestamp and authenticated principal, then excluded from normal Maintenance queries. Optional report fields use partial-update semantics: omitted or null values preserve the stored value, while an explicit empty string remains an update for text fields. Recurrence remains hospital-owned scheduling configuration: a technician payload may contain `recurrencePeriodDays` for compatibility, but it cannot overwrite the stored value used to generate the next task. The transition to `COMPLETED` requires a nonblank effective technician signature: the signature in the current payload when supplied, otherwise the previously stored signature. An explicit blank signature is rejected on completion. A successful transition records a server-controlled `completedAt` timestamp. Negative work hours are rejected, and recurring maintenance is generated only on the first transition to `COMPLETED`. Technician reads and locked updates use the stable assigned user ID rather than comparing email text. Every Maintenance operation also reloads the authenticated account and requires its current database role to match the operation and its account status to remain `ACTIVE`; locked, disabled, deleted, or role-changed accounts are denied with HTTP 403 even when an older JWT has not expired. Before copying the assignment to a recurrence, the service defensively verifies that the linked account remains active with the technician role. If eligibility changes during completion processing, the completion can retain its evidence while the new task is created unassigned. A caller already known to be ineligible cannot perform the completion. The owning hospital can assign or reassign an eligible technician while that new task remains `SCHEDULED`. Hospital assignment and deletion use ownership-scoped write locks so they cannot race with technician work on the same task, and all scoped repository access requires task ownership to agree with linked-equipment ownership.
+
+Completion-driven recurrence also rechecks equipment eligibility. Archived, retired, or disposed
+equipment cannot receive a new recurring task. This does not invalidate completion of work that
+was already scheduled: the completed task, timestamp, report, and sign-off remain committed while
+only the future recurrence is skipped. Equipment archival does not itself hide retained
+Maintenance history; Maintenance access queries continue to enforce hospital ownership against
+the archived equipment row and exclude only tasks whose own soft-delete flag is set.
+
+Policy-driven preventive automation is separate from completion-driven recurrence. It creates new
+tasks in `SCHEDULED` and then uses this same lifecycle. Its recurrence cadence is anchored to the
+latest retained generated deadline for each rule/equipment pair, including soft-deleted audit
+history, so daily scheduler execution cannot change a weekly or monthly rule into a daily task.
+
+The ownership rule also applies to Maintenance analytics. Status counts, completed-task SLA
+inputs, average work hours, and critical-pending counts exclude rows whose scalar hospital owner
+does not match the hospital that owns the linked equipment. Critical-pending analytics use the
+documented canonical priority value `Critical`, matching request validation and persistence.
 
 Legacy completed rows may have a null completion timestamp. They remain readable, but maintenance SLA reporting excludes them rather than estimating when the work finished.
+
+## Calendar Export
+
+The hospital calendar export represents deadlines as `VEVENT` components. RFC 5545 permits
+`TENTATIVE`, `CONFIRMED`, or `CANCELLED` as a `VEVENT` `STATUS`, so every exported Maintenance
+event uses `STATUS:CONFIRMED`. The exact Maintenance enum name, such as `IN_PROGRESS` or
+`COMPLETED`, is preserved separately in `X-MEDTRACK-STATUS` and remains present as a
+human-readable value in the event description.

@@ -21,6 +21,7 @@
         <java.version>17</java.version>
         <lombok.version>1.18.46</lombok.version>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
+        <testcontainers.version>1.21.3</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -29,6 +30,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- WebSocket (real-time operations events pushed to the activity centre) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
         <!-- Spring Data JPA (Database ORM) -->
@@ -88,6 +95,24 @@
             <scope>test</scope>
         </dependency>
 
+        <!--
+            SupplierIntegrationTest boots the application against a real MySQL container and has
+            lived in src/test/java since the observability phase, but the dependency it needs was
+            never declared, so the entire test source set failed to compile. Versions come from the
+            Spring Boot BOM. The test is annotated to skip when no Docker daemon is reachable, so a
+            machine without Docker gets a skipped test rather than an error.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-webmvc-test</artifactId>
@@ -124,7 +149,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>3.0.3</version>
+            <version>3.1.0</version>
         </dependency>
 
         <!-- Bucket4j (Rate Limiting) -->
@@ -192,6 +217,14 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Spring Boot 4's BOM no longer manages Testcontainers, so pin it here. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -227,6 +260,39 @@
                             <version>${lombok.version}</version>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!--
+                Supplies the JWT signing secret for the test run.
+
+                application.properties declares app.jwt.secret from a bare ${JWT_SECRET} with no
+                default, and JWT_SECRET is not set in a developer shell or on a CI runner. Spring
+                could not resolve the placeholder, jwtUtil failed to construct, and with it
+                jwtAuthFilter and securityConfig, so every test that starts an ApplicationContext
+                died before running a single assertion with:
+
+                  PlaceholderResolutionException: Could not resolve placeholder 'JWT_SECRET'
+
+                That accounted for 39 of the 48 red tests.
+
+                Set here rather than as a default in application.properties on purpose. A default
+                there would ship a known signing key to production, where every token the service
+                issues could then be forged by anyone who has read this repository. Production still
+                has to supply JWT_SECRET, and JwtUtil.validateSecret() still rejects a missing or
+                too short one at startup.
+
+                A system property rather than src/test/resources/application.properties, because a
+                test classpath application.properties replaces the main one wholesale rather than
+                merging with it: the test run would silently lose the datasource, Flyway, rate limit
+                and Kafka configuration it is meant to be exercising.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <app.jwt.secret>medtrack-test-signing-secret-not-used-in-production</app.jwt.secret>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
