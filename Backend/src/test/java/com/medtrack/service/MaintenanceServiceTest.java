@@ -809,4 +809,70 @@ public class MaintenanceServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> maintenanceService.getTaskActivity(
                 99L, null, null, null, authentication));
     }
+
+    @Test
+    void scheduleTask_PastDeadline_ThrowsException() {
+        MaintenanceCreateRequest request = MaintenanceCreateRequest.builder()
+                .equipmentId("EQ-100")
+                .maintenanceType("Preventive")
+                .deadline(LocalDate.now().minusDays(1))
+                .priority("Normal")
+                .build();
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> maintenanceService.scheduleTask(request, authentication));
+        assertEquals("Deadline cannot be in the past", ex.getMessage());
+    }
+
+    @Test
+    void scheduleTask_FutureDeadline_Accepted() {
+        when(authentication.getName()).thenReturn(email);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(mockEquipment));
+        when(taskRepository.save(any(MaintenanceTask.class))).thenAnswer(i -> i.getArgument(0));
+
+        MaintenanceCreateRequest request = MaintenanceCreateRequest.builder()
+                .equipmentId("EQ-100")
+                .maintenanceType("Preventive")
+                .deadline(LocalDate.now().plusDays(10))
+                .priority("Normal")
+                .build();
+        MaintenanceTask result = maintenanceService.scheduleTask(request, authentication);
+        assertNotNull(result);
+    }
+
+    @Test
+    void scheduleTask_NullDeadline_ThrowsException() {
+        MaintenanceCreateRequest request = MaintenanceCreateRequest.builder()
+                .equipmentId("EQ-100")
+                .maintenanceType("Preventive")
+                .deadline(null)
+                .priority("Normal")
+                .build();
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> maintenanceService.scheduleTask(request, authentication));
+        assertEquals("Deadline is required", ex.getMessage());
+    }
+
+    @Test
+    void amendSchedule_PastDeadline_ThrowsException() {
+        com.medtrack.dto.MaintenanceScheduleAmendmentRequest request = com.medtrack.dto.MaintenanceScheduleAmendmentRequest.builder()
+                .newDeadline(LocalDate.now().minusDays(1))
+                .reason("Test")
+                .build();
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> maintenanceService.amendSchedule(50L, request, authentication));
+        assertEquals("Deadline cannot be in the past", ex.getMessage());
+    }
+
+    @Test
+    void amendSchedule_NullDeadline_ThrowsException() {
+        com.medtrack.dto.MaintenanceScheduleAmendmentRequest request = com.medtrack.dto.MaintenanceScheduleAmendmentRequest.builder()
+                .newDeadline(null)
+                .reason("Test")
+                .build();
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> maintenanceService.amendSchedule(50L, request, authentication));
+        assertEquals("New deadline is required", ex.getMessage());
+    }
 }
