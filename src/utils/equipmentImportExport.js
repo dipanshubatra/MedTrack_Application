@@ -31,6 +31,13 @@ export const IMPORT_HEADERS = [
   "Warranty Terms",
 ];
 
+/** The columns that hold dates and therefore need normalising to YYYY-MM-DD on import. */
+export const DATE_HEADERS = [
+  "Purchase Date",
+  "Warranty Start Date",
+  "Warranty Expiry",
+];
+
 export const IMPORT_COLUMN_GUIDANCE = {
   "Equipment Code": "Optional. Stable ID like EQ-001. Omit to auto-generate.",
   Name: "Required. Asset name, e.g. MRI Scanner",
@@ -71,7 +78,9 @@ const canonicalHeader = (header) => {
   if (key === "depreciationmethod" || key === "method") return "Depreciation Method";
   if (key === "warrantyprovider" || key === "provider") return "Warranty Provider";
   if (key === "warrantycontractnumber" || key === "contractnumber") return "Warranty Contract Number";
-  if (key === "warrantystartdate" || key === "coverage start") return "Warranty Start Date";
+  // canonicalKey has already stripped spaces and punctuation, so aliases are compared in that
+  // form. "coverage start" sat here for a while and could never match anything.
+  if (key === "warrantystartdate" || key === "coveragestart") return "Warranty Start Date";
   if (key === "warrantycoveragetype" || key === "coveragetype") return "Warranty Coverage Type";
   if (key === "warrantyterms" || key === "terms") return "Warranty Terms";
   return null;
@@ -142,7 +151,10 @@ export const parseImportFile = (file) => {
       });
 
       const rows = [];
-      const dateColumns = new Set(["Purchase Date", "Warranty Expiry"]);
+      // Every date column in IMPORT_HEADERS. "Warranty Start Date" was missing, so a real .xlsx
+      // date cell in that column - which SheetJS hands back as an Excel serial - was uploaded as a
+      // five-digit number while the two columns beside it converted correctly.
+      const dateColumns = new Set(DATE_HEADERS);
       for (let i = 1; i < rawRows.length; i++) {
         const raw = rawRows[i];
         const row = {};
@@ -189,13 +201,90 @@ const normalizeMoneyValue = (value) => {
   return text;
 };
 
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/** Formats calendar components as YYYY-MM-DD, or null when they are not a real date. */
+const toIsoDate = (year, month, day) => {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  // Reject 31 April and 30 February rather than letting them roll into the next month.
+  const probe = new Date(year, month - 1, day);
+  if (probe.getFullYear() !== year || probe.getMonth() !== month - 1 || probe.getDate() !== day) {
+    return null;
+  }
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
+/**
+ * Recognises the date layouts hospital spreadsheets actually contain.
+ *
+ * Deliberately explicit rather than handing the string to `new Date(...)`, whose behaviour on
+ * anything but ISO is implementation-defined, and whose result then has to be formatted - which is
+ * where the timezone bug came from. Returns null for anything not recognised, so the caller can
+ * pass the cell through for the backend to report.
+ *
+ * Slash and dash layouts are ambiguous by nature. The rule: whichever component cannot be a month
+ * decides. `13/06/2025` is day-first because there is no thirteenth month; `06/13/2025` is
+ * month-first for the same reason. When both could be a month the string is read month-first,
+ * matching what `new Date(...)` did before, so this change does not silently re-interpret files
+ * that already imported correctly.
+ */
+const parseDateText = (text) => {
+  const iso = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(text);
+  if (iso) {
+    return toIsoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  }
+
+  const numeric = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(text);
+  if (numeric) {
+    const first = Number(numeric[1]);
+    const second = Number(numeric[2]);
+    const year = Number(numeric[3]);
+    if (first > 12 && second <= 12) return toIsoDate(year, second, first);
+    return toIsoDate(year, first, second);
+  }
+
+  // "12 June 2025", "12 Jun 2025"
+  const dayFirstName = /^(\d{1,2})[\s-]+([A-Za-z]+),?[\s-]+(\d{4})$/.exec(text);
+  if (dayFirstName) {
+    const month = monthFromName(dayFirstName[2]);
+    return month ? toIsoDate(Number(dayFirstName[3]), month, Number(dayFirstName[1])) : null;
+  }
+
+  // "June 12, 2025", "Jun 12 2025"
+  const monthFirstName = /^([A-Za-z]+)[\s-]+(\d{1,2}),?[\s-]+(\d{4})$/.exec(text);
+  if (monthFirstName) {
+    const month = monthFromName(monthFirstName[1]);
+    return month ? toIsoDate(Number(monthFirstName[3]), month, Number(monthFirstName[2])) : null;
+  }
+
+  return null;
+};
+
+/** 1-12 for a full or three-letter month name, or null. */
+const monthFromName = (name) => {
+  const lower = String(name).toLowerCase();
+  const index = MONTH_NAMES.findIndex(
+    (month) => month === lower || (lower.length >= 3 && month.startsWith(lower))
+  );
+  return index === -1 ? null : index + 1;
+};
+
 /**
  * Normalises a spreadsheet date cell to the YYYY-MM-DD the backend expects.
  *
- * <p>SheetJS hands dates back as Excel serial numbers (e.g. 46550 for 2027-06-12) when the cell
+ * SheetJS hands dates back as Excel serial numbers (e.g. 46550 for 2027-06-12) when the cell
  * carries a date format, and as locale-formatted strings in other cases. Both are converted to the
  * ISO date the import accepts; anything unrecognisable is passed through untouched so the backend
- * reports a clear per-row error instead of this layer silently guessing.</p>
+ * reports a clear per-row error instead of this layer silently guessing.
+ *
+ * The formatting is done from calendar components. The previous implementation finished with
+ * `new Date(text).toISOString().slice(0, 10)`, and `new Date(...)` on a non-ISO string produces
+ * local midnight while `toISOString()` converts to UTC - so in every timezone east of Greenwich,
+ * including all of India, the imported date was the day before the one in the file.
  */
 const normalizeDateValue = (value) => {
   if (value === null || value === undefined || value === "") return "";
@@ -205,18 +294,16 @@ const normalizeDateValue = (value) => {
     if (value >= 20000 && value <= 80000) {
       const date = XLSX.SSF.parse_date_code(value);
       if (date) {
-        return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+        const iso = toIsoDate(date.y, date.m, date.d);
+        if (iso) return iso;
       }
     }
-    return "";
+    // Not a plausible serial. Pass it through rather than blanking the cell: a sheet that stores
+    // dates as 20250612 deserves a per-row error naming the value, not an empty column.
+    return String(value);
   }
   const text = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-  const parsed = new Date(text);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
-  }
-  return text;
+  return parseDateText(text) ?? text;
 };
 
 /** Escapes one CSV field per RFC 4180 (quotes, commas, newlines). */
