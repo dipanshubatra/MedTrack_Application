@@ -7,6 +7,7 @@ import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.repository.EquipmentOrderRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
