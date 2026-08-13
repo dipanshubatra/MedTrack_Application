@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
-import { X, Calendar, User, Wrench, ShieldAlert, CheckCircle, Clock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Calendar, User, ShieldAlert, CheckCircle, Clock } from 'lucide-react';
 
 /**
  * MaintenanceTaskDetailModal - Quick inspection & status update modal.
  */
 export const MaintenanceTaskDetailModal = ({ task, onClose, onUpdateStatus, onAssignTechnician }) => {
-  // Hooks must run unconditionally (Rules of Hooks) before any early return.
-  const [currentStatus, setCurrentStatus] = useState(task?.status);
+  const [currentStatus, setCurrentStatus] = useState(task?.status || 'Scheduled');
   const [tech, setTech] = useState(task?.assignedTechnician || 'Unassigned');
+
+  useEffect(() => {
+    setCurrentStatus(task?.status || 'Scheduled');
+    setTech(task?.assignedTechnician || 'Unassigned');
+  }, [task]);
 
   if (!task) return null;
 
