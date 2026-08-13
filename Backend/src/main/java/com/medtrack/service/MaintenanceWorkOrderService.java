@@ -444,13 +444,7 @@ public class MaintenanceWorkOrderService {
         MaintenanceWorkOrder workOrder =
                 getOwnedWorkOrder(id, hospitalId);
 
-        if (workOrder.getStatus()
-                != MaintenanceWorkOrderStatus.IN_PROGRESS) {
-
-            throw new IllegalStateException(
-                    "Only IN_PROGRESS work orders can be completed"
-            );
-        }
+        workOrderValidator.validateCompletion(workOrder, request);
 
         if (request != null && request.getPartsUsed() != null && !request.getPartsUsed().isBlank()) {
             List<com.medtrack.dto.SparePartDeductionItem> deductionItems =
@@ -467,6 +461,8 @@ public class MaintenanceWorkOrderService {
         workOrder.setCompletedAt(
                 LocalDateTime.now()
         );
+
+        workOrderValidator.validateCompletionTimestamp(workOrder);
 
         workOrder.setCompletionNotes(
                 request.getCompletionNotes()
@@ -601,9 +597,28 @@ public class MaintenanceWorkOrderService {
         if (target
                 == MaintenanceWorkOrderStatus.COMPLETED) {
 
+            if (request != null && request.getReason() != null && !request.getReason().isBlank()) {
+                workOrder.setCompletionNotes(request.getReason().trim());
+            }
+
+            if (workOrder.getCompletionNotes() == null
+                    || workOrder.getCompletionNotes().isBlank()) {
+                throw new IllegalArgumentException(
+                        "Completion notes are required when completing a work order"
+                );
+            }
+
+            if (workOrder.getStartedAt() == null) {
+                throw new IllegalStateException(
+                        "Work order cannot be completed before it is started"
+                );
+            }
+
             workOrder.setCompletedAt(
                     LocalDateTime.now()
             );
+
+            workOrderValidator.validateCompletionTimestamp(workOrder);
         }
 
         if (target
@@ -676,7 +691,8 @@ public class MaintenanceWorkOrderService {
                 );
                 maintenanceTaskRepository.save(task);
             } else if (targetStatus == MaintenanceWorkOrderStatus.CANCELLED) {
-                task.setStatus(MaintenanceStatus.ON_HOLD);
+                task.setStatus(MaintenanceStatus.SCHEDULED);
+                task.setCompletedAt(null);
                 maintenanceTaskRepository.save(task);
             }
         }
