@@ -233,4 +233,35 @@ class SparePartServiceTest {
         verifyNoInteractions(userRepository, hospitalRepository, sparePartRepository);
     }
 
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - successfully deducts stock level for valid items")
+    void deductSparePartsForWorkOrder_Success() {
+        com.medtrack.dto.SparePartDeductionItem item = com.medtrack.dto.SparePartDeductionItem.builder()
+                .partNumber("FILTER-001")
+                .quantity(3)
+                .build();
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "FILTER-001"))
+                .thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.save(any(SparePart.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        sparePartService.deductSparePartsForWorkOrder(List.of(item), 1L, "hospitalAdmin");
+
+        assertThat(testSparePart.getStockLevel()).isEqualTo(22);
+        verify(sparePartRepository).save(testSparePart);
+    }
+
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - throws IllegalArgumentException when stock is insufficient")
+    void deductSparePartsForWorkOrder_InsufficientStock_ThrowsException() {
+        com.medtrack.dto.SparePartDeductionItem item = com.medtrack.dto.SparePartDeductionItem.builder()
+                .partNumber("FILTER-001")
+                .quantity(50)
+                .build();
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "FILTER-001"))
+                .thenReturn(Optional.of(testSparePart));
+
+        assertThatThrownBy(() -> sparePartService.deductSparePartsForWorkOrder(List.of(item), 1L, "hospitalAdmin"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Insufficient stock for spare part: FILTER-001");
+    }
 }

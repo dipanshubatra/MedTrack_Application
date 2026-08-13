@@ -51,6 +51,9 @@ class MaintenanceWorkOrderServiceTest {
     @Mock
     private MaintenanceWorkOrderValidator workOrderValidator;
 
+    @Mock
+    private SparePartService sparePartService;
+
     @InjectMocks
     private MaintenanceWorkOrderService workOrderService;
 
@@ -616,6 +619,54 @@ class MaintenanceWorkOrderServiceTest {
 
         verify(maintenanceTaskRepository).save(task);
         verify(equipmentRepository).save(equipment);
+    }
+
+    @Test
+    void shouldDeductSparePartsWhenCompletingWorkOrderWithPartsUsed() {
+        Long workOrderId = 10L;
+        MaintenanceWorkOrder workOrder = buildWorkOrder(MaintenanceWorkOrderStatus.IN_PROGRESS);
+        workOrder.setStartedAt(LocalDateTime.now().minusHours(2));
+
+        MaintenanceWorkOrderCompletionRequest request = MaintenanceWorkOrderCompletionRequest.builder()
+                .completionNotes("Replaced air filters and oil seal")
+                .hoursWorked(2.0)
+                .partsUsed("PRT-1001: 2, PRT-1002: 1")
+                .build();
+
+        com.medtrack.dto.SparePartDeductionItem item1 = com.medtrack.dto.SparePartDeductionItem.builder()
+                .partNumber("PRT-1001").quantity(2).build();
+        com.medtrack.dto.SparePartDeductionItem item2 = com.medtrack.dto.SparePartDeductionItem.builder()
+                .partNumber("PRT-1002").quantity(1).build();
+        java.util.List<com.medtrack.dto.SparePartDeductionItem> items = java.util.List.of(item1, item2);
+
+        when(workOrderRepository.findByIdAndHospitalId(workOrderId, hospitalId))
+                .thenReturn(Optional.of(workOrder));
+        when(workOrderValidator.validateAndExtractSparePartUsage("PRT-1001: 2, PRT-1002: 1"))
+                .thenReturn(items);
+        when(workOrderRepository.save(any(MaintenanceWorkOrder.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        MaintenanceWorkOrderResponse response = workOrderService.completeWorkOrder(
+                workOrderId, request, hospitalId, username
+        );
+
+        assertNotNull(response);
+        assertEquals(MaintenanceWorkOrderStatus.COMPLETED, response.getStatus());
+        verify(sparePartService).deductSparePartsForWorkOrder(items, hospitalId, username);
+        verify(workOrderRepository).save(workOrder);
+    }
+
+    @Test
+    void shouldParsePartsUsedStringCorrectlyIntoDeductionItems() {
+        String partsText = "FILTER-01: 3, SENSOR-99 (2)";
+        java.util.List<com.medtrack.dto.SparePartDeductionItem> parsed =
+                com.medtrack.dto.SparePartDeductionItem.parsePartsUsed(partsText);
+
+        assertEquals(2, parsed.size());
+        assertEquals("FILTER-01", parsed.get(0).getPartNumber());
+        assertEquals(3, parsed.get(0).getQuantity());
+        assertEquals("SENSOR-99", parsed.get(1).getPartNumber());
+        assertEquals(2, parsed.get(1).getQuantity());
     }
 
     private MaintenanceWorkOrder buildWorkOrder(

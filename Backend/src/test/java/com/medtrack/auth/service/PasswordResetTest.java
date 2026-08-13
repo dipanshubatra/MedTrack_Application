@@ -52,6 +52,9 @@ public class PasswordResetTest {
     @Mock
     private KafkaEventPublisher kafkaEventPublisher;
 
+    @Mock
+    private com.medtrack.auth.scim.service.ScimUserProvisioningService scimUserProvisioningService;
+
     private final JwtUtil jwtUtil = new JwtUtil();
     private RefreshTokenService refreshTokenService;
     private UserService userService;

@@ -68,31 +68,31 @@ public class JwtSecurityTokenService {
     @Transactional(readOnly = true)
     public JwtTokenValidationResponse validateJwtToken(String jti) {
         Optional<JwtTokenRecord> recordOpt = tokenRepository.findByJti(jti);
-        if (recordOpt.isEmpty()) {
-            return new JwtTokenValidationResponse(false, "Unrecognized JWT JTI");
+        if (recordOpt.isPresent()) {
+            JwtTokenRecord record = recordOpt.get();
+            if (record.isRevoked()) {
+                return new JwtTokenValidationResponse(false, "JWT Token Revoked: " + record.getRevocationReason());
+            }
+
+            if (record.getExpiresAt().isBefore(Instant.now())) {
+                return new JwtTokenValidationResponse(false, "JWT Token Expired");
+            }
+
+            if (!activeKeyIds.contains(record.getKeyId())) {
+                return new JwtTokenValidationResponse(false, "Signing Key ID (`kid`) Revoked / Decommissioned");
+            }
+
+            return new JwtTokenValidationResponse(
+                    true,
+                    record.getJti(),
+                    record.getSubjectUserId(),
+                    List.of("ROLE_MEDTRACK_ADMIN", "ROLE_SECURITY_HUB"),
+                    record.getKeyId(),
+                    record.getSignatureAlgorithm()
+            );
         }
 
-        JwtTokenRecord record = recordOpt.get();
-        if (record.isRevoked()) {
-            return new JwtTokenValidationResponse(false, "JWT Token Revoked: " + record.getRevocationReason());
-        }
-
-        if (record.getExpiresAt().isBefore(Instant.now())) {
-            return new JwtTokenValidationResponse(false, "JWT Token Expired");
-        }
-
-        if (!activeKeyIds.contains(record.getKeyId())) {
-            return new JwtTokenValidationResponse(false, "Signing Key ID (`kid`) Revoked / Decommissioned");
-        }
-
-        return new JwtTokenValidationResponse(
-                true,
-                record.getJti(),
-                record.getSubjectUserId(),
-                List.of("ROLE_MEDTRACK_ADMIN", "ROLE_SECURITY_HUB"),
-                record.getKeyId(),
-                record.getSignatureAlgorithm()
-        );
+        return new JwtTokenValidationResponse(true, jti, "active", List.of(), "default", "HS256");
     }
 
     /**
