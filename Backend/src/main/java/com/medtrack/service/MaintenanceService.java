@@ -233,7 +233,6 @@ public class MaintenanceService {
 
         task.setDeadline(request.getNewDeadline());
         task.setScheduleRevision(newRevision);
-        task.setUpdatedAt(now);
 
         MaintenanceTask savedTask = taskRepository.save(task);
 

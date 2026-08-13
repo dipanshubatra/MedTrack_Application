@@ -9,6 +9,7 @@ import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.dto.MaintenanceWorkOrderStatusRequest;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
@@ -16,6 +17,7 @@ import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
@@ -55,6 +57,7 @@ public class MaintenanceWorkOrderService {
 
     private final UserRepository userRepository;
     private final MaintenanceWorkOrderValidator workOrderValidator;
+    private final EquipmentDisposalRepository disposalRepository;
 
     /**
      * Create a new maintenance work order.
@@ -902,6 +905,22 @@ public class MaintenanceWorkOrderService {
                             + status.name().toLowerCase()
                             + " and cannot have new maintenance work raised against it"
             );
+        }
+
+        if (equipment.getHospital() != null) {
+            boolean pendingDisposal = disposalRepository
+                    .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(
+                            equipment.getId(), equipment.getHospital().getId())
+                    .stream()
+                    .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                            || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+            if (pendingDisposal) {
+                throw new IllegalArgumentException(
+                        "Equipment "
+                                + equipment.getEquipmentCode()
+                                + " has an active disposal request awaiting approval or completion and cannot have new maintenance work raised against it"
+                );
+            }
         }
     }
 
