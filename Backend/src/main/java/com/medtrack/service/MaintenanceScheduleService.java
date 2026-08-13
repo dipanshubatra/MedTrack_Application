@@ -128,28 +128,44 @@ public class MaintenanceScheduleService {
         if (request.getReason() == null || request.getReason().isBlank()) {
             throw new IllegalArgumentException("Amendment reason is required");
         }
-        if (request.getDeadline() != null && request.getDeadline().isBefore(LocalDate.now())) {
+        if (request.getReason().trim().length() > 1000) {
+            throw new IllegalArgumentException("Amendment reason must not exceed 1000 characters");
+        }
+
+        LocalDate resolvedDeadline = request.getDeadline();
+        if (resolvedDeadline != null && resolvedDeadline.isBefore(LocalDate.now())) {
             throw new IllegalArgumentException("Amended deadline cannot be in the past");
         }
 
+        if (request.getMaintenanceType() != null && request.getMaintenanceType().trim().length() > 255) {
+            throw new IllegalArgumentException("Maintenance type must not exceed 255 characters");
+        }
         String maintenanceType = request.getMaintenanceType() == null
                 ? task.getMaintenanceType() : request.getMaintenanceType().trim();
         if (maintenanceType.isBlank()) {
             throw new IllegalArgumentException("Maintenance type cannot be blank");
         }
 
+        if (request.getDescription() != null && request.getDescription().trim().length() > 255) {
+            throw new IllegalArgumentException("Description must not exceed 255 characters");
+        }
+
+        if (request.getPriority() != null && request.getPriority().trim().length() > 255) {
+            throw new IllegalArgumentException("Priority must not exceed 255 characters");
+        }
         String priority = request.getPriority() == null
                 ? task.getPriority() : normalizePriority(request.getPriority());
         if (!PRIORITIES.contains(priority)) {
             throw new IllegalArgumentException("Priority must be Normal, High, or Critical");
         }
+
         if (request.getRecurrencePeriodDays() != null
                 && request.getRecurrencePeriodDays() < 0) {
             throw new IllegalArgumentException("Recurrence period cannot be negative");
         }
 
         return new AmendmentValues(
-                request.getDeadline() != null ? request.getDeadline() : task.getDeadline(),
+                resolvedDeadline != null ? resolvedDeadline : task.getDeadline(),
                 maintenanceType,
                 request.getDescription() != null
                         ? normalizeNullable(request.getDescription()) : task.getDescription(),

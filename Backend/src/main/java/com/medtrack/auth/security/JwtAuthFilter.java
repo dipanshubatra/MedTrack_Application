@@ -98,7 +98,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
                 // Check JTI revocation status if JTI claim exists
                 String jti = jwtUtil.extractJti(token);
-                boolean jtiValid = jti == null || jwtSecurityTokenService.validateJwtToken(jti).isValid();
+                var tokenValidationResult = jti != null ? jwtSecurityTokenService.validateJwtToken(jti) : null;
+                boolean jtiValid = jti == null || (tokenValidationResult != null && tokenValidationResult.isValid());
 
                 if (jwtUtil.isTokenValid(token, email) && authorityStillValid && jtiValid) {
                     // Map the user's role to a Spring Security authority with a "ROLE_" prefix.

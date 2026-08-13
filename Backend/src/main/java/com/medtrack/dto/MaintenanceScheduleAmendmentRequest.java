@@ -1,8 +1,8 @@
 package com.medtrack.dto;
 
-import jakarta.validation.constraints.Future;
+import com.medtrack.validation.ValidScheduleAmendment;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,28 +11,34 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
-import static com.medtrack.validation.MaintenanceValidationLimits.NOTES_MAX_LENGTH;
+import static com.medtrack.validation.MaintenanceValidationLimits.AMENDMENT_REASON_MAX_LENGTH;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@ValidScheduleAmendment
 public class MaintenanceScheduleAmendmentRequest {
 
-    @NotNull(message = "New deadline is required")
-    @Future(message = "New deadline must be in the future")
     private LocalDate newDeadline;
-
     private LocalDate deadline;
+
+    @Size(max = 255, message = "Maintenance type must not exceed 255 characters")
     private String maintenanceType;
+
+    @Size(max = 255, message = "Description must not exceed 255 characters")
     private String description;
+
+    @Size(max = 255, message = "Priority must not exceed 255 characters")
     private String priority;
+
+    @Min(value = 0, message = "Recurrence period days must not be negative")
     private Integer recurrencePeriodDays;
 
     @NotBlank(message = "Amendment reason is required")
     @Size(
-            max = NOTES_MAX_LENGTH,
-            message = "Amendment reason must not exceed 16000 characters"
+            max = AMENDMENT_REASON_MAX_LENGTH,
+            message = "Amendment reason must not exceed 1000 characters"
     )
     private String reason;
 

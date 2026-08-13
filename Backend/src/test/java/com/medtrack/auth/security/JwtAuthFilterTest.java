@@ -58,6 +58,7 @@ public class JwtAuthFilterTest {
     void doFilterInternal_AuthenticatesWhenAuthorityVersionCurrent() throws Exception {
         String token = jwtUtil.generateToken(10L, "hospital@medtrack.org", "hospital", 3L);
         when(authorityService.validateAuthorityVersion(10L, 3L)).thenReturn(true);
+        when(jwtSecurityTokenService.validateJwtToken(any())).thenReturn(new com.medtrack.auth.jwt.dto.JwtTokenValidationResponse(true, null, "hospital@medtrack.org", java.util.List.of("ROLE_HOSPITAL"), "key-1", "HS256"));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + token);
