@@ -82,6 +82,7 @@ public class EquipmentDisposalService {
     private final MaintenanceWorkOrderRepository workOrderRepository;
     private final MaintenanceTaskRepository taskRepository;
     private final DisposalCertificatePdf certificatePdf;
+    private final PreventiveMaintenanceService preventiveMaintenanceService;
 
     /**
      * Opens a decommissioning request for one asset. The asset must still be active, and no other
@@ -272,6 +273,11 @@ public class EquipmentDisposalService {
         Equipment equipment = disposal.getEquipment();
         equipment.setStatus(EquipmentStatus.DISPOSED);
         equipmentRepository.save(equipment);
+
+        if (preventiveMaintenanceService != null && equipment.getId() != null && disposal.getHospital() != null) {
+            preventiveMaintenanceService.deactivateRulesForDecommissionedEquipment(
+                    equipment.getId(), disposal.getHospital().getId(), username);
+        }
 
         disposal.setStatus(EquipmentDisposalStatus.COMPLETED);
         disposal.setCompletedBy(username);

@@ -20,8 +20,14 @@ import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.model.MaintenancePolicyRule;
+import com.medtrack.model.MaintenancePolicyStatus;
+import com.medtrack.model.MaintenanceRuleScope;
+import com.medtrack.model.RecurrenceFrequency;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.repository.MaintenancePolicyRuleRepository;
+import com.medtrack.repository.MaintenanceRuleAuditRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,6 +84,12 @@ class EquipmentDisposalWorkflowTest {
 
     @Autowired
     private MaintenanceWorkOrderRepository workOrderRepository;
+
+    @Autowired
+    private MaintenancePolicyRuleRepository ruleRepository;
+
+    @Autowired
+    private MaintenanceRuleAuditRepository ruleAuditRepository;
 
     @Autowired
     private MaintenanceTaskRepository taskRepository;
@@ -867,5 +879,100 @@ class EquipmentDisposalWorkflowTest {
 
         assertTrue(exception.getMessage().contains("disposed"),
                 "Work order creation must be rejected for disposed equipment");
+    }
+
+    @Test
+    @DisplayName("completeDisposal automatically deactivates active individual maintenance rules and logs audit trail")
+    void completeDisposal_DeactivatesAssociatedIndividualMaintenanceRulesAndLogsAudit() {
+        Equipment asset = liveAsset("EQ-RULE-DEACT-1");
+
+        MaintenancePolicyRule rule = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Calibration Rule for " + asset.getEquipmentCode())
+                .description("Automatic recurring calibration")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset.getId())
+                .priority("High")
+                .frequency(RecurrenceFrequency.MONTHLY)
+                .maintenanceType("Preventive Calibration")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        disposalService.completeDisposal(disposal.getId(), username);
+
+        MaintenancePolicyRule updatedRule = ruleRepository.findById(rule.getId()).orElseThrow();
+        assertFalse(updatedRule.getActive(), "Rule must be marked inactive after equipment disposal");
+        assertEquals(MaintenancePolicyStatus.ARCHIVED, updatedRule.getStatus(), "Rule status must be ARCHIVED");
+
+        boolean auditLogged = ruleAuditRepository.findByHospitalIdAndRuleIdOrderByCreatedAtDesc(hospital.getId(), rule.getId()).stream()
+                .anyMatch(audit -> audit.getAction() == com.medtrack.model.MaintenanceRuleAuditAction.DEACTIVATED);
+        assertTrue(auditLogged, "Rule deactivation audit entry must be saved in rule audit repository");
+    }
+
+    @Test
+    @DisplayName("completeDisposal deactivates multiple individual rules bound to the same asset without affecting other assets")
+    void completeDisposal_WhenMultipleRulesExist_DeactivatesAllMatchingIndividualRules() {
+        Equipment asset1 = liveAsset("EQ-RULE-DEACT-MULTI-1");
+        Equipment asset2 = liveAsset("EQ-RULE-DEACT-MULTI-2");
+
+        MaintenancePolicyRule rule1 = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Rule 1 for Asset 1")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset1.getId())
+                .frequency(RecurrenceFrequency.MONTHLY)
+                .maintenanceType("Inspection")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        MaintenancePolicyRule rule2 = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Rule 2 for Asset 1")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset1.getId())
+                .frequency(RecurrenceFrequency.QUARTERLY)
+                .maintenanceType("Safety Test")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        MaintenancePolicyRule ruleOtherAsset = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Rule for Asset 2")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset2.getId())
+                .frequency(RecurrenceFrequency.MONTHLY)
+                .maintenanceType("Inspection")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset1.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        disposalService.completeDisposal(disposal.getId(), username);
+
+        assertFalse(ruleRepository.findById(rule1.getId()).orElseThrow().getActive());
+        assertFalse(ruleRepository.findById(rule2.getId()).orElseThrow().getActive());
+        assertTrue(ruleRepository.findById(ruleOtherAsset.getId()).orElseThrow().getActive(),
+                "Rule for active asset 2 must remain active");
     }
 }
