@@ -128,34 +128,19 @@ public class MaintenanceScheduleService {
         if (request.getReason() == null || request.getReason().isBlank()) {
             throw new IllegalArgumentException("Amendment reason is required");
         }
-        if (request.getDeadline() != null && request.getDeadline().isBefore(LocalDate.now())) {
+        if (request.getNewDeadline() != null && request.getNewDeadline().isBefore(LocalDate.now())) {
             throw new IllegalArgumentException("Amended deadline cannot be in the past");
         }
 
-        String maintenanceType = request.getMaintenanceType() == null
-                ? task.getMaintenanceType() : request.getMaintenanceType().trim();
-        if (maintenanceType.isBlank()) {
-            throw new IllegalArgumentException("Maintenance type cannot be blank");
-        }
-
-        String priority = request.getPriority() == null
-                ? task.getPriority() : normalizePriority(request.getPriority());
-        if (!PRIORITIES.contains(priority)) {
-            throw new IllegalArgumentException("Priority must be Normal, High, or Critical");
-        }
-        if (request.getRecurrencePeriodDays() != null
-                && request.getRecurrencePeriodDays() < 0) {
-            throw new IllegalArgumentException("Recurrence period cannot be negative");
-        }
+        String maintenanceType = task.getMaintenanceType();
+        String priority = task.getPriority();
 
         return new AmendmentValues(
-                request.getDeadline() != null ? request.getDeadline() : task.getDeadline(),
+                request.getNewDeadline() != null ? request.getNewDeadline() : task.getDeadline(),
                 maintenanceType,
-                request.getDescription() != null
-                        ? normalizeNullable(request.getDescription()) : task.getDescription(),
+                task.getDescription(),
                 priority,
-                request.getRecurrencePeriodDays() != null
-                        ? request.getRecurrencePeriodDays() : task.getRecurrencePeriodDays());
+                task.getRecurrencePeriodDays());
     }
 
     private List<String> determineChangedFields(

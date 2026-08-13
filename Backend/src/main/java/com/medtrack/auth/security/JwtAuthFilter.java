@@ -1,6 +1,7 @@
 package com.medtrack.auth.security;
 
 import com.medtrack.auth.authority.service.AuthorityService;
+import com.medtrack.auth.jwt.service.JwtSecurityTokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
