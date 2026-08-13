@@ -6,10 +6,16 @@ import { useAuth } from "../../context/AuthContext";
 export default function UpdateTask({ onNavigate, task: initialTask }) {
   const { user } = useAuth();
 
-  const [task, setTask] = useState(initialTask || null);
-  const [taskIdInput, setTaskIdInput] = useState(initialTask?.id || "");
-  const [searchId, setSearchId] = useState(initialTask?.id || "");
-  const [loading, setLoading] = useState(Boolean(initialTask?.id));
+  // The route is parameterised (`update-task/:id`), so a deep link arrives as a bare id string,
+  // while older in-app navigation passed the whole task object. Both resolve to the same id, and
+  // the full record is always fetched from the backend.
+  const initialTaskId = typeof initialTask === "string" ? initialTask : initialTask?.id;
+  const hasInitialObject = !!initialTask && typeof initialTask === "object";
+
+  const [task, setTask] = useState(hasInitialObject ? initialTask : null);
+  const [taskIdInput, setTaskIdInput] = useState(initialTaskId || "");
+  const [searchId, setSearchId] = useState(initialTaskId || "");
+  const [loading, setLoading] = useState(Boolean(initialTaskId));
   const [error, setError] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [done, setDone] = useState(false);
@@ -39,10 +45,10 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
   }, []);
 
   useEffect(() => {
-    if (initialTask?.id) {
-      fetchTaskDetails(initialTask.id);
+    if (initialTaskId) {
+      fetchTaskDetails(initialTaskId);
     }
-  }, [initialTask]);
+  }, [initialTaskId]);
 
   useEffect(() => {
     if (task) {

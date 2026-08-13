@@ -74,6 +74,7 @@ public class UserServiceTest {
         ReflectionTestUtils.setField(jwtUtil, "expirationMs", 604800000L);
         refreshTokenService = new RefreshTokenService(refreshTokenRepository);
         ReflectionTestUtils.setField(refreshTokenService, "refreshExpirationDays", 7L);
+        com.medtrack.auth.scim.service.ScimUserProvisioningService scimService = org.mockito.Mockito.mock(com.medtrack.auth.scim.service.ScimUserProvisioningService.class);
         userService = new UserService(
                 userRepository,
                 passwordEncoder,
@@ -84,7 +85,7 @@ public class UserServiceTest {
                 emailService,
                 kafkaEventPublisher,
                 new PublicRegistrationRolePolicy(),
-                scimUserProvisioningService
+                scimService
         );
         ReflectionTestUtils.setField(userService, "lockDurationMinutes", 30);
         ReflectionTestUtils.setField(userService, "jwtExpirationMs", 900000L);

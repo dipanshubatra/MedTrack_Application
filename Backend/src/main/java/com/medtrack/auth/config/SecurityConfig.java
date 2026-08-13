@@ -222,6 +222,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -238,6 +239,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -254,6 +256,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -270,6 +273,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -286,6 +290,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"

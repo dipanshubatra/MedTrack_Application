@@ -828,6 +828,10 @@ public class EquipmentService {
             equipment.setDepreciationMethod(DepreciationMethod.STRAIGHT_LINE);
         }
 
+        if (equipment.getPurchaseCost() != null && equipment.getPurchaseCost().compareTo(java.math.BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Purchase cost cannot be negative");
+        }
+
         if (equipment.getEquipmentCode() != null &&
                 equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
             throw new IllegalArgumentException("Equipment Code already exists.");

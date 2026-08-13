@@ -51,10 +51,25 @@ public class CspmController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/findings/{findingId}/remediate")
-    @Operation(summary = "Remediate CSPM Finding", description = "Triggers CLI/Terraform auto-remediation snippet for a cloud misconfiguration.")
-    public ResponseEntity<CspmSecurityFindingResponse> remediateFinding(@PathVariable String findingId) {
-        CspmSecurityFindingResponse response = cspmService.remediateFinding(findingId);
+    @PostMapping("/scan/{accountNumber}")
+    @Operation(summary = "Execute Posture Assessment Scan", description = "Runs synthetic continuous monitoring scan over AWS/Azure/GCP resources.")
+    public ResponseEntity<Map<String, Object>> executeScan(@PathVariable String accountNumber) {
+        Map<String, Object> response = cspmService.executeSyntheticPostureAssessmentScan(accountNumber);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/remediate-all/{accountNumber}")
+    @Operation(summary = "Auto-Remediate Account Misconfigurations", description = "Executes automated bulk remediation for all open findings in a cloud account.")
+    public ResponseEntity<Map<String, Object>> autoRemediate(@PathVariable String accountNumber) {
+        Map<String, Object> response = cspmService.autoRemediateCloudAccountFindings(accountNumber);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/metrics")
+    @Operation(summary = "Get CSPM Audit Metrics", description = "Retrieves global posture health score and CIS benchmark compliance metrics.")
+    public ResponseEntity<Map<String, Object>> getMetrics() {
+        Map<String, Object> metrics = cspmService.getCspmAuditMetrics();
+        return ResponseEntity.ok(metrics);
+    }
 }
+
