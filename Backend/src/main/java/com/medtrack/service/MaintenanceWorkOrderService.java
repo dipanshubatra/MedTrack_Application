@@ -58,6 +58,7 @@ public class MaintenanceWorkOrderService {
     private final UserRepository userRepository;
     private final MaintenanceWorkOrderValidator workOrderValidator;
     private final EquipmentDisposalRepository disposalRepository;
+    private final SparePartService sparePartService;
 
     /**
      * Create a new maintenance work order.

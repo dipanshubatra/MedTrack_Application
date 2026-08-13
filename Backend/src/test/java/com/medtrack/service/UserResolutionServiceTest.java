@@ -240,7 +240,8 @@ class UserResolutionServiceTest {
                     userRepository,
                     null,
                     null,
-                    certificatePdf
+                    certificatePdf,
+                    null
             );
 
             when(userRepository.findByUsername("hospital@medtrack.com")).thenReturn(Optional.empty());

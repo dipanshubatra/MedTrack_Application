@@ -422,8 +422,8 @@ public class MicrosegmentationService {
         long activeTunnelsCount = tunnels.stream().filter(t -> "ESTABLISHED".equalsIgnoreCase(t.getStatus())).count();
         long blockedTunnelsCount = tunnels.stream().filter(t -> t.getStatus().contains("DENIED") || t.getStatus().contains("TERMINATED")).count();
 
-        long totalTxBytes = tunnels.stream().mapToLong(t -> t.getTxBytes() != null ? t.getTxBytes() : 0L).sum();
-        long totalRxBytes = tunnels.stream().mapToLong(t -> t.getRxBytes() != null ? t.getRxBytes() : 0L).sum();
+        long totalTxBytes = tunnels.stream().mapToLong(SdpTunnelSession::getTxBytes).sum();
+        long totalRxBytes = tunnels.stream().mapToLong(SdpTunnelSession::getRxBytes).sum();
 
         Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("totalMicrosegmentationRules", policies.size());
