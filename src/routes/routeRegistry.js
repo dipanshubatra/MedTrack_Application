@@ -106,6 +106,8 @@ const SecurityPlaybookPage = lazy(() => import("../pages/auth/SecurityPlaybookPa
 const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentResponsePlaybookPage"));
 const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
 const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
+const SocOperationsConsolePage = lazy(() => import("../pages/auth/SocOperationsConsolePage"));
+
 
 /**
  * Path prefix the bundle is served under on GitHub Pages.
@@ -239,7 +241,9 @@ export const ROUTES = [
   { page: "incident-response", slugs: ["incident-response", "ir-playbook"], component: IncidentResponsePlaybookPage, access: AUTHENTICATED },
   { page: "compliance-evidence", slugs: ["evidence", "compliance-evidence"], component: ComplianceEvidencePage, access: AUTHENTICATED },
   { page: "compliance-reporting", slugs: ["compliance-reporting", "reporting"], component: ComplianceReportingPage, access: AUTHENTICATED },
+  { page: "soc-console", slugs: ["soc-console", "soc-command-center"], component: SocOperationsConsolePage, access: AUTHENTICATED },
 ];
+
 
 /**
  * Routes carrying a dynamic path segment, e.g. `/edit-equipment/EQ-1001`.
