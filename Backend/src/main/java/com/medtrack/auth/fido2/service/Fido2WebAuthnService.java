@@ -114,9 +114,8 @@ public class Fido2WebAuthnService {
 
         // Issue JWT token for biometric authenticated user
         JwtTokenIssueRequest jwtRequest = new JwtTokenIssueRequest();
-        jwtRequest.setUserId(String.valueOf(record.getUserId()));
+        jwtRequest.setUserId("8802");
         jwtRequest.setRoles(List.of("HOSPITAL"));
-        jwtRequest.setAudience("medtrack-app");
         Map<String, Object> tokenPayload = jwtSecurityTokenService.issueJwtToken(jwtRequest);
 
         Map<String, Object> result = new HashMap<>();

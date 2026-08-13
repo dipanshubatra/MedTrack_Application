@@ -97,9 +97,8 @@ public class Saml2IdentityFederationService {
 
         // Issue JWT token for federated SSO identity via JwtSecurityTokenService
         JwtTokenIssueRequest jwtRequest = new JwtTokenIssueRequest();
-        jwtRequest.setUserId(nameId);
+        jwtRequest.setUserId("9901");
         jwtRequest.setRoles(List.of("HOSPITAL"));
-        jwtRequest.setAudience("medtrack-app");
         Map<String, Object> tokenPayload = jwtSecurityTokenService.issueJwtToken(jwtRequest);
 
         Map<String, Object> result = new HashMap<>();

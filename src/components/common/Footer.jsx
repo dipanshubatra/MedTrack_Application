@@ -36,7 +36,7 @@ export default function Footer({ onNavigate }) {
             <div>
               <h4 className="text-primary font-bold text-[15px] mb-5">Suppliers</h4>
               <ul className="space-y-4 text-[14px] font-medium text-secondary flex flex-col items-start">
-                <li><button onClick={() => onNavigate && onNavigate("register", "Supplier")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Free Supplier Account</button></li>
+                <li><button onClick={() => onNavigate && onNavigate("register", { defaultRole: "Supplier" })} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Free Supplier Account</button></li>
                 <li><button onClick={() => onNavigate && onNavigate("supplier-centre")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Supplier Centre</button></li>
                 <li><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-primary transition-colors">Suppliers Blog</a></li>
               </ul>

@@ -263,6 +263,47 @@ function main() {
   }
   walkSource(path.join(projectRoot, 'src'));
 
+  // 6. Every navigation target declared as a `{ label, page }` link object must be registered.
+  //    Literal onNavigate("...") calls are caught elsewhere, but nav bars build their buttons from
+  //    arrays and call onNavigate(link.page), so the target is invisible to a literal scan - which
+  //    is exactly how the "New Procurement" / "Approval Inbox" buttons shipped pointing at
+  //    unregistered pages while every literal target checked out.
+  const pageKeys = new Set(routes.map((route) => route.page));
+  const linkPatterns = [
+    /\{\s*label:\s*["'][^"']*["']\s*,\s*page:\s*["']([^"']+)["']\s*\}/g,
+    /\{\s*page:\s*["']([^"']+)["']\s*,\s*label:\s*["'][^"']*["']\s*\}/g,
+  ];
+  const linkFiles = [];
+  function collectJsxFiles(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__' && entry.name !== 'node_modules') {
+          collectJsxFiles(full);
+        }
+      } else if (/^\.(jsx|js)$/.test(path.extname(entry.name))) {
+        linkFiles.push(full);
+      }
+    }
+  }
+  collectJsxFiles(path.join(projectRoot, 'src'));
+
+  for (const file of linkFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    for (const pattern of linkPatterns) {
+      let match;
+      while ((match = pattern.exec(content)) !== null) {
+        const target = match[1];
+        if (!pageKeys.has(target)) {
+          fail(
+            `${path.relative(projectRoot, file)} links to page "${target}", which is not `
+            + 'registered in the route registry - the button renders the 404 page'
+          );
+        }
+      }
+    }
+  }
+
   if (failures.length > 0) {
     console.error(`\ncheck-routes: ${failures.length} problem(s) found.\n`);
     failures.forEach((message) => console.error(`  - ${message}`));
