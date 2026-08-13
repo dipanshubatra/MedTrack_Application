@@ -183,4 +183,54 @@ class SparePartServiceTest {
         assertThat(captor.getValue().getDeleted()).isTrue();
     }
 
+    @Test
+    @DisplayName("getAllSpareParts - filters out soft-deleted spare parts")
+    void getAllSpareParts_ExcludesDeletedItems() {
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.findByHospitalIdAndDeletedFalse(1L)).thenReturn(List.of(testSparePart));
+
+        List<SparePartResponse> parts = sparePartService.getAllSpareParts("hospitalAdmin");
+        assertThat(parts).hasSize(1);
+        assertThat(parts.get(0).getPartNumber()).isEqualTo("FILTER-001");
+        verify(sparePartRepository).findByHospitalIdAndDeletedFalse(1L);
+        verify(sparePartRepository, never()).findByHospitalId(anyLong());
+    }
+
+    @Test
+    @DisplayName("getSparePart - successfully returns single active spare part")
+    void getSparePart_Success() {
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.findByIdAndHospitalIdAndDeletedFalse(50L, 1L))
+                .thenReturn(Optional.of(testSparePart));
+
+        SparePartResponse result = sparePartService.getSparePart(50L, "hospitalAdmin");
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(50L);
+        assertThat(result.getPartNumber()).isEqualTo("FILTER-001");
+    }
+
+    @Test
+    @DisplayName("getSparePart - throws ResourceNotFoundException when part is deleted or missing")
+    void getSparePart_NotFound_ThrowsException() {
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.findByIdAndHospitalIdAndDeletedFalse(999L, 1L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sparePartService.getSparePart(999L, "hospitalAdmin"))
+                .isInstanceOf(com.medtrack.exception.ResourceNotFoundException.class)
+                .hasMessageContaining("Active spare part not found with ID: 999");
+    }
+
+    @Test
+    @DisplayName("getSparePart - throws IllegalArgumentException when id is null")
+    void getSparePart_NullId_ThrowsException() {
+        assertThatThrownBy(() -> sparePartService.getSparePart(null, "hospitalAdmin"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Spare part ID is required");
+        verifyNoInteractions(userRepository, hospitalRepository, sparePartRepository);
+    }
+
 }

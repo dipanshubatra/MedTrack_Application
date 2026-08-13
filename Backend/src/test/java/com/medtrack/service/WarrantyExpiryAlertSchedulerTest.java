@@ -272,7 +272,8 @@ class WarrantyExpiryAlertSchedulerTest {
                             .type(OperationsEvent.EventType.EQUIPMENT_WARRANTY_EXPIRING)
                             .entityType(OperationsEvent.EntityType.EQUIPMENT)
                             .entityId(20L)
-                            .detail("{\"equipmentCode\":\"EQ-DUP\",\"threshold\":30}")
+                            .detail("{\"equipmentCode\":\"EQ-DUP\",\"threshold\":30,"
+                                    + "\"expiry\":\"" + equipment.getWarrantyExpiry() + "\"}")
                             .build()));
 
             scheduler.runWarrantyAlertGeneration();

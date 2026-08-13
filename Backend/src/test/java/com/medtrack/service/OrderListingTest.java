@@ -125,7 +125,7 @@ class OrderListingTest {
             assertEquals(1, page.getTotalElements());
             verify(orderRepository).findBySupplierId(41L, pageable);
             verify(orderRepository, never()).findAll(any(Pageable.class));
-            verify(orderRepository, never()).findByHospital(any(), any(Pageable.class));
+            verify(orderRepository, never()).findVisibleToHospitalUser(any(), any(), any(Pageable.class));
         }
 
         @Test
@@ -133,14 +133,16 @@ class OrderListingTest {
         void hospitalUserIsScopedToTheirOrganisation() {
             authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
             Pageable pageable = PageRequest.of(1, 10);
-            when(orderRepository.findByHospital("City Hospital", pageable))
+            when(orderRepository.findVisibleToHospitalUser(
+                    "City Hospital", "admin@cityhospital.com", pageable))
                     .thenReturn(new PageImpl<>(List.of(deliveredOrder(2L, 8, 3)), pageable, 11));
 
             Page<EquipmentOrder> page = orderService.getAllOrders(pageable);
 
             assertEquals(11, page.getTotalElements());
             assertEquals(1, page.getNumber());
-            verify(orderRepository).findByHospital("City Hospital", pageable);
+            verify(orderRepository).findVisibleToHospitalUser(
+                    "City Hospital", "admin@cityhospital.com", pageable);
             verify(orderRepository, never()).findAll(any(Pageable.class));
         }
 
@@ -192,20 +194,20 @@ class OrderListingTest {
         @DisplayName("a hospital caller's scorecard stays scoped to their organisation")
         void hospitalScorecardIsScoped() {
             authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
-            when(orderRepository.findByHospital("City Hospital"))
+            when(orderRepository.findVisibleToHospitalUser("City Hospital", "admin@cityhospital.com"))
                     .thenReturn(List.of(deliveredOrder(1L, 10, 5), deliveredOrder(2L, 20, 5)));
 
             SupplierMetricsDto metrics = orderService.getSupplierMetrics();
 
             assertEquals(2, metrics.getTotalOrders());
             assertEquals(50.0, metrics.getOnTimeRate());
-            verify(orderRepository).findByHospital("City Hospital");
+            verify(orderRepository).findVisibleToHospitalUser("City Hospital", "admin@cityhospital.com");
             verify(orderRepository, never()).findAll();
         }
 
         @Test
-        @DisplayName("reports 100% on time when nothing has been delivered yet")
-        void emptyHistoryDefaultsToFullyOnTime() {
+        @DisplayName("reports no on-time record when nothing has been delivered yet")
+        void emptyHistoryHasNoOnTimeRecord() {
             authenticateAs("supplier@medsupply.com", "Global Suppliers", "ROLE_SUPPLIER");
             when(supplierAccessGuard.resolveCallerId(any())).thenReturn(41L);
             when(orderRepository.findBySupplierId(41L)).thenReturn(List.of());
@@ -214,7 +216,9 @@ class OrderListingTest {
 
             assertEquals(0, metrics.getTotalOrders());
             assertEquals(0, metrics.getDeliveredOrders());
-            assertEquals(100.0, metrics.getOnTimeRate());
+            // Was 100.0. A supplier who has delivered nothing has no on-time record, and opening
+            // a brand-new scorecard on a perfect score is a claim the data does not support.
+            assertEquals(0.0, metrics.getOnTimeRate());
             assertEquals(0.0, metrics.getAverageDeliveryDays());
         }
     }

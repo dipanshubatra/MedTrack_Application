@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, ChevronDown, Hospital, Layers, Lock, Mail, Wrench } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { loginUser } from "../../services/AuthService";
+import { buildHref } from "../../routes/routeRegistry";
 import MedTrackLogo from "../../components/common/MedTrackLogo";
 import "./auth.css";
 
@@ -74,7 +75,7 @@ export default function LoginPage({ onNavigate }) {
     <main className="split-auth-container">
       <section className="split-form-section" style={{ position: 'relative' }}>
         <button 
-          onClick={() => onNavigate ? onNavigate('home') : window.location.href = '/'} 
+          onClick={() => onNavigate ? onNavigate('landing') : window.location.href = buildHref('landing')} 
           style={{ position: 'absolute', top: '40px', left: '40px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '500' }}
         >
           <ArrowLeft size={20} /> Back
@@ -165,7 +166,7 @@ export default function LoginPage({ onNavigate }) {
         <footer className="auth-footer" style={{ marginTop: "24px" }}>
           <span>Not a member?</span>
           <a
-            href="/register"
+            href={buildHref("register")}
             className="split-footer-link"
             onClick={(e) => {
               if (onNavigate) {

@@ -1,8 +1,12 @@
 package com.medtrack.service;
 
+import com.medtrack.dto.MaintenanceActivityAnalytics;
 import com.medtrack.dto.MaintenanceAnalyticsResponse;
+import com.medtrack.dto.MaintenanceDepartmentAnalytics;
 import com.medtrack.dto.MaintenanceEquipmentAnalytics;
+import com.medtrack.dto.MaintenanceStatusTransitionAnalytics;
 import com.medtrack.dto.MaintenanceTechnicianAnalytics;
+import com.medtrack.dto.MaintenanceTrendAnalytics;
 import com.medtrack.dto.MaintenanceTypeAnalytics;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.SlaState;
@@ -71,23 +75,14 @@ public class MaintenanceAnalyticsService {
                         MaintenanceStatus.COMPLETED
                 );
 
-        long cancelledTasks =
-                analyticsRepository.countByHospitalIdAndStatus(
-                        hospitalId,
-                        MaintenanceStatus.CANCELLED
-                );
+        // Cancellation is represented by archival, not a persisted MaintenanceStatus.
+        long cancelledTasks = 0L;
 
         long openTasks =
                 analyticsRepository.countByHospitalIdAndStatusNot(
                         hospitalId,
                         MaintenanceStatus.COMPLETED
                 );
-
-        // Cancelled tasks should not normally be treated as open.
-        openTasks = Math.max(
-                0,
-                openTasks - cancelledTasks
-        );
 
         // ========================================================
         // OVERDUE
@@ -183,6 +178,28 @@ public class MaintenanceAnalyticsService {
                         hospitalId
                 );
 
+        List<MaintenanceDepartmentAnalytics> departmentAnalytics =
+                analyticsRepository.getDepartmentAnalytics(hospitalId);
+
+        List<MaintenanceTrendAnalytics> trendAnalytics =
+                analyticsRepository.getMaintenanceTrend(
+                        hospitalId,
+                        startDateTime,
+                        endDateTime
+                );
+
+        long totalActivities = activityRepository.countByHospitalId(hospitalId);
+        long activitiesInPeriod =
+                activityRepository.countByHospitalIdAndOccurredAtBetween(
+                        hospitalId,
+                        startDateTime,
+                        endDateTime
+                );
+        List<MaintenanceActivityAnalytics> activityTypeAnalytics =
+                activityRepository.getEventTypeAnalytics(hospitalId);
+        List<MaintenanceStatusTransitionAnalytics> statusTransitionAnalytics =
+                activityRepository.getStatusTransitionAnalytics(hospitalId);
+
         // ========================================================
         // RESPONSE
         // ========================================================
@@ -243,6 +260,18 @@ public class MaintenanceAnalyticsService {
                         equipmentAnalytics
                 )
 
+                .departmentAnalytics(departmentAnalytics)
+
+                .trendAnalytics(trendAnalytics)
+
+                .totalActivities(totalActivities)
+
+                .activitiesInPeriod(activitiesInPeriod)
+
+                .activityTypeAnalytics(activityTypeAnalytics)
+
+                .statusTransitionAnalytics(statusTransitionAnalytics)
+
                 .build();
     }
 
@@ -260,5 +289,35 @@ public class MaintenanceAnalyticsService {
                 today.withDayOfMonth(1),
                 today
         );
+    }
+
+    public List<MaintenanceDepartmentAnalytics> getDepartmentAnalytics(Long hospitalId) {
+        requireHospitalId(hospitalId);
+        return analyticsRepository.getDepartmentAnalytics(hospitalId);
+    }
+
+    public List<MaintenanceTrendAnalytics> getMaintenanceTrends(
+            Long hospitalId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        requireHospitalId(hospitalId);
+        if (startDate == null || endDate == null) {
+            throw new IllegalArgumentException("Start date and end date are required");
+        }
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("Start date cannot be after end date");
+        }
+        return analyticsRepository.getMaintenanceTrend(
+                hospitalId,
+                startDate.atStartOfDay(),
+                endDate.plusDays(1).atStartOfDay().minusNanos(1)
+        );
+    }
+
+    private void requireHospitalId(Long hospitalId) {
+        if (hospitalId == null) {
+            throw new IllegalArgumentException("Hospital ID is required");
+        }
     }
 }

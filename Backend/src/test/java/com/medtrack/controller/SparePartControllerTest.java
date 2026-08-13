@@ -265,6 +265,35 @@ class SparePartControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    @DisplayName("Should return single spare part by ID")
+    void shouldReturnSparePartById() throws Exception {
+        SparePartResponse part = response(1L, "SP-100", 10);
+        when(sparePartService.getSparePart(1L, "hospitalUser")).thenReturn(part);
+
+        mockMvc.perform(get("/api/spare-parts/1")
+                        .principal(hospitalAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.partNumber").value("SP-100"))
+                .andExpect(jsonPath("$.stockLevel").value(10));
+
+        verify(sparePartService).getSparePart(1L, "hospitalUser");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when requesting non-existent or deleted spare part by ID")
+    void shouldReturnNotFoundWhenSparePartDoesNotExist() throws Exception {
+        when(sparePartService.getSparePart(99L, "hospitalUser"))
+                .thenThrow(new ResourceNotFoundException("Active spare part not found with ID: 99"));
+
+        mockMvc.perform(get("/api/spare-parts/99")
+                        .principal(hospitalAuth))
+                .andExpect(status().isNotFound());
+
+        verify(sparePartService).getSparePart(99L, "hospitalUser");
+    }
+
     private SparePartResponse response(Long id, String partNumber, int stockLevel) {
         return SparePartResponse.builder()
                 .id(id)

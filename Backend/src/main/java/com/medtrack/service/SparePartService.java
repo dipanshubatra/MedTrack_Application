@@ -40,9 +40,20 @@ public class SparePartService {
 
     public List<SparePartResponse> getAllSpareParts(String username) {
         Hospital hospital = getHospitalForUser(username);
-        return sparePartRepository.findByHospitalId(hospital.getId()).stream()
+        return sparePartRepository.findByHospitalIdAndDeletedFalse(hospital.getId()).stream()
                 .map(SparePartResponse::from)
                 .toList();
+    }
+
+    public SparePartResponse getSparePart(Long id, String username) {
+        if (id == null) {
+            throw new IllegalArgumentException("Spare part ID is required");
+        }
+        Hospital hospital = getHospitalForUser(username);
+        SparePart sparePart = sparePartRepository
+                .findByIdAndHospitalIdAndDeletedFalse(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Active spare part not found with ID: " + id));
+        return SparePartResponse.from(sparePart);
     }
 
     public List<SparePartResponse> getLowStockAlerts(String username) {

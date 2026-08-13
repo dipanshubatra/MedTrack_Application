@@ -6,14 +6,17 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DepartmentMaintenanceAnalyticsResponse {
+public class MaintenanceTrendResponse {
 
-    private String department;
+    private LocalDate periodStart;
+
+    private LocalDate periodEnd;
 
     private long maintenanceCount;
 
@@ -21,15 +24,7 @@ public class DepartmentMaintenanceAnalyticsResponse {
 
     private long overdueCount;
 
-    private long preventiveCount;
-
-    private long correctiveCount;
-
-    private long emergencyCount;
-
-    private BigDecimal totalMaintenanceCost;
-
-    private BigDecimal averageMaintenanceCost;
+    private BigDecimal maintenanceCost;
 
     private double averageCompletionTimeHours;
 }

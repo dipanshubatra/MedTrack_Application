@@ -30,7 +30,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class PreventiveMaintenanceServiceTest {
+class MaintenancePolicyLifecycleServiceTest {
 
     @Mock
     private MaintenancePolicyRuleRepository ruleRepository;
@@ -101,11 +101,8 @@ class PreventiveMaintenanceServiceTest {
         when(ruleRepository.findByIdAndHospitalId(1L, 100L))
                 .thenReturn(Optional.of(rule));
 
-        when(ruleRepository.save(any(MaintenancePolicyRule.class)))
+        lenient().when(ruleRepository.save(any(MaintenancePolicyRule.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-
-        when(equipmentRepository.findById(anyLong()))
-                .thenReturn(Optional.empty());
     }
 
     @Test

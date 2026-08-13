@@ -33,6 +33,11 @@ const GuidesPage = lazy(() => import("../pages/GuidesPage"));
 const SecurityPage = lazy(() => import("../pages/SecurityPage"));
 const SystemStatusPage = lazy(() => import("../pages/SystemStatusPage"));
 const DualRangeSliderStudio = lazy(() => import("../components/common/DualRangeSliderStudio"));
+const ResearchPage = lazy(() => import("../pages/ResearchPage"));
+const SupplierCentrePage = lazy(() => import("../pages/SupplierCentrePage"));
+const PrivacyPage = lazy(() => import("../pages/PrivacyPage"));
+const CookieConsentPage = lazy(() => import("../pages/CookieConsentPage"));
+const DoNotSellPage = lazy(() => import("../pages/DoNotSellPage"));
 
 const LoginPage = lazy(() => import("../pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("../pages/auth/RegisterPage"));
@@ -52,6 +57,9 @@ const PreventiveMaintenanceRules = lazy(() => import("../pages/hospital/Preventi
 const MaintenanceSlaDashboard = lazy(() => import("../pages/hospital/MaintenanceSlaDashboard"));
 const EquipmentCalibrationHub = lazy(() => import("../pages/hospital/EquipmentCalibrationHub"));
 const RetiredAssets = lazy(() => import("../pages/hospital/RetiredAssets"));
+const EquipmentLifecyclePredictor = lazy(() => import("../pages/hospital/EquipmentLifecyclePredictor"));
+const ProcurementRequestWizard = lazy(() => import("../pages/hospital/ProcurementRequestWizard"));
+const ApprovalInbox = lazy(() => import("../pages/hospital/ApprovalInbox"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -147,6 +155,11 @@ export const ROUTES = [
   { page: "help", slugs: ["help", "help-center"], component: HelpCenterPage, access: PUBLIC },
   { page: "awards", slugs: ["awards"], component: AwardsPage, access: PUBLIC },
   { page: "terms", slugs: ["terms"], component: TermsPage, access: PUBLIC },
+  { page: "privacy", slugs: ["privacy"], component: PrivacyPage, access: PUBLIC },
+  { page: "cookies", slugs: ["cookies", "cookie-consent"], component: CookieConsentPage, access: PUBLIC },
+  { page: "do-not-sell", slugs: ["do-not-sell"], component: DoNotSellPage, access: PUBLIC },
+  { page: "research", slugs: ["research"], component: ResearchPage, access: PUBLIC },
+  { page: "supplier-centre", slugs: ["supplier-centre"], component: SupplierCentrePage, access: PUBLIC },
   { page: "guides", slugs: ["guides"], component: GuidesPage, access: PUBLIC },
   { page: "security", slugs: ["security"], component: SecurityPage, access: PUBLIC },
   { page: "status", slugs: ["status"], component: SystemStatusPage, access: PUBLIC },
@@ -168,6 +181,9 @@ export const ROUTES = [
   { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId" },
   { page: "schedule-maintenance", slugs: ["schedule-maintenance"], component: ScheduleMaintenancePage, access: HOSPITAL_ONLY },
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
+  { page: "equipment-lifecycle", slugs: ["equipment-lifecycle", "lifecycle"], component: EquipmentLifecyclePredictor, access: HOSPITAL_ONLY },
+  { page: "procurement-wizard", slugs: ["procurement-wizard"], component: ProcurementRequestWizard, access: HOSPITAL_ONLY },
+  { page: "approval-inbox", slugs: ["approval-inbox"], component: ApprovalInbox, access: HOSPITAL_ONLY },
   { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
   { page: "sla-dashboard", slugs: ["sla-dashboard"], component: MaintenanceSlaDashboard, access: HOSPITAL_ONLY },
   { page: "calibration", slugs: ["calibration", "equipment-calibration"], component: EquipmentCalibrationHub, access: HOSPITAL_ONLY },
@@ -299,6 +315,20 @@ export function buildPath(page, data) {
     return `/${slug}/${encodeURIComponent(data)}`;
   }
   return slug ? `/${slug}` : "/";
+}
+
+/**
+ * Builds a full, base-path-aware URL for a navigation target.
+ *
+ * The app is served from a sub-path on GitHub Pages (BASE_PATH, e.g.
+ * "/MedTrack_Application"), so a bare path like "/login" bypasses it and
+ * 404s. Mirror App.jsx's base-path detection so fallback navigation (plain
+ * <a href> targets and window.location redirects used when onNavigate is
+ * unavailable) lands on the real route in both dev and the deployed site.
+ */
+export function buildHref(page, data) {
+  const basePath = window.location.pathname.includes(BASE_PATH) ? BASE_PATH : "";
+  return `${basePath}${buildPath(page, data)}`;
 }
 
 /**
