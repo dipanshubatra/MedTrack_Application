@@ -208,6 +208,37 @@ public class SparePartService {
         return SparePartResponse.from(sparePartRepository.save(part));
     }
 
+    @Transactional
+    public void deductSparePartsForWorkOrder(
+            List<com.medtrack.dto.SparePartDeductionItem> items,
+            Long hospitalId,
+            String username) {
+        if (items == null || items.isEmpty() || hospitalId == null) {
+            return;
+        }
+
+        for (com.medtrack.dto.SparePartDeductionItem item : items) {
+            if (item.getPartNumber() == null || item.getPartNumber().isBlank()) {
+                continue;
+            }
+            String partNumber = item.getPartNumber().trim();
+            int quantity = item.getQuantity() != null && item.getQuantity() > 0 ? item.getQuantity() : 1;
+
+            SparePart part = sparePartRepository
+                    .findActiveByHospitalIdAndPartNumberForUpdate(hospitalId, partNumber)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Spare part with part number '" + partNumber + "' not found in hospital inventory"));
+
+            if (part.getStockLevel() < quantity) {
+                throw new IllegalArgumentException("Insufficient stock for spare part: " + partNumber
+                        + ". Available: " + part.getStockLevel() + ", Required: " + quantity);
+            }
+
+            part.setStockLevel(part.getStockLevel() - quantity);
+            sparePartRepository.save(part);
+        }
+    }
+
     private void validateSparePart(SparePart sparePart) {
         if (sparePart == null) {
             throw new IllegalArgumentException("Spare part payload is required");

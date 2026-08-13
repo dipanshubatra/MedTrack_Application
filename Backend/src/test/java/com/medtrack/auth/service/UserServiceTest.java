@@ -60,6 +60,9 @@ public class UserServiceTest {
     @Mock
     private KafkaEventPublisher kafkaEventPublisher;
 
+    @Mock
+    private com.medtrack.auth.scim.service.ScimUserProvisioningService scimUserProvisioningService;
+
     private final JwtUtil jwtUtil = new JwtUtil();
 
     private RefreshTokenService refreshTokenService;
@@ -80,7 +83,8 @@ public class UserServiceTest {
                 passwordResetTokenRepository,
                 emailService,
                 kafkaEventPublisher,
-                new PublicRegistrationRolePolicy()
+                new PublicRegistrationRolePolicy(),
+                scimUserProvisioningService
         );
         ReflectionTestUtils.setField(userService, "lockDurationMinutes", 30);
         ReflectionTestUtils.setField(userService, "jwtExpirationMs", 900000L);

@@ -55,6 +55,7 @@ public class MaintenanceWorkOrderService {
 
     private final UserRepository userRepository;
     private final MaintenanceWorkOrderValidator workOrderValidator;
+    private final SparePartService sparePartService;
 
     /**
      * Create a new maintenance work order.
@@ -449,6 +450,14 @@ public class MaintenanceWorkOrderService {
             throw new IllegalStateException(
                     "Only IN_PROGRESS work orders can be completed"
             );
+        }
+
+        if (request != null && request.getPartsUsed() != null && !request.getPartsUsed().isBlank()) {
+            List<com.medtrack.dto.SparePartDeductionItem> deductionItems =
+                    workOrderValidator.validateAndExtractSparePartUsage(request.getPartsUsed());
+            if (!deductionItems.isEmpty() && hospitalId != null) {
+                sparePartService.deductSparePartsForWorkOrder(deductionItems, hospitalId, username);
+            }
         }
 
         workOrder.setStatus(

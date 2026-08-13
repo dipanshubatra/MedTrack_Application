@@ -52,6 +52,9 @@ public class PasswordResetTest {
     @Mock
     private KafkaEventPublisher kafkaEventPublisher;
 
+    @Mock
+    private com.medtrack.auth.scim.service.ScimUserProvisioningService scimUserProvisioningService;
+
     private final JwtUtil jwtUtil = new JwtUtil();
     private RefreshTokenService refreshTokenService;
     private UserService userService;
@@ -69,7 +72,8 @@ public class PasswordResetTest {
                 passwordResetTokenRepository,
                 emailService,
                 kafkaEventPublisher,
-                new PublicRegistrationRolePolicy()
+                new PublicRegistrationRolePolicy(),
+                scimUserProvisioningService
         );
         ReflectionTestUtils.setField(userService, "otpLength", 6);
         ReflectionTestUtils.setField(userService, "otpExpiryMinutes", 10);

@@ -23,10 +23,20 @@ public class MaintenanceScheduleAmendmentRequest {
     @Future(message = "New deadline must be in the future")
     private LocalDate newDeadline;
 
+    private LocalDate deadline;
+    private String maintenanceType;
+    private String description;
+    private String priority;
+    private Integer recurrencePeriodDays;
+
     @NotBlank(message = "Amendment reason is required")
     @Size(
             max = NOTES_MAX_LENGTH,
             message = "Amendment reason must not exceed 16000 characters"
     )
     private String reason;
+
+    public LocalDate getDeadline() {
+        return deadline != null ? deadline : newDeadline;
+    }
 }

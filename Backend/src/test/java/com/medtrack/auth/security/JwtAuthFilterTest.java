@@ -33,6 +33,9 @@ public class JwtAuthFilterTest {
     @Mock
     private AuthorityService authorityService;
 
+    @Mock
+    private com.medtrack.auth.jwt.service.JwtSecurityTokenService jwtSecurityTokenService;
+
     private JwtUtil jwtUtil;
     private JwtAuthFilter jwtAuthFilter;
 
@@ -43,7 +46,7 @@ public class JwtAuthFilterTest {
                 "medtrack-super-secret-key-change-this-in-production-1234567890");
         org.springframework.test.util.ReflectionTestUtils.setField(jwtUtil, "expirationMs", 900000L);
 
-        jwtAuthFilter = new JwtAuthFilter(jwtUtil, authorityService);
+        jwtAuthFilter = new JwtAuthFilter(jwtUtil, authorityService, jwtSecurityTokenService);
     }
 
     @AfterEach
