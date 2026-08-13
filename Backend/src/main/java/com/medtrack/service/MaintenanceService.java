@@ -194,6 +194,10 @@ public class MaintenanceService {
             throw new IllegalArgumentException("New deadline is required");
         }
 
+        if (request.getNewDeadline().isBefore(java.time.LocalDate.now())) {
+            throw new IllegalArgumentException("Deadline cannot be in the past");
+        }
+
         if (request.getReason() == null || request.getReason().isBlank()) {
             throw new IllegalArgumentException("Amendment reason is required");
         }
@@ -411,6 +415,9 @@ public class MaintenanceService {
         }
         if (request.getDeadline() == null) {
             throw new IllegalArgumentException("Deadline is required");
+        }
+        if (request.getDeadline().isBefore(java.time.LocalDate.now())) {
+            throw new IllegalArgumentException("Deadline cannot be in the past");
         }
         if (request.getMaintenanceType() == null || request.getMaintenanceType().isBlank()) {
             throw new IllegalArgumentException("Maintenance type is required");
