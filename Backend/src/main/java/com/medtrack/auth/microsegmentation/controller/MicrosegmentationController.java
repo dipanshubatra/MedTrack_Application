@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST Controller for Zero-Trust Microsegmentation & Software-Defined Perimeter (SDP).
@@ -58,21 +59,32 @@ public class MicrosegmentationController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/evaluate")
-    @Operation(summary = "Evaluate Traffic Access", description = "Performs real-time zero-trust packet access evaluation between source and destination segments.")
-    public ResponseEntity<Map<String, Object>> evaluateTrafficAccess(@RequestParam String sourceSegment,
-                                                                    @RequestParam String destinationSegment,
-                                                                    @RequestParam(defaultValue = "TCP") String protocol,
-                                                                    @RequestParam(defaultValue = "443") String port) {
-        Map<String, Object> response = microsegmentationService.evaluateTrafficAccess(sourceSegment, destinationSegment, protocol, port);
+    @PutMapping("/tunnels/{sessionId}/terminate")
+    @Operation(summary = "Terminate SDP Tunnel", description = "Terminates an active SDP encrypted tunnel session.")
+    public ResponseEntity<SdpTunnelSessionResponse> terminateTunnel(@PathVariable String sessionId) {
+        SdpTunnelSessionResponse response = microsegmentationService.terminateTunnel(sessionId);
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/quarantine/{sourceSegment}")
-    @Operation(summary = "Quarantine Source Segment", description = "Creates emergency isolation policy blocking all traffic to/from compromised segment.")
-    public ResponseEntity<Map<String, Object>> quarantineSourceSegment(@PathVariable String sourceSegment) {
-        Map<String, Object> response = microsegmentationService.quarantineSourceSegment(sourceSegment, "SECURITY_OPERATOR");
+    @PostMapping("/evaluate")
+    @Operation(summary = "Evaluate Traffic Access", description = "Performs real-time zero-trust packet access evaluation between source and destination segments.")
+    public ResponseEntity<Map<String, Object>> evaluateTrafficAccess(@Valid @RequestBody EvaluateTrafficAccessRequest request) {
+        Map<String, Object> response = microsegmentationService.evaluateTrafficAccess(request);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/quarantine")
+    @Operation(summary = "Quarantine Source Segment", description = "Creates emergency isolation policy blocking all traffic to/from compromised segment.")
+    public ResponseEntity<Map<String, Object>> quarantineSourceSegment(@Valid @RequestBody QuarantineSegmentRequest request) {
+        Map<String, Object> response = microsegmentationService.quarantineSourceSegment(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/violations")
+    @Operation(summary = "Get All Policy Violations", description = "Retrieves logged zero-trust microsegmentation policy violations and blocked attempts.")
+    public ResponseEntity<List<MicrosegmentationViolationResponse>> getAllViolationLogs() {
+        List<MicrosegmentationViolationResponse> violations = microsegmentationService.getAllViolationLogs();
+        return ResponseEntity.ok(violations);
     }
 
     @GetMapping("/ebpf/matrix")
@@ -89,4 +101,3 @@ public class MicrosegmentationController {
         return ResponseEntity.ok(metrics);
     }
 }
-

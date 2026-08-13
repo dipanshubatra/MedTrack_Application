@@ -32,6 +32,7 @@ public class MicrosegmentationService {
 
     private final MicrosegmentationPolicyRepository policyRepository;
     private final SdpTunnelSessionRepository tunnelRepository;
+    private final MicrosegmentationViolationLogRepository violationLogRepository;
     private final SiemLogCorrelationService siemLogCorrelationService;
 
     private static final List<String> RESTRICTED_PORTS = List.of("22", "3389", "23", "21", "445", "139");
@@ -39,14 +40,16 @@ public class MicrosegmentationService {
     @Autowired
     public MicrosegmentationService(MicrosegmentationPolicyRepository policyRepository,
                                      SdpTunnelSessionRepository tunnelRepository,
+                                     MicrosegmentationViolationLogRepository violationLogRepository,
                                      SiemLogCorrelationService siemLogCorrelationService) {
         this.policyRepository = policyRepository;
         this.tunnelRepository = tunnelRepository;
+        this.violationLogRepository = violationLogRepository;
         this.siemLogCorrelationService = siemLogCorrelationService;
     }
 
     /**
-     * Seeds baseline microsegmentation rules & SDP tunnel telemetry.
+     * Seeds baseline microsegmentation rules, SDP tunnel telemetry, and sample violation logs.
      */
     @PostConstruct
     @Transactional
@@ -63,6 +66,12 @@ public class MicrosegmentationService {
             seedSampleTunnel("SDP-87105", "operator@medtrack-health.org", "10.200.4.12", "PROD_HEALTH_DB", "WIREGUARD_UDP", 1048576L, 4194304L);
             seedSampleTunnel("SDP-65120", "doctor.smith@medtrack-health.org", "10.200.8.44", "EHR_VAULT", "WIREGUARD_UDP", 524288L, 2097152L);
             seedSampleTunnel("SDP-43109", "tech.lead@medtrack-health.org", "10.200.12.89", "INTERNAL_API_GATEWAY", "IPSEC_IKEV2", 2097152L, 8388608L);
+        }
+
+        if (violationLogRepository.count() == 0) {
+            seedSampleViolation("VIO-90101", "GUEST_WIFI_VLAN", "PROD_HEALTH_DB", "192.168.99.45", "TCP", "5432", "Implicit Zero-Trust Deny Rule", "BLOCK");
+            seedSampleViolation("VIO-87102", "THIRD_PARTY_VENDOR_VPN", "EHR_VAULT", "10.200.55.12", "TCP", "443", "Unapproved Device Posture Fingerprint", "BLOCK");
+            seedSampleViolation("VIO-74103", "WORKSTATION_LAN", "CORE_INFRASTRUCTURE", "10.100.2.88", "TCP", "22", "Restricted SSH Port Access Blocked", "BLOCK");
         }
     }
 
@@ -96,6 +105,22 @@ public class MicrosegmentationService {
                     .txBytes(tx)
                     .rxBytes(rx)
                     .establishedAt(LocalDateTime.now().minusHours(1))
+                    .build());
+        }
+    }
+
+    private void seedSampleViolation(String vId, String src, String dst, String ip, String proto, String port, String reason, String act) {
+        if (violationLogRepository.findByViolationId(vId).isEmpty()) {
+            violationLogRepository.save(MicrosegmentationViolationLog.builder()
+                    .violationId(vId)
+                    .sourceSegment(src)
+                    .destinationSegment(dst)
+                    .sourceIp(ip)
+                    .protocol(proto)
+                    .destinationPort(port)
+                    .violationReason(reason)
+                    .enforcedAction(act)
+                    .detectedAt(LocalDateTime.now().minusMinutes(30))
                     .build());
         }
     }
@@ -154,7 +179,7 @@ public class MicrosegmentationService {
         boolean targetBlocked = policyRepository.findAll().stream()
                 .filter(p -> "ACTIVE".equalsIgnoreCase(p.getStatus()))
                 .filter(p -> "BLOCK".equalsIgnoreCase(p.getAction()))
-                .anyComponentsMatch(p -> request.getTargetSegment().equalsIgnoreCase(p.getDestinationSegment()));
+                .anyMatch(p -> request.getTargetSegment().equalsIgnoreCase(p.getDestinationSegment()));
 
         String status = targetBlocked ? "DENIED_BY_POLICY" : "ESTABLISHED";
 
@@ -194,33 +219,38 @@ public class MicrosegmentationService {
     /**
      * Real-time zero-trust packet traffic evaluation engine.
      */
-    @Transactional(readOnly = true)
-    public Map<String, Object> evaluateTrafficAccess(String sourceSegment, String destinationSegment, String protocol, String port) {
+    @Transactional
+    public Map<String, Object> evaluateTrafficAccess(EvaluateTrafficAccessRequest request) {
         List<MicrosegmentationPolicy> activePolicies = policyRepository.findAll().stream()
                 .filter(p -> "ACTIVE".equalsIgnoreCase(p.getStatus()))
                 .collect(Collectors.toList());
 
         Optional<MicrosegmentationPolicy> matchingPolicy = activePolicies.stream()
-                .filter(p -> p.getSourceSegment().equalsIgnoreCase(sourceSegment) || "*".equals(p.getSourceSegment()))
-                .filter(p -> p.getDestinationSegment().equalsIgnoreCase(destinationSegment) || "*".equals(p.getDestinationSegment()))
-                .filter(p -> p.getAllowedProtocol().equalsIgnoreCase(protocol) || "ALL".equalsIgnoreCase(p.getAllowedProtocol()))
-                .filter(p -> p.getPortRange().equals(port) || "*".equals(p.getPortRange()))
+                .filter(p -> p.getSourceSegment().equalsIgnoreCase(request.getSourceSegment()) || "*".equals(p.getSourceSegment()))
+                .filter(p -> p.getDestinationSegment().equalsIgnoreCase(request.getDestinationSegment()) || "*".equals(p.getDestinationSegment()))
+                .filter(p -> p.getAllowedProtocol().equalsIgnoreCase(request.getProtocol()) || "ALL".equalsIgnoreCase(p.getAllowedProtocol()))
+                .filter(p -> p.getPortRange().equals(request.getPort()) || "*".equals(p.getPortRange()))
                 .findFirst();
 
         Map<String, Object> evalResult = new LinkedHashMap<>();
-        evalResult.put("sourceSegment", sourceSegment);
-        evalResult.put("destinationSegment", destinationSegment);
-        evalResult.put("protocol", protocol);
-        evalResult.put("port", port);
+        evalResult.put("sourceSegment", request.getSourceSegment());
+        evalResult.put("destinationSegment", request.getDestinationSegment());
+        evalResult.put("protocol", request.getProtocol());
+        evalResult.put("port", request.getPort());
         evalResult.put("timestamp", LocalDateTime.now().format(ISO_FORMATTER));
 
         if (matchingPolicy.isPresent()) {
             MicrosegmentationPolicy pol = matchingPolicy.get();
-            evalResult.put("accessGranted", "STRICT_ALLOW".equalsIgnoreCase(pol.getAction()));
+            boolean isAllow = "STRICT_ALLOW".equalsIgnoreCase(pol.getAction());
+            evalResult.put("accessGranted", isAllow);
             evalResult.put("matchedRuleId", pol.getRuleId());
             evalResult.put("action", pol.getAction());
             evalResult.put("postureRequirement", pol.getPostureRequirement());
             evalResult.put("evalReason", "Explicit microsegmentation policy match found.");
+
+            if (!isAllow) {
+                recordViolation(request.getSourceSegment(), request.getDestinationSegment(), request.getSourceIpAddress(), request.getProtocol(), request.getPort(), "Policy Match Blocked Access");
+            }
         } else {
             // Default Zero Trust Posture: DENY ALL BY DEFAULT
             evalResult.put("accessGranted", false);
@@ -228,23 +258,41 @@ public class MicrosegmentationService {
             evalResult.put("action", "BLOCK");
             evalResult.put("postureRequirement", "NONE");
             evalResult.put("evalReason", "Default Zero-Trust implicit deny rule enforced (NIST SP 800-207).");
+
+            recordViolation(request.getSourceSegment(), request.getDestinationSegment(), request.getSourceIpAddress(), request.getProtocol(), request.getPort(), "Implicit Zero-Trust Deny Rule");
         }
 
         evalResult.put("complianceStandard", "NIST SP 800-207 Zero Trust Architecture");
         return evalResult;
     }
 
+    private void recordViolation(String src, String dst, String ip, String proto, String port, String reason) {
+        String vId = "VIO-" + (10000 + new Random().nextInt(90000));
+        MicrosegmentationViolationLog log = MicrosegmentationViolationLog.builder()
+                .violationId(vId)
+                .sourceSegment(src != null ? src : "UNKNOWN_SRC")
+                .destinationSegment(dst != null ? dst : "UNKNOWN_DST")
+                .sourceIp(ip != null ? ip : "127.0.0.1")
+                .protocol(proto != null ? proto : "TCP")
+                .destinationPort(port != null ? port : "443")
+                .violationReason(reason)
+                .enforcedAction("BLOCK")
+                .detectedAt(LocalDateTime.now())
+                .build();
+        violationLogRepository.save(log);
+    }
+
     /**
      * Quarantines a source segment by creating emergency isolation rules.
      */
     @Transactional
-    public Map<String, Object> quarantineSourceSegment(String sourceSegment, String operator) {
+    public Map<String, Object> quarantineSourceSegment(QuarantineSegmentRequest request) {
         String quarantineRuleId = "SEG-Q-" + (10000 + new Random().nextInt(90000));
         LocalDateTime now = LocalDateTime.now();
 
         MicrosegmentationPolicy policy = MicrosegmentationPolicy.builder()
                 .ruleId(quarantineRuleId)
-                .sourceSegment(sourceSegment.toUpperCase(Locale.ROOT))
+                .sourceSegment(request.getSourceSegment().toUpperCase(Locale.ROOT))
                 .destinationSegment("*")
                 .allowedProtocol("ALL")
                 .portRange("*")
@@ -257,15 +305,17 @@ public class MicrosegmentationService {
 
         policyRepository.save(policy);
 
-        // Terminate all open SDP tunnels targeting or originating from this segment
+        // Terminate active SDP tunnels targeting or originating from this segment
         List<SdpTunnelSession> activeTunnels = tunnelRepository.findAll().stream()
                 .filter(t -> "ESTABLISHED".equalsIgnoreCase(t.getStatus()))
-                .filter(t -> t.getTargetSegment().equalsIgnoreCase(sourceSegment))
+                .filter(t -> t.getTargetSegment().equalsIgnoreCase(request.getSourceSegment()))
                 .collect(Collectors.toList());
 
-        for (SdpTunnelSession t : activeTunnels) {
-            t.setStatus("TERMINATED_BY_QUARANTINE");
-            tunnelRepository.save(t);
+        if (request.isTerminateActiveTunnels()) {
+            for (SdpTunnelSession t : activeTunnels) {
+                t.setStatus("TERMINATED_BY_QUARANTINE");
+                tunnelRepository.save(t);
+            }
         }
 
         // Trigger SIEM alert
@@ -276,7 +326,7 @@ public class MicrosegmentationService {
             siemRequest.setSeverity("CRITICAL");
             siemRequest.setSourceHost("ZTA-QUARANTINE-ENGINE");
             siemRequest.setSourceIp("127.0.0.1");
-            siemRequest.setMessage("Emergency Segment Quarantine Applied: " + sourceSegment + " by operator [" + operator + "]");
+            siemRequest.setMessage("Emergency Segment Quarantine Applied: " + request.getSourceSegment() + " [Reason: " + request.getQuarantineReason() + "]");
             siemRequest.setRawPayload("QuarantineRuleID: " + quarantineRuleId + ", TerminatedTunnels: " + activeTunnels.size());
             siemLogCorrelationService.ingestLog(siemRequest);
         } catch (Exception e) {
@@ -286,9 +336,10 @@ public class MicrosegmentationService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("quarantineStatus", "ACTIVE");
         result.put("quarantineRuleId", quarantineRuleId);
-        result.put("quarantinedSegment", sourceSegment);
+        result.put("quarantinedSegment", request.getSourceSegment());
         result.put("terminatedTunnelsCount", activeTunnels.size());
-        result.put("executedBy", operator);
+        result.put("reason", request.getQuarantineReason());
+        result.put("executedBy", request.getEmergencyOperator() != null ? request.getEmergencyOperator() : "SYSTEM_AUTOMATION");
         result.put("timestamp", now.format(ISO_FORMATTER));
         return result;
     }
@@ -349,12 +400,23 @@ public class MicrosegmentationService {
     }
 
     /**
+     * Retrieves all violation logs.
+     */
+    @Transactional(readOnly = true)
+    public List<MicrosegmentationViolationResponse> getAllViolationLogs() {
+        return violationLogRepository.findAll().stream()
+                .map(this::mapToViolationResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Retrieves overall Microsegmentation & SDP Audit Metrics.
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getMicrosegmentationAuditMetrics() {
         List<MicrosegmentationPolicy> policies = policyRepository.findAll();
         List<SdpTunnelSession> tunnels = tunnelRepository.findAll();
+        List<MicrosegmentationViolationLog> violations = violationLogRepository.findAll();
 
         long activePoliciesCount = policies.stream().filter(p -> "ACTIVE".equalsIgnoreCase(p.getStatus())).count();
         long activeTunnelsCount = tunnels.stream().filter(t -> "ESTABLISHED".equalsIgnoreCase(t.getStatus())).count();
@@ -368,6 +430,7 @@ public class MicrosegmentationService {
         metrics.put("activeRulesCount", activePoliciesCount);
         metrics.put("activeSdpTunnelsCount", activeTunnelsCount);
         metrics.put("blockedOrTerminatedTunnelsCount", blockedTunnelsCount);
+        metrics.put("policyViolationsLogged", violations.size());
         metrics.put("totalEncryptedTxMb", (totalTxBytes / (1024.0 * 1024.0)));
         metrics.put("totalEncryptedRxMb", (totalRxBytes / (1024.0 * 1024.0)));
         metrics.put("restrictedPortsMonitored", RESTRICTED_PORTS);
@@ -426,5 +489,19 @@ public class MicrosegmentationService {
                 .establishedAt(t.getEstablishedAt())
                 .build();
     }
-}
 
+    private MicrosegmentationViolationResponse mapToViolationResponse(MicrosegmentationViolationLog v) {
+        return MicrosegmentationViolationResponse.builder()
+                .id(v.getId())
+                .violationId(v.getViolationId())
+                .sourceSegment(v.getSourceSegment())
+                .destinationSegment(v.getDestinationSegment())
+                .sourceIp(v.getSourceIp())
+                .protocol(v.getProtocol())
+                .destinationPort(v.getDestinationPort())
+                .violationReason(v.getViolationReason())
+                .enforcedAction(v.getEnforcedAction())
+                .detectedAt(v.getDetectedAt())
+                .build();
+    }
+}
