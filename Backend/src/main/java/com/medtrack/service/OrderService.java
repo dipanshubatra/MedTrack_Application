@@ -196,6 +196,10 @@ public class OrderService {
             throw new IllegalArgumentException("Retired or disposed equipment cannot be ordered as active stock");
         }
 
+        if (request.getQuantity() == null || request.getQuantity() <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than zero");
+        }
+
         EquipmentOrder order = EquipmentOrder.builder()
                 .orderCode("ORD-" + java.util.UUID.randomUUID())
                 .equipmentId(equipment.getEquipmentCode())

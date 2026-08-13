@@ -82,8 +82,14 @@ export default function AppRoutes({ currentPage, onNavigate, pageData }) {
 
     // A parameterised route names the prop its component expects for the dynamic segment, so
     // `/edit-equipment/EQ-1001` arrives as `equipmentId` and `/blog/my-post` as `slug` without this
-    // file needing to know either name.
-    const params = route.param ? { [route.param]: pageData } : {};
+    // file needing to know either name. Non-parameterised routes carry the data only in component
+    // state (never in the URL), so forward the whole pageData object as props when it is one: the
+    // register / verify-otp / reset-password pages rely on it (e.g. `defaultRole`, `email`, `otp`).
+    const params = route.param
+      ? { [route.param]: pageData }
+      : pageData && typeof pageData === "object" && !Array.isArray(pageData)
+        ? pageData
+        : {};
 
     return <Component onNavigate={onNavigate} {...params} />;
   };

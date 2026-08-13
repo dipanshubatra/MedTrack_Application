@@ -132,8 +132,15 @@ public class MaintenanceScheduleService {
             throw new IllegalArgumentException("Amended deadline cannot be in the past");
         }
 
-        String maintenanceType = task.getMaintenanceType();
-        String priority = task.getPriority();
+        String maintenanceType = task.getMaintenanceType() != null ? task.getMaintenanceType().trim() : "";
+        if (maintenanceType.isBlank()) {
+            throw new IllegalArgumentException("Maintenance type cannot be blank");
+        }
+
+        String priority = task.getPriority() != null ? normalizePriority(task.getPriority()) : "Normal";
+        if (!PRIORITIES.contains(priority)) {
+            throw new IllegalArgumentException("Priority must be Normal, High, or Critical");
+        }
 
         return new AmendmentValues(
                 request.getNewDeadline() != null ? request.getNewDeadline() : task.getDeadline(),

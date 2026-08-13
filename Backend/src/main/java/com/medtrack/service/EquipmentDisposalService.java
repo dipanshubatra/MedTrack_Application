@@ -109,6 +109,29 @@ public class EquipmentDisposalService {
             throw new IllegalArgumentException("This asset already has a disposal request awaiting approval");
         }
 
+        EquipmentDisposal checkDisposal = EquipmentDisposal.builder()
+                .equipment(equipment)
+                .hospital(hospital)
+                .build();
+        List<MaintenanceWorkOrder> liveWorkOrders = liveWorkOrdersFor(checkDisposal);
+        if (!liveWorkOrders.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has active maintenance work orders and cannot be submitted for disposal: "
+                            + liveWorkOrders.stream()
+                                    .map(MaintenanceWorkOrder::getWorkOrderCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
+        List<MaintenanceTask> liveTasks = liveTasksFor(checkDisposal);
+        if (!liveTasks.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has scheduled maintenance tasks and cannot be submitted for disposal: "
+                            + liveTasks.stream()
+                                    .map(MaintenanceTask::getTaskCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
+
         EquipmentDisposal disposal = EquipmentDisposal.builder()
                 .equipment(equipment)
                 .hospital(hospital)

@@ -60,6 +60,7 @@ const RetiredAssets = lazy(() => import("../pages/hospital/RetiredAssets"));
 const EquipmentLifecyclePredictor = lazy(() => import("../pages/hospital/EquipmentLifecyclePredictor"));
 const ProcurementRequestWizard = lazy(() => import("../pages/hospital/ProcurementRequestWizard"));
 const ApprovalInbox = lazy(() => import("../pages/hospital/ApprovalInbox"));
+const DynamicRiskDashboard = lazy(() => import("../pages/hospital/DynamicRiskDashboard"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -105,6 +106,8 @@ const SecurityPlaybookPage = lazy(() => import("../pages/auth/SecurityPlaybookPa
 const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentResponsePlaybookPage"));
 const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
 const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
+const SocOperationsConsolePage = lazy(() => import("../pages/auth/SocOperationsConsolePage"));
+
 
 /**
  * Path prefix the bundle is served under on GitHub Pages.
@@ -183,6 +186,7 @@ export const ROUTES = [
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
   { page: "equipment-lifecycle", slugs: ["equipment-lifecycle", "lifecycle"], component: EquipmentLifecyclePredictor, access: HOSPITAL_ONLY },
   { page: "procurement-wizard", slugs: ["procurement-wizard"], component: ProcurementRequestWizard, access: HOSPITAL_ONLY },
+  { page: "risk-dashboard", slugs: ["risk-dashboard", "la-razt"], component: DynamicRiskDashboard, access: HOSPITAL_ONLY },
   { page: "approval-inbox", slugs: ["approval-inbox"], component: ApprovalInbox, access: HOSPITAL_ONLY },
   { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
   { page: "sla-dashboard", slugs: ["sla-dashboard"], component: MaintenanceSlaDashboard, access: HOSPITAL_ONLY },
@@ -237,7 +241,9 @@ export const ROUTES = [
   { page: "incident-response", slugs: ["incident-response", "ir-playbook"], component: IncidentResponsePlaybookPage, access: AUTHENTICATED },
   { page: "compliance-evidence", slugs: ["evidence", "compliance-evidence"], component: ComplianceEvidencePage, access: AUTHENTICATED },
   { page: "compliance-reporting", slugs: ["compliance-reporting", "reporting"], component: ComplianceReportingPage, access: AUTHENTICATED },
+  { page: "soc-console", slugs: ["soc-console", "soc-command-center"], component: SocOperationsConsolePage, access: AUTHENTICATED },
 ];
+
 
 /**
  * Routes carrying a dynamic path segment, e.g. `/edit-equipment/EQ-1001`.
