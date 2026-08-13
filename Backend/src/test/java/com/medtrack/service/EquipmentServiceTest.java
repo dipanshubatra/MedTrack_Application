@@ -137,6 +137,74 @@ public class EquipmentServiceTest {
     }
 
     @Test
+    void addEquipment_PurchaseCostNull_Accepted() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        
+        Equipment newEq = Equipment.builder()
+                .name("Ventilator")
+                .purchaseCost(null)
+                .build();
+
+        when(equipmentRepository.save(any(Equipment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Equipment saved = equipmentService.addEquipment(newEq, username);
+        assertNotNull(saved);
+        assertNull(saved.getPurchaseCost());
+    }
+
+    @Test
+    void addEquipment_PurchaseCostZero_Accepted() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        
+        Equipment newEq = Equipment.builder()
+                .name("Ventilator")
+                .purchaseCost(java.math.BigDecimal.ZERO)
+                .build();
+
+        when(equipmentRepository.save(any(Equipment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Equipment saved = equipmentService.addEquipment(newEq, username);
+        assertNotNull(saved);
+        assertEquals(java.math.BigDecimal.ZERO, saved.getPurchaseCost());
+    }
+
+    @Test
+    void addEquipment_PurchaseCostPositive_Accepted() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        
+        Equipment newEq = Equipment.builder()
+                .name("Ventilator")
+                .purchaseCost(new java.math.BigDecimal("100.50"))
+                .build();
+
+        when(equipmentRepository.save(any(Equipment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Equipment saved = equipmentService.addEquipment(newEq, username);
+        assertNotNull(saved);
+        assertEquals(new java.math.BigDecimal("100.50"), saved.getPurchaseCost());
+    }
+
+    @Test
+    void addEquipment_PurchaseCostNegative_ThrowsException() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        
+        Equipment newEq = Equipment.builder()
+                .name("Ventilator")
+                .purchaseCost(new java.math.BigDecimal("-10.00"))
+                .build();
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            equipmentService.addEquipment(newEq, username);
+        });
+
+        assertEquals("Purchase cost cannot be negative", exception.getMessage());
+    }
+
+    @Test
     void generateQrCodeBase64_Success() {
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
         when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
