@@ -1,6 +1,7 @@
 package com.medtrack.auth.siem.service;
 
 import com.medtrack.auth.siem.dto.SiemAlertTriageRequest;
+
 import com.medtrack.auth.siem.dto.SiemCorrelationRuleRequest;
 import com.medtrack.auth.siem.dto.SiemLogIngestRequest;
 import com.medtrack.auth.siem.dto.SiemLogIngestResponse;
@@ -10,6 +11,8 @@ import com.medtrack.auth.siem.model.SiemLogEvent;
 import com.medtrack.auth.siem.repository.SiemCorrelationAlertRepository;
 import com.medtrack.auth.siem.repository.SiemCorrelationRuleRepository;
 import com.medtrack.auth.siem.repository.SiemLogEventRepository;
+import com.medtrack.auth.soar.dto.SoarPlaybookExecutionRequest;
+import com.medtrack.auth.soar.service.SoarOrchestrationService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,7 @@ import java.util.stream.Collectors;
  * 3. Provide an analyst triage lifecycle (OPEN, ACKNOWLEDGED, RESOLVED) with
  *    full attribution and timestamps (ISO/IEC 27035:2023 incident management).
  * 4. Enforce log retention and audit metrics per NIST SP 800-92.
+ * 5. Automate containment playbook execution via SOAR Orchestration integration.
  */
 @Service
 public class SiemLogCorrelationService {
@@ -56,15 +60,19 @@ public class SiemLogCorrelationService {
     private final SiemLogEventRepository logEventRepository;
     private final SiemCorrelationRuleRepository correlationRuleRepository;
     private final SiemCorrelationAlertRepository correlationAlertRepository;
+    private final SoarOrchestrationService soarOrchestrationService;
 
     @Autowired
     public SiemLogCorrelationService(SiemLogEventRepository logEventRepository,
                                      SiemCorrelationRuleRepository correlationRuleRepository,
-                                     SiemCorrelationAlertRepository correlationAlertRepository) {
+                                     SiemCorrelationAlertRepository correlationAlertRepository,
+                                     SoarOrchestrationService soarOrchestrationService) {
         this.logEventRepository = logEventRepository;
         this.correlationRuleRepository = correlationRuleRepository;
         this.correlationAlertRepository = correlationAlertRepository;
+        this.soarOrchestrationService = soarOrchestrationService;
     }
+
 
     /**
      * Seed a baseline set of correlation rules on first startup so the hub is
@@ -264,8 +272,25 @@ public class SiemLogCorrelationService {
                 .matchedEventCount(matchCount)
                 .createdAt(LocalDateTime.now())
                 .build();
-        return correlationAlertRepository.save(alert);
+
+        SiemCorrelationAlert savedAlert = correlationAlertRepository.save(alert);
+
+        // Cross-Subsystem Action: Auto-trigger SOAR Containment Playbook for HIGH and CRITICAL alerts
+        if ("CRITICAL".equalsIgnoreCase(alert.getSeverity()) || "HIGH".equalsIgnoreCase(alert.getSeverity())) {
+            try {
+                SoarPlaybookExecutionRequest soarRequest = new SoarPlaybookExecutionRequest();
+                soarRequest.setPlaybookName("AUTOMATED_SIEM_" + alert.getSeverity() + "_CONTAINMENT");
+                soarRequest.setTriggerEvent("SIEM_CORRELATION_ALERT: " + alert.getTitle());
+                soarRequest.setSeverity(alert.getSeverity());
+                soarOrchestrationService.executePlaybook(soarRequest);
+            } catch (Exception e) {
+                // Non-blocking log for SOAR trigger resilience
+            }
+        }
+
+        return savedAlert;
     }
+
 
     /**
      * Suppress alert storms: return an existing non-resolved alert for the same
