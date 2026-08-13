@@ -337,4 +337,111 @@ public class OrderServiceTest {
         assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
         verify(orderRepository, never()).save(any());
     }
+
+    @Test
+    void placeOrder_QuantityNull_ThrowsIllegalArgumentException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(null)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
+        assertEquals("Quantity must be greater than zero", ex.getMessage());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_QuantityZero_ThrowsIllegalArgumentException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(0)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
+        assertEquals("Quantity must be greater than zero", ex.getMessage());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_QuantityNegative_ThrowsIllegalArgumentException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(-5)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
+        assertEquals("Quantity must be greater than zero", ex.getMessage());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_QuantityPositive_Accepted() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setName("MRI Scanner");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(10)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(i -> i.getArgument(0));
+
+        EquipmentOrder order = orderService.placeOrder(request, authentication);
+        assertNotNull(order);
+        assertEquals(10, order.getQuantity());
+        verify(orderRepository, times(1)).save(any(EquipmentOrder.class));
+    }
 }
