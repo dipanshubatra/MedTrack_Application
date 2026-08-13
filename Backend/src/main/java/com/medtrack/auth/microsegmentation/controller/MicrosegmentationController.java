@@ -58,10 +58,35 @@ public class MicrosegmentationController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/tunnels/{sessionId}/terminate")
-    @Operation(summary = "Terminate SDP Tunnel", description = "Terminates an active SDP encrypted tunnel session.")
-    public ResponseEntity<SdpTunnelSessionResponse> terminateTunnel(@PathVariable String sessionId) {
-        SdpTunnelSessionResponse response = microsegmentationService.terminateTunnel(sessionId);
+    @PostMapping("/evaluate")
+    @Operation(summary = "Evaluate Traffic Access", description = "Performs real-time zero-trust packet access evaluation between source and destination segments.")
+    public ResponseEntity<Map<String, Object>> evaluateTrafficAccess(@RequestParam String sourceSegment,
+                                                                    @RequestParam String destinationSegment,
+                                                                    @RequestParam(defaultValue = "TCP") String protocol,
+                                                                    @RequestParam(defaultValue = "443") String port) {
+        Map<String, Object> response = microsegmentationService.evaluateTrafficAccess(sourceSegment, destinationSegment, protocol, port);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/quarantine/{sourceSegment}")
+    @Operation(summary = "Quarantine Source Segment", description = "Creates emergency isolation policy blocking all traffic to/from compromised segment.")
+    public ResponseEntity<Map<String, Object>> quarantineSourceSegment(@PathVariable String sourceSegment) {
+        Map<String, Object> response = microsegmentationService.quarantineSourceSegment(sourceSegment, "SECURITY_OPERATOR");
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/ebpf/matrix")
+    @Operation(summary = "Compile eBPF Policy Matrix", description = "Compiles active rules into Linux kernel eBPF bytecode map matrix.")
+    public ResponseEntity<Map<String, Object>> compileEbpfPolicyMatrix() {
+        Map<String, Object> response = microsegmentationService.compileEbpfPolicyMatrix();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/metrics")
+    @Operation(summary = "Get Microsegmentation Audit Metrics", description = "Retrieves NIST SP 800-207 Zero Trust audit metrics and active SDP tunnel stats.")
+    public ResponseEntity<Map<String, Object>> getMetrics() {
+        Map<String, Object> metrics = microsegmentationService.getMicrosegmentationAuditMetrics();
+        return ResponseEntity.ok(metrics);
+    }
 }
+
