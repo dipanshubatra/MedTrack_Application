@@ -65,9 +65,14 @@ public class DuplicateDetectionService {
             "UPDATE maintenance_policy_rules SET equipment_record_id = :keep "
                     + "WHERE equipment_record_id = :merge",
             "UPDATE equipment_audit SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE equipment_audit_log SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE software_telemetry_logs SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE security_incidents SET equipment_id = :keep WHERE equipment_id = :merge",
             "UPDATE equipment SET replacement_equipment_id = :keep WHERE replacement_equipment_id = :merge",
             "UPDATE equipment_lifecycle_actions SET replacement_equipment_id = :keep "
-                    + "WHERE replacement_equipment_id = :merge");
+                    + "WHERE replacement_equipment_id = :merge",
+            "UPDATE software_telemetry_logs SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE security_incidents SET equipment_id = :keep WHERE equipment_id = :merge");
 
     private static final double SERIAL_THRESHOLD = 0.75;
     private static final double CODE_THRESHOLD = 0.75;

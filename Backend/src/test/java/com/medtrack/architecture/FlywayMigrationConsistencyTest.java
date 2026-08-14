@@ -82,7 +82,8 @@ class FlywayMigrationConsistencyTest {
             "equipment_disposals",
             "facility_location",
             "equipment_location_history",
-            "recall_notice");
+            "recall_notice",
+            "equipment_audit_log");
 
     private static final Pattern TABLE_REFERENCE = Pattern.compile(
             "\\b(?:ALTER\\s+TABLE|CREATE\\s+TABLE|INSERT\\s+INTO|UPDATE|CREATE\\s+INDEX\\s+\\w+\\s+ON|"

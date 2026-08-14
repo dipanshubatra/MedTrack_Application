@@ -812,6 +812,10 @@ public class MaintenanceServiceTest {
 
     @Test
     void scheduleTask_PastDeadline_ThrowsException() {
+        when(authentication.getName()).thenReturn(email);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+
         MaintenanceCreateRequest request = MaintenanceCreateRequest.builder()
                 .equipmentId("EQ-100")
                 .maintenanceType("Preventive")
@@ -843,6 +847,10 @@ public class MaintenanceServiceTest {
 
     @Test
     void scheduleTask_NullDeadline_ThrowsException() {
+        when(authentication.getName()).thenReturn(email);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+
         MaintenanceCreateRequest request = MaintenanceCreateRequest.builder()
                 .equipmentId("EQ-100")
                 .maintenanceType("Preventive")
@@ -856,6 +864,7 @@ public class MaintenanceServiceTest {
 
     @Test
     void amendSchedule_PastDeadline_ThrowsException() {
+
         com.medtrack.dto.MaintenanceScheduleAmendmentRequest request = com.medtrack.dto.MaintenanceScheduleAmendmentRequest.builder()
                 .newDeadline(LocalDate.now().minusDays(1))
                 .reason("Test")
