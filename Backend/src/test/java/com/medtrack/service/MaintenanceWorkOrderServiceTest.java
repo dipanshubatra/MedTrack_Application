@@ -48,13 +48,15 @@ class MaintenanceWorkOrderServiceTest {
     @Mock
     private UserRepository userRepository;
 
-    @Mock
+    @Spy
     private MaintenanceWorkOrderValidator workOrderValidator;
 
     @Mock
     private SparePartService sparePartService;
 
-    @InjectMocks
+    @Mock
+    private com.medtrack.repository.EquipmentDisposalRepository disposalRepository;
+
     private MaintenanceWorkOrderService workOrderService;
 
     private Hospital hospital;
@@ -67,6 +69,15 @@ class MaintenanceWorkOrderServiceTest {
 
     @BeforeEach
     void setUp() {
+        workOrderService = new MaintenanceWorkOrderService(
+                workOrderRepository,
+                equipmentRepository,
+                maintenanceTaskRepository,
+                userRepository,
+                workOrderValidator,
+                disposalRepository,
+                sparePartService
+        );
 
         hospital = Hospital.builder()
                 .id(hospitalId)
