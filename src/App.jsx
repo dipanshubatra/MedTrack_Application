@@ -4,6 +4,7 @@ import "lenis/dist/lenis.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ToastProvider, useToast } from "./context/ToastContext";
 import ToastContainer from "./components/common/ToastContainer";
+import SessionGuard from "./components/common/SessionGuard";
 import { errorEmitter } from "./services/HttpService";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import Navbar from "./components/common/Navbar";
@@ -90,8 +91,13 @@ function AppContent() {
   // /equipment. Both sides now derive the substitution from resolveEffectivePage.
   const showChrome = hasChrome(resolveEffectivePage(user, currentPage));
 
+  // SessionGuard sits inside ToastProvider (it needs toasts) and wraps the whole
+  // layout so the idle-timeout warning can render above every page. It is a no-op
+  // for signed-out visitors and enforces the inactivity auto-lock only once a
+  // user is signed in - see SessionGuard.jsx.
   return (
-    <ReactLenis root>
+    <SessionGuard>
+      <ReactLenis root>
       <div
         className="flex flex-col min-h-screen bg-surface text-primary transition-colors duration-200"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -114,7 +120,8 @@ function AppContent() {
         <ScrollToTopButton />
         <CookieBanner onNavigate={handleNavigate} />
       </div>
-    </ReactLenis>
+      </ReactLenis>
+    </SessionGuard>
   );
 }
 
