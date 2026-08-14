@@ -27,6 +27,13 @@ import com.medtrack.model.MaintenanceWorkOrderType;
 import com.medtrack.model.EquipmentAudit;
 import com.medtrack.model.SlaState;
 import com.medtrack.model.WarrantyCoverageType;
+import com.medtrack.analytics.model.IncidentSeverity;
+import com.medtrack.analytics.model.RiskEvaluationEvent;
+import com.medtrack.analytics.model.SecurityIncident;
+import com.medtrack.analytics.model.SoftwareTelemetryLog;
+import com.medtrack.analytics.repository.RiskEvaluationEventRepository;
+import com.medtrack.analytics.repository.SecurityIncidentRepository;
+import com.medtrack.analytics.repository.SoftwareTelemetryLogRepository;
 import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentLifecycleActionRepository;
 import com.medtrack.repository.EquipmentRepository;
@@ -58,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
  * Duplicate detection & tag reconciliation (issue #746), exercised through
  * {@link DuplicateDetectionService} end to end.
@@ -105,6 +113,15 @@ class DuplicateDetectionTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private SoftwareTelemetryLogRepository telemetryLogRepository;
+
+    @Autowired
+    private SecurityIncidentRepository securityIncidentRepository;
+
+    @Autowired
+    private RiskEvaluationEventRepository riskEvaluationEventRepository;
 
     private String username;
     private Hospital hospital;
@@ -529,5 +546,313 @@ class DuplicateDetectionTest {
                         + "survivor, so their rows would be stranded on the archived duplicate: "
                         + uncovered);
         assertFalse(declared.isEmpty(), "Expected the schema to declare columns referencing equipment");
+    }
+
+    @Test
+    @DisplayName("merging reassigns software telemetry logs from duplicate onto survivor")
+    void mergeReassignsSoftwareTelemetryLogs() {
+        Equipment survivor = asset("EQ-TEL-KEEP", "SN-TEL-KEEP", "Patient Monitor", "Mindray BeneVision");
+        Equipment duplicate = asset("EQ-TEL-MERGE", "SN-TEL-MERGE", "Patient Monitor", "Mindray BeneVision");
+        User user = hospital.getUser();
+
+        SoftwareTelemetryLog log1 = telemetryLogRepository.saveAndFlush(SoftwareTelemetryLog.builder()
+                .user(user)
+                .equipment(duplicate)
+                .actionType("DEVICE_DIAGNOSTIC")
+                .success(true)
+                .timestamp(LocalDateTime.now())
+                .ipAddress("192.168.1.100")
+                .endpointAccessed("/api/v1/telemetry/diagnostics")
+                .executionTimeMs(145)
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        SoftwareTelemetryLog reassignedLog = telemetryLogRepository.findById(log1.getLogId()).orElseThrow();
+        assertNotNull(reassignedLog.getEquipment(), "Telemetry log should have non-null equipment");
+        assertEquals(survivor.getId(), reassignedLog.getEquipment().getId(),
+                "Software telemetry log must be reassigned from duplicate to survivor asset");
+    }
+
+    @Test
+    @DisplayName("merging reassigns security incidents from duplicate onto survivor")
+    void mergeReassignsSecurityIncidents() {
+        Equipment survivor = asset("EQ-SEC-KEEP", "SN-SEC-KEEP", "Infusion Pump", "Alaris 8015");
+        Equipment duplicate = asset("EQ-SEC-MERGE", "SN-SEC-MERGE", "Infusion Pump", "Alaris 8015");
+        User user = hospital.getUser();
+
+        SoftwareTelemetryLog telemetry = telemetryLogRepository.saveAndFlush(SoftwareTelemetryLog.builder()
+                .user(user)
+                .equipment(duplicate)
+                .actionType("DEVICE_DIAGNOSTIC")
+                .success(true)
+                .timestamp(LocalDateTime.now())
+                .build());
+
+        RiskEvaluationEvent riskEvent = riskEvaluationEventRepository.saveAndFlush(RiskEvaluationEvent.builder()
+                .telemetryLog(telemetry)
+                .finalCbrsScore(85.5f)
+                .riskLevel(com.medtrack.analytics.model.RiskLevel.HIGH)
+                .policyEnforcementTaken(com.medtrack.analytics.model.PolicyEnforcement.MONITOR)
+                .evaluationTimestamp(LocalDateTime.now())
+                .build());
+
+        SecurityIncident incident = securityIncidentRepository.saveAndFlush(SecurityIncident.builder()
+                .riskEvent(riskEvent)
+                .user(user)
+                .equipment(duplicate)
+                .incidentType("UNAUTHORIZED_FIRMWARE_MODIFICATION")
+                .severity(IncidentSeverity.HIGH)
+                .status(com.medtrack.analytics.model.IncidentStatus.OPEN)
+                .detectedAt(LocalDateTime.now())
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        SecurityIncident reassignedIncident = securityIncidentRepository.findById(incident.getIncidentId()).orElseThrow();
+        assertNotNull(reassignedIncident.getEquipment(), "Security incident should have non-null equipment");
+        assertEquals(survivor.getId(), reassignedIncident.getEquipment().getId(),
+                "Security incident must be reassigned from duplicate to survivor asset");
+    }
+
+    @Test
+    @DisplayName("merging preserves multiple telemetry logs and security incidents across merged assets")
+    void mergePreservesMultipleTelemetryLogsAndIncidentsAcrossMergedAssets() {
+        Equipment survivor = asset("EQ-MULTI-KEEP", "SN-MULTI-KEEP", "Ventilator", "Puritan Bennett 980");
+        Equipment duplicate = asset("EQ-MULTI-MERGE", "SN-MULTI-MERGE", "Ventilator", "Puritan Bennett 980");
+        User user = hospital.getUser();
+
+        SoftwareTelemetryLog log1 = telemetryLogRepository.saveAndFlush(SoftwareTelemetryLog.builder()
+                .user(user)
+                .equipment(duplicate)
+                .actionType("BOOT_SEQUENCE")
+                .success(true)
+                .timestamp(LocalDateTime.now().minusHours(2))
+                .build());
+
+        SoftwareTelemetryLog log2 = telemetryLogRepository.saveAndFlush(SoftwareTelemetryLog.builder()
+                .user(user)
+                .equipment(survivor)
+                .actionType("CALIBRATION")
+                .success(true)
+                .timestamp(LocalDateTime.now().minusHours(1))
+                .build());
+
+        RiskEvaluationEvent riskEvent = riskEvaluationEventRepository.saveAndFlush(RiskEvaluationEvent.builder()
+                .telemetryLog(log1)
+                .finalCbrsScore(92.0f)
+                .riskLevel(com.medtrack.analytics.model.RiskLevel.CRITICAL)
+                .policyEnforcementTaken(com.medtrack.analytics.model.PolicyEnforcement.RESTRICT)
+                .evaluationTimestamp(LocalDateTime.now().minusDays(1))
+                .build());
+
+        SecurityIncident incident = securityIncidentRepository.saveAndFlush(SecurityIncident.builder()
+                .riskEvent(riskEvent)
+                .user(user)
+                .equipment(duplicate)
+                .incidentType("NETWORK_ANOMALY")
+                .severity(IncidentSeverity.CRITICAL)
+                .status(com.medtrack.analytics.model.IncidentStatus.OPEN)
+                .detectedAt(LocalDateTime.now().minusDays(1))
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        SoftwareTelemetryLog updatedLog1 = telemetryLogRepository.findById(log1.getLogId()).orElseThrow();
+        SoftwareTelemetryLog updatedLog2 = telemetryLogRepository.findById(log2.getLogId()).orElseThrow();
+        SecurityIncident updatedIncident = securityIncidentRepository.findById(incident.getIncidentId()).orElseThrow();
+
+        assertEquals(survivor.getId(), updatedLog1.getEquipment().getId());
+        assertEquals(survivor.getId(), updatedLog2.getEquipment().getId());
+        assertEquals(survivor.getId(), updatedIncident.getEquipment().getId());
+    }
+
+    @Test
+    @DisplayName("merging retains historical incident and telemetry metadata integrity")
+    void mergeRetainsHistoricalIncidentAndTelemetryAuditIntegrity() {
+        Equipment survivor = asset("EQ-META-KEEP", "SN-META-KEEP", "ECG Machine", "GE MAC 2000");
+        Equipment duplicate = asset("EQ-META-MERGE", "SN-META-MERGE", "ECG Machine", "GE MAC 2000");
+        User user = hospital.getUser();
+
+        LocalDateTime logTime = LocalDateTime.now().minusDays(3);
+        SoftwareTelemetryLog log = telemetryLogRepository.saveAndFlush(SoftwareTelemetryLog.builder()
+                .user(user)
+                .equipment(duplicate)
+                .actionType("FIRMWARE_UPDATE")
+                .previousActionType("DIAGNOSTIC_RUN")
+                .success(true)
+                .timestamp(logTime)
+                .ipAddress("10.0.0.45")
+                .endpointAccessed("/api/v1/device/firmware")
+                .executionTimeMs(320)
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        SoftwareTelemetryLog resultLog = telemetryLogRepository.findById(log.getLogId()).orElseThrow();
+        assertEquals(survivor.getId(), resultLog.getEquipment().getId());
+        assertEquals("FIRMWARE_UPDATE", resultLog.getActionType());
+        assertEquals("DIAGNOSTIC_RUN", resultLog.getPreviousActionType());
+        assertEquals("10.0.0.45", resultLog.getIpAddress());
+        assertEquals("/api/v1/device/firmware", resultLog.getEndpointAccessed());
+        assertEquals(320, resultLog.getExecutionTimeMs());
+    }
+
+    @Test
+    @DisplayName("merging assets with no telemetry logs or security incidents completes cleanly")
+    void mergeHandlesNullAndEmptyTelemetryLogsGracefully() {
+        Equipment survivor = asset("EQ-EMPTY-KEEP", "SN-EMPTY-KEEP", "Defibrillator", "Zoll R Series");
+        Equipment duplicate = asset("EQ-EMPTY-MERGE", "SN-EMPTY-MERGE", "Defibrillator", "Zoll R Series");
+
+        Equipment result = duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        assertNotNull(result);
+        assertEquals(survivor.getId(), result.getId());
+        assertTrue(equipmentRepository.findByIdAndHospitalId(duplicate.getId(), hospital.getId()).isEmpty());
+    }
+
+    @Test
+    @DisplayName("merging sequentially consolidates telemetry logs and security incidents on final survivor")
+    void mergeReassignsTelemetryLogsAndSecurityIncidentsAcrossMultipleDuplicateMergedChain() {
+        Equipment first = asset("EQ-CHAIN-1", "SN-CHAIN-1", "Syringe Pump", "BD Alaris");
+        Equipment second = asset("EQ-CHAIN-2", "SN-CHAIN-2", "Syringe Pump", "BD Alaris");
+        Equipment survivor = asset("EQ-CHAIN-3", "SN-CHAIN-3", "Syringe Pump", "BD Alaris");
+        User user = hospital.getUser();
+
+        SoftwareTelemetryLog log1 = telemetryLogRepository.saveAndFlush(SoftwareTelemetryLog.builder()
+                .user(user)
+                .equipment(first)
+                .actionType("BATTERY_TEST")
+                .success(true)
+                .timestamp(LocalDateTime.now().minusDays(5))
+                .build());
+
+        RiskEvaluationEvent risk1 = riskEvaluationEventRepository.saveAndFlush(RiskEvaluationEvent.builder()
+                .telemetryLog(log1)
+                .finalCbrsScore(75.0f)
+                .riskLevel(com.medtrack.analytics.model.RiskLevel.MODERATE)
+                .policyEnforcementTaken(com.medtrack.analytics.model.PolicyEnforcement.MONITOR)
+                .evaluationTimestamp(LocalDateTime.now().minusDays(3))
+                .build());
+
+        SecurityIncident incident1 = securityIncidentRepository.saveAndFlush(SecurityIncident.builder()
+                .riskEvent(risk1)
+                .user(user)
+                .equipment(second)
+                .incidentType("LATE_NIGHT_ACCESS")
+                .severity(IncidentSeverity.MEDIUM)
+                .status(com.medtrack.analytics.model.IncidentStatus.OPEN)
+                .detectedAt(LocalDateTime.now().minusDays(3))
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(second.getId(), first.getId(), username);
+        entityManager.clear();
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), second.getId(), username);
+        entityManager.clear();
+
+        SoftwareTelemetryLog finalLog = telemetryLogRepository.findById(log1.getLogId()).orElseThrow();
+        SecurityIncident finalIncident = securityIncidentRepository.findById(incident1.getIncidentId()).orElseThrow();
+
+        assertEquals(survivor.getId(), finalLog.getEquipment().getId(),
+                "Telemetry log from initial asset must be migrated through the chain to final survivor");
+        assertEquals(survivor.getId(), finalIncident.getEquipment().getId(),
+                "Security incident from initial asset must be migrated through the chain to final survivor");
+    }
+
+    @Test
+    @DisplayName("merging fails when assets belong to different hospitals")
+    void mergeFailsWhenTargetEquipmentBelongsToDifferentHospital() {
+        Equipment survivor = asset("EQ-HOSP-1", "SN-HOSP-1", "Ultrasound", "GE Logiq");
+
+        Hospital otherHospital = hospitalRepository.saveAndFlush(Hospital.builder()
+                .name("Other Hospital " + UUID.randomUUID())
+                .location("City Hospital")
+                .user(userRepository.saveAndFlush(User.builder()
+                        .name("Other User")
+                        .username("other-user-" + UUID.randomUUID())
+                        .email("other-" + UUID.randomUUID() + "@hospital.com")
+                        .password("hashed_password")
+                        .phone("+15551234567")
+                        .organization("Other Org")
+                        .accountStatus(AccountStatus.ACTIVE)
+                        .createdAt(LocalDateTime.now())
+                        .build()))
+                .build());
+
+        Equipment duplicateOtherHospital = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-HOSP-2")
+                .serialNumber("SN-HOSP-2")
+                .name("Ultrasound")
+                .model("GE Logiq")
+                .department("Radiology")
+                .status(EquipmentStatus.ACTIVE)
+                .hospital(otherHospital)
+                .deleted(false)
+                .build());
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicateOtherHospital.getId(), username));
+    }
+
+    @Test
+    @DisplayName("merging rejects identical keep and merge asset IDs")
+    void mergePreventsSelfMergeOfEquipmentRecord() {
+        Equipment survivor = asset("EQ-SELF-1", "SN-SELF-1", "Infusion Pump", "Fresenius Kabi");
+
+        assertThrows(IllegalArgumentException.class, () ->
+                duplicateDetectionService.mergeDuplicates(survivor.getId(), survivor.getId(), username));
+    }
+
+    @Test
+    @DisplayName("merging transfers all missing metadata and reassigns child telemetry simultaneously")
+    void mergeTransfersAllMissingMetadataAndReassignsChildTelemetry() {
+        Equipment survivor = Equipment.builder()
+                .equipmentCode("EQ-META-TRANS-1")
+                .name("Infusion Pump")
+                .department("Radiology")
+                .hospital(hospital)
+                .status(EquipmentStatus.ACTIVE)
+                .deleted(false)
+                .build();
+        survivor = equipmentRepository.saveAndFlush(survivor);
+
+        Equipment duplicate = Equipment.builder()
+                .equipmentCode("EQ-META-TRANS-2")
+                .name("Infusion Pump")
+                .model("Alaris 8015")
+                .serialNumber("SN-META-TRANS")
+                .department("ICU")
+                .custodian("Nurse Jackie")
+                .hospital(hospital)
+                .status(EquipmentStatus.ACTIVE)
+                .deleted(false)
+                .build();
+        duplicate = equipmentRepository.saveAndFlush(duplicate);
+        User user = hospital.getUser();
+
+        SoftwareTelemetryLog log = telemetryLogRepository.saveAndFlush(SoftwareTelemetryLog.builder()
+                .user(user)
+                .equipment(duplicate)
+                .actionType("PUMP_CALIBRATION")
+                .success(true)
+                .timestamp(LocalDateTime.now())
+                .build());
+
+        Equipment merged = duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        assertEquals("Alaris 8015", merged.getModel());
+        assertEquals("SN-META-TRANS", merged.getSerialNumber());
+        assertEquals("Radiology", merged.getDepartment());
+        assertEquals("Nurse Jackie", merged.getCustodian());
+
+        SoftwareTelemetryLog reassignedLog = telemetryLogRepository.findById(log.getLogId()).orElseThrow();
+        assertEquals(merged.getId(), reassignedLog.getEquipment().getId());
     }
 }
