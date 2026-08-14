@@ -264,4 +264,241 @@ class SparePartServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Insufficient stock for spare part: FILTER-001");
     }
+
+    @Test
+    @DisplayName("getAllSpareParts - successfully resolves hospital for technician via organization")
+    void getAllSpareParts_TechnicianRole_ResolvesHospitalByOrganization() {
+        User techUser = User.builder()
+                .id(200L)
+                .username("techUser")
+                .email("tech@hospital.com")
+                .role("technician")
+                .organization("General Hospital")
+                .build();
+
+        when(userRepository.findByUsername("techUser")).thenReturn(Optional.of(techUser));
+        when(hospitalRepository.findByUserId(200L)).thenReturn(Optional.empty());
+        when(hospitalRepository.findByNameIgnoreCaseAndTrimmed("General Hospital"))
+                .thenReturn(List.of(testHospital));
+        when(sparePartRepository.findByHospitalIdAndDeletedFalse(1L))
+                .thenReturn(List.of(testSparePart));
+
+        List<SparePartResponse> parts = sparePartService.getAllSpareParts("techUser");
+
+        assertThat(parts).hasSize(1);
+        assertThat(parts.get(0).getPartNumber()).isEqualTo("FILTER-001");
+        verify(hospitalRepository).findByUserId(200L);
+        verify(hospitalRepository).findByNameIgnoreCaseAndTrimmed("General Hospital");
+    }
+
+    @Test
+    @DisplayName("getSparePart - successfully resolves hospital for technician via organization")
+    void getSparePart_TechnicianRole_ResolvesHospitalByOrganization() {
+        User techUser = User.builder()
+                .id(200L)
+                .username("techUser")
+                .email("tech@hospital.com")
+                .role("technician")
+                .organization("General Hospital")
+                .build();
+
+        when(userRepository.findByUsername("techUser")).thenReturn(Optional.of(techUser));
+        when(hospitalRepository.findByUserId(200L)).thenReturn(Optional.empty());
+        when(hospitalRepository.findByNameIgnoreCaseAndTrimmed("General Hospital"))
+                .thenReturn(List.of(testHospital));
+        when(sparePartRepository.findByIdAndHospitalIdAndDeletedFalse(50L, 1L))
+                .thenReturn(Optional.of(testSparePart));
+
+        SparePartResponse part = sparePartService.getSparePart(50L, "techUser");
+
+        assertThat(part).isNotNull();
+        assertThat(part.getId()).isEqualTo(50L);
+        assertThat(part.getPartNumber()).isEqualTo("FILTER-001");
+        verify(hospitalRepository).findByNameIgnoreCaseAndTrimmed("General Hospital");
+    }
+
+    @Test
+    @DisplayName("deductStock - successfully resolves hospital and deducts stock for technician")
+    void deductStock_TechnicianRole_ResolvesHospitalAndDeductsStock() {
+        User techUser = User.builder()
+                .id(200L)
+                .username("techUser")
+                .email("tech@hospital.com")
+                .role("technician")
+                .organization("General Hospital")
+                .build();
+        SparePartStockRequest request = SparePartStockRequest.builder()
+                .partNumber("FILTER-001")
+                .quantity(3)
+                .build();
+
+        when(userRepository.findByUsername("techUser")).thenReturn(Optional.of(techUser));
+        when(hospitalRepository.findByUserId(200L)).thenReturn(Optional.empty());
+        when(hospitalRepository.findByNameIgnoreCaseAndTrimmed("General Hospital"))
+                .thenReturn(List.of(testHospital));
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "FILTER-001"))
+                .thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.save(any(SparePart.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        SparePartResponse response = sparePartService.deductStock(request, "techUser");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStockLevel()).isEqualTo(22);
+        verify(hospitalRepository).findByNameIgnoreCaseAndTrimmed("General Hospital");
+    }
+
+    @Test
+    @DisplayName("getHospitalForUser - throws ResourceNotFoundException when technician organization is not found")
+    void getHospitalForUser_TechnicianUnknownOrganization_ThrowsException() {
+        User techUser = User.builder()
+                .id(200L)
+                .username("techUser")
+                .email("tech@hospital.com")
+                .role("technician")
+                .organization("Unknown Hospital")
+                .build();
+
+        when(userRepository.findByUsername("techUser")).thenReturn(Optional.of(techUser));
+        when(hospitalRepository.findByUserId(200L)).thenReturn(Optional.empty());
+        when(hospitalRepository.findByNameIgnoreCaseAndTrimmed("Unknown Hospital"))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> sparePartService.getAllSpareParts("techUser"))
+                .isInstanceOf(com.medtrack.exception.ResourceNotFoundException.class)
+                .hasMessageContaining("Hospital profile not found for technician organization: Unknown Hospital");
+    }
+
+    @Test
+    @DisplayName("getHospitalForUser - throws ResourceNotFoundException when technician has blank organization")
+    void getHospitalForUser_TechnicianBlankOrganization_ThrowsException() {
+        User techUser = User.builder()
+                .id(200L)
+                .username("techUser")
+                .email("tech@hospital.com")
+                .role("technician")
+                .organization("")
+                .build();
+
+        when(userRepository.findByUsername("techUser")).thenReturn(Optional.of(techUser));
+        when(hospitalRepository.findByUserId(200L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sparePartService.getAllSpareParts("techUser"))
+                .isInstanceOf(com.medtrack.exception.ResourceNotFoundException.class)
+                .hasMessageContaining("Hospital profile not found for technician organization: unassigned");
+    }
+
+    @Test
+    @DisplayName("getHospitalForUser - throws ResourceNotFoundException when non-technician user has no hospital profile")
+    void getHospitalForUser_NonTechnicianNoHospital_ThrowsException() {
+        User regularUser = User.builder()
+                .id(300L)
+                .username("regularUser")
+                .email("user@regular.com")
+                .role("HOSPITAL")
+                .build();
+
+        when(userRepository.findByUsername("regularUser")).thenReturn(Optional.of(regularUser));
+        when(hospitalRepository.findByUserId(300L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sparePartService.getAllSpareParts("regularUser"))
+                .isInstanceOf(com.medtrack.exception.ResourceNotFoundException.class)
+                .hasMessageContaining("Hospital profile not found for user: regularUser");
+    }
+
+    @Test
+    @DisplayName("deductStock - throws IllegalArgumentException when part number is blank for technician")
+    void deductStock_TechnicianBlankPartNumber_ThrowsException() {
+        SparePartStockRequest request = SparePartStockRequest.builder()
+                .partNumber("")
+                .quantity(2)
+                .build();
+
+        assertThatThrownBy(() -> sparePartService.deductStock(request, "techUser"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Part number is required for stock adjustment");
+        verifyNoInteractions(userRepository, hospitalRepository, sparePartRepository);
+    }
+
+    @Test
+    @DisplayName("deductStock - throws IllegalArgumentException when quantity is negative for technician")
+    void deductStock_TechnicianNegativeQuantity_ThrowsException() {
+        SparePartStockRequest request = SparePartStockRequest.builder()
+                .partNumber("FILTER-001")
+                .quantity(-5)
+                .build();
+
+        assertThatThrownBy(() -> sparePartService.deductStock(request, "techUser"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Stock adjustment quantity must be greater than zero");
+        verifyNoInteractions(userRepository, hospitalRepository, sparePartRepository);
+    }
+
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - throws ResourceNotFoundException when part is missing for technician hospital")
+    void deductSparePartsForWorkOrder_TechnicianHospitalPartNotFound_ThrowsException() {
+        com.medtrack.dto.SparePartDeductionItem item = com.medtrack.dto.SparePartDeductionItem.builder()
+                .partNumber("NON-EXISTENT-PART")
+                .quantity(1)
+                .build();
+
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "NON-EXISTENT-PART"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sparePartService.deductSparePartsForWorkOrder(List.of(item), 1L, "techUser"))
+                .isInstanceOf(com.medtrack.exception.ResourceNotFoundException.class)
+                .hasMessageContaining("Spare part with part number 'NON-EXISTENT-PART' not found in hospital inventory");
+    }
+
+    @Test
+    @DisplayName("getLowStockAlerts - successfully resolves hospital for technician via organization")
+    void getLowStockAlerts_TechnicianRole_ResolvesHospitalByOrganization() {
+        User techUser = User.builder()
+                .id(200L)
+                .username("techUser")
+                .email("tech@hospital.com")
+                .role("technician")
+                .organization("General Hospital")
+                .build();
+
+        when(userRepository.findByUsername("techUser")).thenReturn(Optional.of(techUser));
+        when(hospitalRepository.findByUserId(200L)).thenReturn(Optional.empty());
+        when(hospitalRepository.findByNameIgnoreCaseAndTrimmed("General Hospital"))
+                .thenReturn(List.of(testHospital));
+        when(sparePartRepository.findLowStockPartsByHospitalId(1L))
+                .thenReturn(List.of(testSparePart));
+
+        List<SparePartResponse> alerts = sparePartService.getLowStockAlerts("techUser");
+
+        assertThat(alerts).hasSize(1);
+        verify(hospitalRepository).findByNameIgnoreCaseAndTrimmed("General Hospital");
+        verify(sparePartRepository).findLowStockPartsByHospitalId(1L);
+    }
+
+    @Test
+    @DisplayName("deductStock - throws IllegalArgumentException when technician stock deduction exceeds available inventory")
+    void deductStock_TechnicianRole_InsufficientStock_ThrowsException() {
+        User techUser = User.builder()
+                .id(200L)
+                .username("techUser")
+                .email("tech@hospital.com")
+                .role("technician")
+                .organization("General Hospital")
+                .build();
+        SparePartStockRequest request = SparePartStockRequest.builder()
+                .partNumber("FILTER-001")
+                .quantity(100)
+                .build();
+
+        when(userRepository.findByUsername("techUser")).thenReturn(Optional.of(techUser));
+        when(hospitalRepository.findByUserId(200L)).thenReturn(Optional.empty());
+        when(hospitalRepository.findByNameIgnoreCaseAndTrimmed("General Hospital"))
+                .thenReturn(List.of(testHospital));
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "FILTER-001"))
+                .thenReturn(Optional.of(testSparePart));
+
+        assertThatThrownBy(() -> sparePartService.deductStock(request, "techUser"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Insufficient stock for part: FILTER-001");
+        verify(sparePartRepository, never()).save(any());
+    }
 }

@@ -35,7 +35,24 @@ public class SparePartService {
                 .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
         return hospitalRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
+                .orElseGet(() -> resolveHospitalForTechnician(user, username));
+    }
+
+    private Hospital resolveHospitalForTechnician(User user, String username) {
+        if ("technician".equalsIgnoreCase(user.getRole())) {
+            String organization = user.getOrganization();
+            if (organization != null && !organization.isBlank()) {
+                List<Hospital> matchingHospitals =
+                        hospitalRepository.findByNameIgnoreCaseAndTrimmed(organization.trim());
+                if (!matchingHospitals.isEmpty()) {
+                    return matchingHospitals.get(0);
+                }
+            }
+            throw new ResourceNotFoundException(
+                    "Hospital profile not found for technician organization: "
+                            + (user.getOrganization() != null && !user.getOrganization().isBlank() ? user.getOrganization() : "unassigned"));
+        }
+        throw new ResourceNotFoundException("Hospital profile not found for user: " + username);
     }
 
     public List<SparePartResponse> getAllSpareParts(String username) {
