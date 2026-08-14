@@ -28,8 +28,9 @@ public class EventStreamAccessGuard {
 
     public Long bindAuthorizedHospital(WebSocketSession session) {
         Authentication authentication = requireHospitalAuthentication(session);
-        String email = authentication.getName().trim().toLowerCase(Locale.ROOT);
-        User user = userRepository.findByEmail(email)
+        String identifier = authentication.getName().trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(Locale.ROOT)))
                 .filter(candidate -> candidate.getAccountStatus() == AccountStatus.ACTIVE)
                 .filter(candidate -> "hospital".equalsIgnoreCase(candidate.getRole()))
                 .orElseThrow(() -> denied("An active hospital account is required"));

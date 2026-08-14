@@ -35,9 +35,7 @@ public class MaintenanceSlaAlertScheduler {
      */
     @Scheduled(cron = "${app.maintenance.sla.alert.cron:0 0 * * * *}")
     public void runSlaSweep() {
-        @Scheduled(cron = "${app.maintenance.sla.alert.cron:0 0 * * * *}")
-        public void runSlaSweep() {
-            log.info("Starting scheduled maintenance SLA sweep");
+        log.info("Starting scheduled maintenance SLA sweep");
 
             List<Hospital> hospitals = hospitalRepository.findAll();
 
@@ -84,5 +82,5 @@ public class MaintenanceSlaAlertScheduler {
                     breaches,
                     escalations
             );
-        }
+    }
 }

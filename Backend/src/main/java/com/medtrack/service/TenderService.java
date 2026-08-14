@@ -265,6 +265,15 @@ public class TenderService {
         if (request.getBidAmount() == null || request.getBidAmount().signum() < 0) {
             throw new IllegalArgumentException("Bid amount cannot be negative");
         }
+        if (request.getLeadTimeDays() != null && request.getLeadTimeDays() <= 0) {
+            throw new IllegalArgumentException("Lead time must be greater than zero");
+        }
+        if (request.getQualityScore() != null && (request.getQualityScore() < 0 || request.getQualityScore() > 100)) {
+            throw new IllegalArgumentException("Quality score must be between 0 and 100");
+        }
+        if (request.getDeliveryScore() != null && (request.getDeliveryScore() < 0 || request.getDeliveryScore() > 100)) {
+            throw new IllegalArgumentException("Delivery score must be between 0 and 100");
+        }
 
         TenderBid bid = TenderBid.builder()
                 .tenderId(tender.getId())

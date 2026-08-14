@@ -28,6 +28,14 @@ public class SparePartController {
         return ResponseEntity.ok(sparePartService.getAllSpareParts(authentication.getName()));
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<SparePartResponse> getSparePart(
+            @PathVariable Long id,
+            Authentication authentication) {
+        return ResponseEntity.ok(sparePartService.getSparePart(id, authentication.getName()));
+    }
+
     @GetMapping("/low-stock")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<List<SparePartResponse>> getLowStockAlerts(Authentication authentication) {

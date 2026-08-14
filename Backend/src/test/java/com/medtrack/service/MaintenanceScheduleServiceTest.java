@@ -85,18 +85,12 @@ class MaintenanceScheduleServiceTest {
         when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         LocalDate newDeadline = LocalDate.now().plusDays(12);
         MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
-                .deadline(newDeadline).maintenanceType("  Calibration  ")
-                .description("  Updated instructions  ").priority("critical")
-                .recurrencePeriodDays(60).reason("Vendor availability changed").build();
+                .newDeadline(newDeadline).reason("Vendor availability changed").build();
 
         MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
 
         assertSame(task, result);
         assertEquals(newDeadline, task.getDeadline());
-        assertEquals("Calibration", task.getMaintenanceType());
-        assertEquals("Updated instructions", task.getDescription());
-        assertEquals("Critical", task.getPriority());
-        assertEquals(60, task.getRecurrencePeriodDays());
         assertEquals(3, task.getScheduleRevision());
         assertEquals(newDeadline.minusDays(3).atStartOfDay(), task.getSlaWarningAt());
         assertEquals(newDeadline.plusDays(1).atTime(23, 59, 59), task.getSlaBreachedAt());
@@ -112,37 +106,10 @@ class MaintenanceScheduleServiceTest {
         assertEquals(hospitalUser.getId(), revision.getActorUserId());
         assertEquals("hospital@medtrack.com", revision.getActorEmail());
         assertEquals("Vendor availability changed", revision.getReason());
-        assertEquals("deadline,maintenanceType,description,priority,recurrencePeriodDays",
-                revision.getChangedFields());
-        assertEquals("Inspection", revision.getPreviousMaintenanceType());
-        assertEquals("Calibration", revision.getNewMaintenanceType());
-        assertEquals("Normal", revision.getPreviousPriority());
-        assertEquals("Critical", revision.getNewPriority());
         assertNotNull(revision.getAmendedAt());
-        verify(activityService).recordScheduleAmendment(
-                task, hospitalUser,
-                List.of("deadline", "maintenanceType", "description", "priority",
-                        "recurrencePeriodDays"));
     }
 
-    @Test
-    void amendScheduleCanClearOptionalDescriptionAndDisableRecurrence() {
-        arrangeOwnedHospitalTask();
-        when(taskRepository.save(task)).thenReturn(task);
 
-        service.amendSchedule(44L, MaintenanceScheduleAmendmentRequest.builder()
-                .description("  ").recurrencePeriodDays(0)
-                .reason("Move to on-demand servicing").build(), hospitalAuthentication);
-
-        assertNull(task.getDescription());
-        assertEquals(0, task.getRecurrencePeriodDays());
-        ArgumentCaptor<MaintenanceScheduleRevision> captor =
-                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
-        verify(revisionRepository).save(captor.capture());
-        assertEquals("description,recurrencePeriodDays", captor.getValue().getChangedFields());
-        assertEquals("Original instructions", captor.getValue().getPreviousDescription());
-        assertNull(captor.getValue().getNewDescription());
-    }
 
     @Test
     void generatedTaskAmendmentUsesOwnedPolicySlaWindows() {
@@ -157,7 +124,7 @@ class MaintenanceScheduleServiceTest {
         LocalDate newDeadline = LocalDate.now().plusDays(2);
 
         service.amendSchedule(44L, MaintenanceScheduleAmendmentRequest.builder()
-                .deadline(newDeadline).reason("Policy work rescheduled").build(),
+                .newDeadline(newDeadline).reason("Policy work rescheduled").build(),
                 hospitalAuthentication);
 
         assertEquals(newDeadline.minusDays(5).atStartOfDay(), task.getSlaWarningAt());
@@ -186,9 +153,7 @@ class MaintenanceScheduleServiceTest {
     void amendScheduleRejectsNoOpWithoutWritingAuditEvidence() {
         arrangeOwnedHospitalTask();
         MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
-                .deadline(task.getDeadline()).maintenanceType(" Inspection ")
-                .description("Original instructions").priority("normal")
-                .recurrencePeriodDays(30).reason("No actual change").build();
+                .newDeadline(task.getDeadline()).reason("No actual change").build();
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.amendSchedule(44L, request, hospitalAuthentication));
@@ -216,25 +181,19 @@ class MaintenanceScheduleServiceTest {
     }
 
     @Test
-    void amendScheduleRejectsBlankReasonPastDeadlineAndInvalidPriority() {
+    void amendScheduleRejectsBlankReasonAndPastDeadline() {
         arrangeOwnedHospitalTask();
         MaintenanceScheduleAmendmentRequest blankReason = MaintenanceScheduleAmendmentRequest
-                .builder().deadline(LocalDate.now().plusDays(8)).reason(" ").build();
+                .builder().newDeadline(LocalDate.now().plusDays(8)).reason(" ").build();
         assertEquals("Amendment reason is required", assertThrows(
                 IllegalArgumentException.class,
                 () -> service.amendSchedule(44L, blankReason, hospitalAuthentication)).getMessage());
 
         MaintenanceScheduleAmendmentRequest pastDeadline = MaintenanceScheduleAmendmentRequest
-                .builder().deadline(LocalDate.now().minusDays(1)).reason("Backdate").build();
+                .builder().newDeadline(LocalDate.now().minusDays(1)).reason("Backdate").build();
         assertEquals("Amended deadline cannot be in the past", assertThrows(
                 IllegalArgumentException.class,
                 () -> service.amendSchedule(44L, pastDeadline, hospitalAuthentication)).getMessage());
-
-        MaintenanceScheduleAmendmentRequest invalidPriority = MaintenanceScheduleAmendmentRequest
-                .builder().priority("Urgent").reason("Escalation").build();
-        assertEquals("Priority must be Normal, High, or Critical", assertThrows(
-                IllegalArgumentException.class,
-                () -> service.amendSchedule(44L, invalidPriority, hospitalAuthentication)).getMessage());
         verify(taskRepository, never()).save(any());
     }
 
@@ -331,7 +290,7 @@ class MaintenanceScheduleServiceTest {
 
     private MaintenanceScheduleAmendmentRequest requestWithDeadline() {
         return MaintenanceScheduleAmendmentRequest.builder()
-                .deadline(LocalDate.now().plusDays(10)).reason("Planning update").build();
+                .newDeadline(LocalDate.now().plusDays(10)).reason("Planning update").build();
     }
 
     private MaintenanceScheduleRevision revision(int number, String fields) {

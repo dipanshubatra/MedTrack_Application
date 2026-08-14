@@ -59,13 +59,4 @@ public class MaintenanceGenerationRun {
     @Builder.Default
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
-    @UniqueConstraint(
-            name = "uk_generation_run_window",
-            columnNames = {
-                    "hospital_id",
-                    "policy_rule_id",
-                    "window_start",
-                    "window_end"
-            }
-    )
 }

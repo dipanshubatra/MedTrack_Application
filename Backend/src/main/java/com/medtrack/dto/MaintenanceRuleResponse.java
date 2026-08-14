@@ -45,6 +45,8 @@ public class MaintenanceRuleResponse {
     private MaintenancePolicyStatus status;
     private LocalDate startDate;
     private LocalDate nextExecutionDate;
+    private Long assignedTechnicianId;
+    private String assignedTechnician;
     private LocalDateTime archivedAt;
 
     public static MaintenanceRuleResponse from(MaintenancePolicyRule rule, String equipmentName) {
@@ -68,13 +70,13 @@ public class MaintenanceRuleResponse {
                 .lastGeneratedAt(rule.getLastGeneratedAt())
                 .createdAt(rule.getCreatedAt())
                 .updatedAt(rule.getUpdatedAt())
-                .build();
-        .policyCode(rule.getPolicyCode())
+                .policyCode(rule.getPolicyCode())
                 .status(rule.getStatus())
                 .startDate(rule.getStartDate())
                 .nextExecutionDate(rule.getNextExecutionDate())
                 .assignedTechnicianId(rule.getAssignedTechnicianId())
                 .assignedTechnician(rule.getAssignedTechnician())
                 .archivedAt(rule.getArchivedAt())
+                .build();
     }
 }

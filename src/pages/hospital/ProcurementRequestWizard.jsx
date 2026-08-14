@@ -68,9 +68,12 @@ const ProcurementRequestWizard = ({ onNavigate }) => {
         category: formData.category,
         notes: formData.notes.trim() || null
       };
-      await createProcurementRequest(payload);
+      const created = await createProcurementRequest(payload);
       alert('Procurement request created successfully!');
-      onNavigate('dashboard');
+      // Land on the request's lifecycle timeline so the requester immediately sees the
+      // approval routing their submission enters. Falls back to the dashboard if the
+      // backend response carries no id.
+      onNavigate(created && created.id ? 'procurement-timeline' : 'dashboard', created && created.id ? created.id : null);
     } catch (err) {
       console.error('Error creating request:', err);
       alert('Failed to create request. Please try again.');

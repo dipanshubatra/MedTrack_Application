@@ -14,12 +14,15 @@ import com.medtrack.model.EquipmentLifecycleActionType;
 import com.medtrack.model.EquipmentLifecycleStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentLifecycleActionRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import com.medtrack.util.DisposalCertificatePdf;
 import lombok.RequiredArgsConstructor;
@@ -61,13 +64,25 @@ public class EquipmentDisposalService {
             MaintenanceWorkOrderStatus.IN_PROGRESS,
             MaintenanceWorkOrderStatus.ON_HOLD);
 
+    /**
+     * Scheduled preventive maintenance task states that represent open work needing completion
+     * or cancellation before equipment decommissioning can proceed.
+     */
+    private static final List<MaintenanceStatus> LIVE_TASK_STATUSES = List.of(
+            MaintenanceStatus.SCHEDULED,
+            MaintenanceStatus.IN_PROGRESS,
+            MaintenanceStatus.NEEDS_PART,
+            MaintenanceStatus.ON_HOLD);
+
     private final EquipmentDisposalRepository disposalRepository;
     private final EquipmentLifecycleActionRepository lifecycleRepository;
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final MaintenanceWorkOrderRepository workOrderRepository;
+    private final MaintenanceTaskRepository taskRepository;
     private final DisposalCertificatePdf certificatePdf;
+    private final PreventiveMaintenanceService preventiveMaintenanceService;
 
     /**
      * Opens a decommissioning request for one asset. The asset must still be active, and no other
@@ -94,6 +109,29 @@ public class EquipmentDisposalService {
         if (alreadyActive) {
             throw new IllegalArgumentException("This asset already has a disposal request awaiting approval");
         }
+
+        EquipmentDisposal checkDisposal = EquipmentDisposal.builder()
+                .equipment(equipment)
+                .hospital(hospital)
+                .build();
+        List<MaintenanceWorkOrder> liveWorkOrders = liveWorkOrdersFor(checkDisposal);
+        if (!liveWorkOrders.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has active maintenance work orders and cannot be submitted for disposal: "
+                            + liveWorkOrders.stream()
+                                    .map(MaintenanceWorkOrder::getWorkOrderCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
+        List<MaintenanceTask> liveTasks = liveTasksFor(checkDisposal);
+        if (!liveTasks.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has scheduled maintenance tasks and cannot be submitted for disposal: "
+                            + liveTasks.stream()
+                                    .map(MaintenanceTask::getTaskCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
 
         EquipmentDisposal disposal = EquipmentDisposal.builder()
                 .equipment(equipment)
@@ -222,9 +260,24 @@ public class EquipmentDisposalService {
                                     .collect(Collectors.joining(", ")));
         }
 
+        List<MaintenanceTask> liveTasks = liveTasksFor(disposal);
+        if (!liveTasks.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has scheduled maintenance tasks outstanding and cannot be decommissioned "
+                            + "until they are completed or cancelled: "
+                            + liveTasks.stream()
+                                    .map(MaintenanceTask::getTaskCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
         Equipment equipment = disposal.getEquipment();
         equipment.setStatus(EquipmentStatus.DISPOSED);
         equipmentRepository.save(equipment);
+
+        if (preventiveMaintenanceService != null && equipment.getId() != null && disposal.getHospital() != null) {
+            preventiveMaintenanceService.deactivateRulesForDecommissionedEquipment(
+                    equipment.getId(), disposal.getHospital().getId(), username);
+        }
 
         disposal.setStatus(EquipmentDisposalStatus.COMPLETED);
         disposal.setCompletedBy(username);
@@ -303,6 +356,19 @@ public class EquipmentDisposalService {
                         disposal.getHospital().getId(), equipment.getId())
                 .stream()
                 .filter(workOrder -> LIVE_WORK_ORDER_STATUSES.contains(workOrder.getStatus()))
+                .toList();
+    }
+
+    /** Scheduled maintenance tasks still expecting attention on the asset behind this disposal. */
+    private List<MaintenanceTask> liveTasksFor(EquipmentDisposal disposal) {
+        Equipment equipment = disposal.getEquipment();
+        if (equipment == null || equipment.getId() == null || disposal.getHospital() == null) {
+            return List.of();
+        }
+        return taskRepository
+                .findByHospitalIdAndEquipmentRecordId(disposal.getHospital().getId(), equipment.getId())
+                .stream()
+                .filter(task -> LIVE_TASK_STATUSES.contains(task.getStatus()))
                 .toList();
     }
 

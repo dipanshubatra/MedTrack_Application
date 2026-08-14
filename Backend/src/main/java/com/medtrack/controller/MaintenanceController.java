@@ -11,6 +11,7 @@ import com.medtrack.service.MaintenanceService;
 import com.medtrack.dto.MaintenanceRuleStatusRequest;
 import com.medtrack.dto.MaintenanceRuleResponse;
 import com.medtrack.service.MaintenanceScheduleService;
+import com.medtrack.service.PreventiveMaintenanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.medtrack.dto.MaintenanceScheduleAmendmentRequest;
+import com.medtrack.dto.MaintenanceScheduleAmendmentResponse;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -34,6 +38,7 @@ public class MaintenanceController {
 
     private final MaintenanceService maintenanceService;
     private final MaintenanceScheduleService maintenanceScheduleService;
+    private final PreventiveMaintenanceService preventiveMaintenanceService;
 
     /**
      * Retrieves an ownership-scoped list of maintenance tasks, with optional pagination.
@@ -212,6 +217,7 @@ public class MaintenanceController {
     }
 
     @PatchMapping("/rules/{id}/status")
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<MaintenanceRuleResponse> updateRuleStatus(
             @PathVariable Long id,
             @Valid @RequestBody MaintenanceRuleStatusRequest request,
