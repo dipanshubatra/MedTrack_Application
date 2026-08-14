@@ -4,10 +4,12 @@ import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentLocationHistory;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.FacilityLocation;
 import com.medtrack.model.Hospital;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentLocationHistoryRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.FacilityLocationRepository;
@@ -36,6 +38,7 @@ public class LocationService {
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final EquipmentDisposalRepository disposalRepository;
 
     private Hospital getHospitalForUser(String username) {
         if (username == null || username.isBlank()) {
@@ -183,6 +186,18 @@ public class LocationService {
                 || equipment.getStatus() == EquipmentStatus.DISPOSED) {
             throw new IllegalArgumentException(
                     "Retired or disposed equipment cannot be assigned to a location");
+        }
+        if (equipment.getHospital() != null && disposalRepository != null) {
+            boolean pendingDisposal = disposalRepository
+                    .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(
+                            equipment.getId(), equipment.getHospital().getId())
+                    .stream()
+                    .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                            || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+            if (pendingDisposal) {
+                throw new IllegalArgumentException("Equipment " + equipment.getEquipmentCode()
+                        + " has an active disposal request awaiting approval or completion and cannot be assigned to a location");
+            }
         }
     }
 }

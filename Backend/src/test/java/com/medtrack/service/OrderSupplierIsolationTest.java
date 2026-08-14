@@ -86,7 +86,7 @@ class OrderSupplierIsolationTest {
         when(orderRepository.findBySupplierId(41L, pageable))
                 .thenReturn(new PageImpl<>(List.of(assignedOrder), pageable, 1));
 
-        assertEquals(List.of(assignedOrder), orderService.getAllOrders(pageable).getContent());
+        assertEquals(List.of(assignedOrder), orderService.getAllOrders(null, pageable).getContent());
 
         verify(orderRepository).findBySupplierId(41L, pageable);
         verify(orderRepository, never()).findAll(any(PageRequest.class));

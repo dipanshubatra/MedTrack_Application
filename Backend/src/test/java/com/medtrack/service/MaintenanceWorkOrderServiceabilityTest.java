@@ -7,6 +7,7 @@ import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
