@@ -26,6 +26,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import Pagination from "../../components/common/Pagination";
 import QrScannerModal from "../../components/common/QrScannerModal";
+import RequirePermission from "../../components/common/RequirePermission";
 
 /* ===========================
    DEFAULT PUBLIC EQUIPMENT
@@ -704,12 +705,14 @@ export default function EquipmentList({ onNavigate }) {
               >
                 📥 Bulk Import
               </button>
-              <button
-                className="bg-blue-600 hover:bg-blue-700 text-white border-none px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-md transition-colors"
-                onClick={() => onNavigate("add-equipment")}
-              >
-                + Add Equipment
-              </button>
+              <RequirePermission permission="WRITE_EQUIPMENT">
+                <button
+                  className="bg-blue-600 hover:bg-blue-700 text-white border-none px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-md transition-colors"
+                  onClick={() => onNavigate("add-equipment")}
+                >
+                  + Add Equipment
+                </button>
+              </RequirePermission>
             </div>
           )}
         </div>
@@ -820,12 +823,14 @@ export default function EquipmentList({ onNavigate }) {
                   {user?.role === "hospital" &&
                     !String(item.id).startsWith("EQ-00") && (
                       <>
-                        <button
-                          onClick={() => onNavigate("edit-equipment", item.id)}
-                          className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white border-none rounded-lg cursor-pointer font-semibold text-sm transition-colors shadow-sm"
-                        >
-                          Edit
-                        </button>
+                        <RequirePermission permission="WRITE_EQUIPMENT" mode="disable">
+                          <button
+                            onClick={() => onNavigate("edit-equipment", item.id)}
+                            className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white border-none rounded-lg cursor-pointer font-semibold text-sm transition-colors shadow-sm"
+                          >
+                            Edit
+                          </button>
+                        </RequirePermission>
                         <button
                           onClick={() => handleDelete(item.id)}
                           className="py-2 px-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg cursor-pointer font-semibold text-sm transition-colors hover:bg-red-100 dark:hover:bg-red-900/40"

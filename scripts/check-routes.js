@@ -187,6 +187,36 @@ function main() {
     }
   }
 
+  // 6. Every route `permission` field must name a permission code that actually exists in
+  //    src/security/permissions.js (which mirrors the backend AuthorityService matrix). A typo
+  //    here silently locks a route forever - AppRoutes denies anyone who does not hold the
+  //    mistyped code - so it has to fail the build instead. The valid codes are collected by
+  //    regex from the source, exactly like the route entries above, so this script never needs
+  //    to import the ESM module.
+  const permissionsPath = path.join(projectRoot, 'src', 'security', 'permissions.js');
+  const permissionsSource = fs.readFileSync(permissionsPath, 'utf8');
+  const permissionCodes = new Set();
+  const permissionCodePattern = /"([A-Z][A-Z0-9_]{2,})"/g;
+  let codeMatch;
+  while ((codeMatch = permissionCodePattern.exec(permissionsSource)) !== null) {
+    permissionCodes.add(codeMatch[1]);
+  }
+
+  const permissionFieldPattern = /permission:\s*"([^"]+)"/;
+  for (const route of routes) {
+    const match = permissionFieldPattern.exec(route.rest || '');
+    if (!match) {
+      continue;
+    }
+    const code = match[1];
+    if (!permissionCodes.has(code)) {
+      fail(
+        `route "${route.page}" requires permission "${code}", which is not defined in `
+        + 'src/security/permissions.js - AppRoutes would lock this route for everyone'
+      );
+    }
+  }
+
   if (failures.length > 0) {
     console.error(`\ncheck-routes: ${failures.length} problem(s) found.\n`);
     failures.forEach((message) => console.error(`  - ${message}`));
@@ -197,7 +227,8 @@ function main() {
   console.log(
     `check-routes: ${routes.length} routes, ${seenSlugs.size} slugs, `
     + `${seenParameterisedSlugs.size} parameterised, `
-    + `${authPages.length} security consoles - all consistent.`
+    + `${authPages.length} security consoles, `
+    + `${permissionCodes.size} permission codes - all consistent.`
   );
 }
 
