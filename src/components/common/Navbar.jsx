@@ -77,11 +77,14 @@ export default function Navbar({ onNavigate, currentPage }) {
 
   const isLanding = currentPage === "landing";
 
-  // Landing page links
+  // Landing page links. "Features" / "Hospitals" / "Suppliers" are sections of the landing page,
+  // not routes of their own - pointing them at "landing" keeps them from 404ing (an unregistered
+  // page key renders the not-found screen). "Features" additionally scrolls to its section when the
+  // landing page is already on screen.
  const publicLinks = [
-  { label: "Features", page: "features" },
-  { label: "Hospitals", page: "hospitals" },
-  { label: "Suppliers", page: "suppliers" },
+  { label: "Features", page: "landing", section: "features" },
+  { label: "Hospitals", page: "landing" },
+  { label: "Suppliers", page: "landing" },
   { label: "Blog", page: "blog" },
   { label: "For employers", page: "about" },
   { label: "Careers", page: "careers" },
@@ -103,8 +106,8 @@ export default function Navbar({ onNavigate, currentPage }) {
         ]
       : user.role === "technician"
       ? [
-          { label: "My Tasks", page: "tasks", permission: "READ_MAINTENANCE" },
-          { label: "Update Task", page: "updatetask", permission: "UPDATE_MAINTENANCE" },
+          { label: "My Tasks", page: "tasks" },
+          { label: "Update Task", page: "update-task" },
         ]
       : [
           { label: "Orders", page: "orders", permission: "READ_ORDERS" },
@@ -143,8 +146,14 @@ export default function Navbar({ onNavigate, currentPage }) {
 
             {visibleLinks.map((link) => (
               <button
-                key={link.page}
-                onClick={() => onNavigate(link.page)}
+                key={link.label}
+                onClick={() => {
+                  if (link.page === "landing" && currentPage === "landing" && link.section) {
+                    document.getElementById(link.section)?.scrollIntoView({ behavior: "smooth" });
+                    return;
+                  }
+                  onNavigate(link.page);
+                }}
                 className={`text-sm font-bold transition-all ${
                   currentPage === link.page
                     ? "text-blue-600"
@@ -302,9 +311,13 @@ export default function Navbar({ onNavigate, currentPage }) {
         <div className="md:hidden border-t border-subtle bg-surface px-6 py-4 space-y-3">
           {visibleLinks.map((link) => (
             <button
-              key={link.page}
+              key={link.label}
               onClick={() => {
-                onNavigate(link.page);
+                if (link.page === "landing" && currentPage === "landing" && link.section) {
+                  document.getElementById(link.section)?.scrollIntoView({ behavior: "smooth" });
+                } else {
+                  onNavigate(link.page);
+                }
                 setMenuOpen(false);
               }}
               className={`block w-full text-left px-3 py-2 rounded-lg text-sm font-bold ${
