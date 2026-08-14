@@ -8,11 +8,13 @@ import com.medtrack.dto.EquipmentLifecycleActionResponse;
 import com.medtrack.dto.EquipmentLocationResponse;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentLifecycleAction;
 import com.medtrack.model.EquipmentLifecycleActionType;
 import com.medtrack.model.EquipmentLifecycleStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentLifecycleActionRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
@@ -36,6 +38,8 @@ public class EquipmentLifecycleService {
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final EquipmentDisposalRepository disposalRepository;
+    private final PreventiveMaintenanceService preventiveMaintenanceService;
 
     @Transactional
     public EquipmentLifecycleActionResponse createAction(Long equipmentId,
@@ -185,6 +189,7 @@ public class EquipmentLifecycleService {
         if (isInactive(equipment) && action.getActionType() != EquipmentLifecycleActionType.DEPRECIATION_SNAPSHOT) {
             throw new IllegalArgumentException("Retired or disposed equipment cannot receive lifecycle changes");
         }
+        validateNoPendingDisposal(equipment);
 
         applyCompletedAction(equipment, action);
         action.setStatus(EquipmentLifecycleStatus.COMPLETED);
@@ -206,14 +211,24 @@ public class EquipmentLifecycleService {
             equipment.setLocationEffectiveDate(action.getEffectiveDate());
         } else if (action.getActionType() == EquipmentLifecycleActionType.RETIREMENT) {
             equipment.setStatus(EquipmentStatus.RETIRED);
+            deactivateMaintenanceRules(equipment, action.getApprovedBy());
         } else if (action.getActionType() == EquipmentLifecycleActionType.DISPOSAL) {
             equipment.setStatus(EquipmentStatus.DISPOSED);
+            deactivateMaintenanceRules(equipment, action.getApprovedBy());
         } else if (action.getActionType() == EquipmentLifecycleActionType.REPLACEMENT) {
             if (action.getReplacementEquipment() == null) {
                 throw new IllegalArgumentException("Replacement equipment is required");
             }
             equipment.setReplacementEquipment(action.getReplacementEquipment());
             equipment.setStatus(EquipmentStatus.RETIRED);
+            deactivateMaintenanceRules(equipment, action.getApprovedBy());
+        }
+    }
+
+    private void deactivateMaintenanceRules(Equipment equipment, String username) {
+        if (preventiveMaintenanceService != null && equipment != null && equipment.getId() != null && equipment.getHospital() != null) {
+            preventiveMaintenanceService.deactivateRulesForDecommissionedEquipment(
+                    equipment.getId(), equipment.getHospital().getId(), username);
         }
     }
 
@@ -221,6 +236,7 @@ public class EquipmentLifecycleService {
         if (isInactive(equipment) && request.getActionType() != EquipmentLifecycleActionType.DEPRECIATION_SNAPSHOT) {
             throw new IllegalArgumentException("Retired or disposed equipment cannot receive lifecycle changes");
         }
+        validateNoPendingDisposal(equipment);
         if ((request.getActionType() == EquipmentLifecycleActionType.TRANSFER
                 || request.getActionType() == EquipmentLifecycleActionType.ASSIGNMENT)
                 && trimToNull(request.getNewDepartment()) == null) {
@@ -236,6 +252,21 @@ public class EquipmentLifecycleService {
         }
         if (request.getDepreciationAmount() != null && request.getDepreciationAmount().signum() < 0) {
             throw new IllegalArgumentException("Depreciation amount cannot be negative");
+        }
+    }
+
+    private void validateNoPendingDisposal(Equipment equipment) {
+        if (equipment != null && equipment.getId() != null && equipment.getHospital() != null && disposalRepository != null) {
+            boolean pendingDisposal = disposalRepository
+                    .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(
+                            equipment.getId(), equipment.getHospital().getId())
+                    .stream()
+                    .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                            || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+            if (pendingDisposal) {
+                throw new IllegalArgumentException("Equipment " + equipment.getEquipmentCode()
+                        + " has an active disposal request awaiting approval or completion and cannot receive lifecycle changes");
+            }
         }
     }
 

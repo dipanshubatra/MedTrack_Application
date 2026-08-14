@@ -8,12 +8,16 @@ import com.medtrack.dto.MaintenanceScheduleRevisionPageResponse;
 import com.medtrack.dto.MaintenanceScheduleRevisionResponse;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentDisposalStatus;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceScheduleRevision;
 import com.medtrack.model.MaintenancePolicyRule;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.SlaState;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenancePolicyRuleRepository;
 import com.medtrack.repository.MaintenanceScheduleRevisionRepository;
@@ -50,6 +54,7 @@ public class MaintenanceScheduleService {
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
     private final MaintenanceActivityService activityService;
+    private final EquipmentDisposalRepository disposalRepository;
 
     @Transactional
     public MaintenanceTask amendSchedule(
@@ -120,6 +125,26 @@ public class MaintenanceScheduleService {
                 || taskRepository.countValidOwnership(task.getId(), task.getHospitalId()) != 1) {
             throw new IllegalStateException(
                     "Maintenance task hospital ownership does not match its equipment");
+        }
+        Equipment equipment = task.getEquipmentRecord();
+        if (equipment != null) {
+            if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
+                throw new IllegalArgumentException("Equipment " + equipment.getEquipmentCode()
+                        + " is " + equipment.getStatus().name().toLowerCase()
+                        + " and cannot have its maintenance schedule amended");
+            }
+            if (disposalRepository != null && task.getHospitalId() != null) {
+                boolean pendingDisposal = disposalRepository
+                        .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(
+                                equipment.getId(), task.getHospitalId())
+                        .stream()
+                        .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                                || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+                if (pendingDisposal) {
+                    throw new IllegalArgumentException("Equipment " + equipment.getEquipmentCode()
+                            + " has an active disposal request and cannot have its maintenance schedule amended");
+                }
+            }
         }
     }
 

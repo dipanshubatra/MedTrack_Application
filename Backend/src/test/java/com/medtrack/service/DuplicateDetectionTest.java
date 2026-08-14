@@ -41,6 +41,16 @@ import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.EquipmentAuditRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
+import com.medtrack.analytics.model.IncidentSeverity;
+import com.medtrack.analytics.model.IncidentStatus;
+import com.medtrack.analytics.model.PolicyEnforcement;
+import com.medtrack.analytics.model.RiskEvaluationEvent;
+import com.medtrack.analytics.model.RiskLevel;
+import com.medtrack.analytics.model.SecurityIncident;
+import com.medtrack.analytics.model.SoftwareTelemetryLog;
+import com.medtrack.analytics.repository.RiskEvaluationEventRepository;
+import com.medtrack.analytics.repository.SecurityIncidentRepository;
+import com.medtrack.analytics.repository.SoftwareTelemetryLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -130,7 +140,7 @@ class DuplicateDetectionTest {
     void setUp() {
         username = "duplicates-owner-" + UUID.randomUUID();
 
-        User owner = userRepository.save(User.builder()
+        ownerUser = userRepository.save(User.builder()
                 .name("Duplicates Owner")
                 .username(username)
                 .email(UUID.randomUUID() + "@medtrack.test")
@@ -144,7 +154,7 @@ class DuplicateDetectionTest {
         hospital = hospitalRepository.save(Hospital.builder()
                 .name("Duplicates Trust")
                 .location("Test City")
-                .user(owner)
+                .user(ownerUser)
                 .build());
     }
 
