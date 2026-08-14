@@ -73,7 +73,7 @@ const TenderList = lazy(() => import("../pages/hospital/TenderList"));
 const TenderCreate = lazy(() => import("../pages/hospital/TenderCreate"));
 const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
-const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
+const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -198,8 +198,8 @@ export const ROUTES = [
   { page: "tender-create", slugs: ["tender-create", "new-tender"], component: TenderCreate, access: HOSPITAL_ONLY },
   { page: "tender-detail", slugs: ["tender"], component: TenderDetail, access: HOSPITAL_ONLY, param: "tenderId" },
 
-  // --- hospital operations & emergency triage consoles ------------------------
-  { page: "emergency-triage", slugs: ["emergency-triage", "er-triage"], component: EmergencyTriageHub, access: AUTHENTICATED },
+  // --- telehealth & remote patient management consoles ------------------------
+  { page: "telehealth", slugs: ["telehealth", "remote-care"], component: TelehealthHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
