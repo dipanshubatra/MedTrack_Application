@@ -140,15 +140,22 @@ public class OrderService {
      * @param pageable the page to fetch; must not be {@code null}
      * @return the requested page of orders
      */
-    public Page<EquipmentOrder> getAllOrders(Pageable pageable) {
+    public Page<EquipmentOrder> getAllOrders(String status, Pageable pageable) {
         if (pageable == null) {
             throw new IllegalArgumentException("Pageable is required");
         }
         if (isSupplier()) {
             Long supplierId = supplierAccessGuard.resolveCallerId(getCurrentAuthentication());
+            if (status != null && !status.isBlank()) {
+                return orderRepository.findBySupplierIdWithStatus(supplierId, status, pageable);
+            }
             return orderRepository.findBySupplierId(supplierId, pageable);
         }
         User caller = getCurrentHospitalUser();
+        if (status != null && !status.isBlank()) {
+            return orderRepository.findVisibleToHospitalUserWithStatus(
+                    caller.getOrganization(), caller.getEmail(), status, pageable);
+        }
         return orderRepository.findVisibleToHospitalUser(
                 caller.getOrganization(), caller.getEmail(), pageable);
     }
