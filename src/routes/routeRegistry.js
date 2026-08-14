@@ -142,6 +142,10 @@ const HOSPITAL_ONLY = ["hospital"];
  * @property {string|string[]} access PUBLIC, AUTHENTICATED, or an array of permitted roles
  * @property {boolean}  chrome    whether the navbar and footer are shown (defaults to true)
  * @property {string}   param     name of the dynamic path segment, if the route takes one
+ * @property {string}   permission fine-grained permission code the session must hold
+ *              (see src/security/permissions.js). Enforced by AppRoutes after the
+ *              role check, so a permission revoked through the RBAC console locks
+ *              the route immediately. Optional - most routes are role-gated only.
  */
 export const ROUTES = [
   // --- public marketing and content -----------------------------------------
@@ -179,11 +183,11 @@ export const ROUTES = [
 
   // --- hospital ---------------------------------------------------------------
   { page: "dashboard", slugs: ["dashboard"], component: Dashboard, access: AUTHENTICATED, chrome: false },
-  { page: "equipment", slugs: ["equipment"], component: EquipmentList, access: AUTHENTICATED },
-  { page: "maintenance", slugs: ["maintenance"], component: MaintenanceSchedule, access: AUTHENTICATED },
+  { page: "equipment", slugs: ["equipment"], component: EquipmentList, access: AUTHENTICATED, permission: "READ_EQUIPMENT" },
+  { page: "maintenance", slugs: ["maintenance"], component: MaintenanceSchedule, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
   { page: "analytics", slugs: ["analytics"], component: AnalyticsDashboard, access: HOSPITAL_ONLY },
-  { page: "add-equipment", slugs: ["add-equipment"], component: AddEquipmentForm, access: HOSPITAL_ONLY },
-  { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId" },
+  { page: "add-equipment", slugs: ["add-equipment"], component: AddEquipmentForm, access: HOSPITAL_ONLY, permission: "WRITE_EQUIPMENT" },
+  { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId", permission: "WRITE_EQUIPMENT" },
   { page: "schedule-maintenance", slugs: ["schedule-maintenance"], component: ScheduleMaintenancePage, access: HOSPITAL_ONLY },
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
   { page: "equipment-lifecycle", slugs: ["equipment-lifecycle", "lifecycle"], component: EquipmentLifecyclePredictor, access: HOSPITAL_ONLY },
@@ -202,8 +206,8 @@ export const ROUTES = [
   { page: "telehealth", slugs: ["telehealth", "remote-care"], component: TelehealthHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
-  { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
-  { page: "update-task", slugs: ["update-task", "updatetask"], component: UpdateTask, access: AUTHENTICATED, param: "task" },
+  { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
+  { page: "update-task", slugs: ["update-task", "updatetask"], component: UpdateTask, access: AUTHENTICATED, param: "task", permission: "UPDATE_MAINTENANCE" },
 
   // --- supplier ---------------------------------------------------------------
   { page: "orders", slugs: ["orders"], component: OrdersList, access: AUTHENTICATED },
