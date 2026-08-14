@@ -67,7 +67,9 @@ public class DuplicateDetectionService {
             "UPDATE equipment_audit SET equipment_id = :keep WHERE equipment_id = :merge",
             "UPDATE equipment SET replacement_equipment_id = :keep WHERE replacement_equipment_id = :merge",
             "UPDATE equipment_lifecycle_actions SET replacement_equipment_id = :keep "
-                    + "WHERE replacement_equipment_id = :merge");
+                    + "WHERE replacement_equipment_id = :merge",
+            "UPDATE software_telemetry_logs SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE security_incidents SET equipment_id = :keep WHERE equipment_id = :merge");
 
     private static final double SERIAL_THRESHOLD = 0.75;
     private static final double CODE_THRESHOLD = 0.75;
@@ -296,6 +298,7 @@ public class DuplicateDetectionService {
             reassign(statement, keepId, mergeId);
         }
         reassignTaskMetadata(keepId, mergeId, keep.getEquipmentCode(), keep.getName());
+        verifyAndAuditReassignments(keepId, mergeId);
 
         Equipment savedKeep = equipmentRepository.save(keep);
 
@@ -403,6 +406,31 @@ public class DuplicateDetectionService {
                 .setParameter("keepName", keepName != null ? keepName : "")
                 .setParameter("merge", mergeId)
                 .executeUpdate();
+    }
+
+    /**
+     * Verifies that telemetry logs and security incidents were successfully reassigned to the surviving
+     * equipment record during a merge.
+     */
+    private void verifyAndAuditReassignments(Long keepId, Long mergeId) {
+        if (keepId == null || mergeId == null) {
+            return;
+        }
+        long telemetryCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM software_telemetry_logs WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        long incidentCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        if (telemetryCount > 0 || incidentCount > 0) {
+            org.slf4j.LoggerFactory.getLogger(DuplicateDetectionService.class)
+                    .info("Merged equipment child records for keepId={}, mergeId={}: telemetryLogs={}, securityIncidents={}",
+                            keepId, mergeId, telemetryCount, incidentCount);
+        }
     }
 
     private boolean isBlank(String value) {

@@ -34,6 +34,16 @@ import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.EquipmentAuditRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
+import com.medtrack.analytics.model.IncidentSeverity;
+import com.medtrack.analytics.model.IncidentStatus;
+import com.medtrack.analytics.model.PolicyEnforcement;
+import com.medtrack.analytics.model.RiskEvaluationEvent;
+import com.medtrack.analytics.model.RiskLevel;
+import com.medtrack.analytics.model.SecurityIncident;
+import com.medtrack.analytics.model.SoftwareTelemetryLog;
+import com.medtrack.analytics.repository.RiskEvaluationEventRepository;
+import com.medtrack.analytics.repository.SecurityIncidentRepository;
+import com.medtrack.analytics.repository.SoftwareTelemetryLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -106,6 +116,16 @@ class DuplicateDetectionTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private SoftwareTelemetryLogRepository softwareTelemetryLogRepository;
+
+    @Autowired
+    private SecurityIncidentRepository securityIncidentRepository;
+
+    @Autowired
+    private RiskEvaluationEventRepository riskEvaluationEventRepository;
+
+    private User ownerUser;
     private String username;
     private Hospital hospital;
 
@@ -113,7 +133,7 @@ class DuplicateDetectionTest {
     void setUp() {
         username = "duplicates-owner-" + UUID.randomUUID();
 
-        User owner = userRepository.save(User.builder()
+        ownerUser = userRepository.save(User.builder()
                 .name("Duplicates Owner")
                 .username(username)
                 .email(UUID.randomUUID() + "@medtrack.test")
@@ -127,7 +147,7 @@ class DuplicateDetectionTest {
         hospital = hospitalRepository.save(Hospital.builder()
                 .name("Duplicates Trust")
                 .location("Test City")
-                .user(owner)
+                .user(ownerUser)
                 .build());
     }
 
@@ -529,5 +549,260 @@ class DuplicateDetectionTest {
                         + "survivor, so their rows would be stranded on the archived duplicate: "
                         + uncovered);
         assertFalse(declared.isEmpty(), "Expected the schema to declare columns referencing equipment");
+    }
+
+    @Test
+    @DisplayName("merging carries software telemetry logs onto the surviving equipment record")
+    void mergeReassignsSoftwareTelemetryLogs() {
+        Equipment survivor = asset("EQ-TEL-KEEP", "SN-TEL-KEEP", "Ultrasound Scanner", "GE Logiq E9");
+        Equipment duplicate = asset("EQ-TEL-MERGE", "SN-TEL-MERGE", "Ultrasound Scanner", "GE Logiq E9");
+
+        softwareTelemetryLogRepository.save(SoftwareTelemetryLog.builder()
+                .user(ownerUser)
+                .equipment(duplicate)
+                .actionType("DEVICE_DIAGNOSTIC_RUN")
+                .timestamp(LocalDateTime.now())
+                .ipAddress("192.168.1.100")
+                .endpointAccessed("/api/v1/equipment/diagnostics")
+                .executionTimeMs(145)
+                .success(true)
+                .responseStatus(200)
+                .sessionId("sess-" + UUID.randomUUID())
+                .deviceFingerprint("fp-" + UUID.randomUUID())
+                .metadata("{\"mode\":\"transvaginal\",\"probe\":\"C1-5-D\"}")
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        long survivorLogCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM software_telemetry_logs WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+
+        long duplicateLogCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM software_telemetry_logs WHERE equipment_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+
+        assertEquals(1, survivorLogCount,
+                "Software telemetry logs from the duplicate equipment must be reassigned to the surviving equipment record");
+        assertEquals(0, duplicateLogCount,
+                "No software telemetry logs may remain attached to the soft-deleted duplicate equipment record");
+    }
+
+    @Test
+    @DisplayName("merging carries security incidents onto the surviving equipment record")
+    void mergeReassignsSecurityIncidents() {
+        Equipment survivor = asset("EQ-SEC-KEEP", "SN-SEC-KEEP", "Patient Monitor", "Mindray BeneVision N17");
+        Equipment duplicate = asset("EQ-SEC-MERGE", "SN-SEC-MERGE", "Patient Monitor", "Mindray BeneVision N17");
+
+        SoftwareTelemetryLog log = softwareTelemetryLogRepository.save(SoftwareTelemetryLog.builder()
+                .user(ownerUser)
+                .equipment(duplicate)
+                .actionType("SECURITY_AUDIT_LOG")
+                .timestamp(LocalDateTime.now())
+                .success(true)
+                .build());
+
+        RiskEvaluationEvent riskEvent = riskEvaluationEventRepository.save(RiskEvaluationEvent.builder()
+                .telemetryLog(log)
+                .evaluationTimestamp(LocalDateTime.now())
+                .finalCbrsScore(0.85f)
+                .riskLevel(RiskLevel.HIGH)
+                .policyEnforcementTaken(PolicyEnforcement.MONITOR)
+                .build());
+
+        securityIncidentRepository.save(SecurityIncident.builder()
+                .riskEvent(riskEvent)
+                .user(ownerUser)
+                .equipment(duplicate)
+                .incidentType("UNAUTHORIZED_FIRMWARE_MODIFICATION")
+                .severity(IncidentSeverity.HIGH)
+                .detectedAt(LocalDateTime.now())
+                .status(IncidentStatus.OPEN)
+                .responseAction("ISOLATED_PORT_8080")
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        long survivorIncidentCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+
+        long duplicateIncidentCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+
+        assertEquals(1, survivorIncidentCount,
+                "Security incidents attached to duplicate equipment must be reassigned to the surviving equipment record");
+        assertEquals(0, duplicateIncidentCount,
+                "No security incidents may remain attached to the archived duplicate equipment record");
+    }
+
+    @Test
+    @DisplayName("merging reassigns both telemetry logs and security incidents simultaneously")
+    void mergeReassignsBothTelemetryLogsAndSecurityIncidentsSimultaneously() {
+        Equipment survivor = asset("EQ-BOTH-KEEP", "SN-BOTH-KEEP", "Defibrillator", "Zoll R Series");
+        Equipment duplicate = asset("EQ-BOTH-MERGE", "SN-BOTH-MERGE", "Defibrillator", "Zoll R Series");
+
+        SoftwareTelemetryLog log = softwareTelemetryLogRepository.save(SoftwareTelemetryLog.builder()
+                .user(ownerUser)
+                .equipment(duplicate)
+                .actionType("SELF_TEST_EXECUTION")
+                .timestamp(LocalDateTime.now())
+                .success(true)
+                .build());
+
+        RiskEvaluationEvent riskEvent = riskEvaluationEventRepository.save(RiskEvaluationEvent.builder()
+                .telemetryLog(log)
+                .evaluationTimestamp(LocalDateTime.now())
+                .finalCbrsScore(0.92f)
+                .riskLevel(RiskLevel.CRITICAL)
+                .policyEnforcementTaken(PolicyEnforcement.RESTRICT)
+                .build());
+
+        securityIncidentRepository.save(SecurityIncident.builder()
+                .riskEvent(riskEvent)
+                .user(ownerUser)
+                .equipment(duplicate)
+                .incidentType("HARDWARE_TAMPERING_DETECTED")
+                .severity(IncidentSeverity.CRITICAL)
+                .detectedAt(LocalDateTime.now())
+                .status(IncidentStatus.INVESTIGATING)
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        long survivorLogCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM software_telemetry_logs WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+
+        long survivorIncidentCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+
+        assertEquals(1, survivorLogCount, "Telemetry log must be reassigned to survivor asset");
+        assertEquals(1, survivorIncidentCount, "Security incident must be reassigned to survivor asset");
+    }
+
+    @Test
+    @DisplayName("merging preserves telemetry log metadata and incident severity attributes")
+    void mergePreservesTelemetryLogMetadataAndIncidentSeverity() {
+        Equipment survivor = asset("EQ-ATTR-KEEP", "SN-ATTR-KEEP", "Ventilator", "Hamilton C6");
+        Equipment duplicate = asset("EQ-ATTR-MERGE", "SN-ATTR-MERGE", "Ventilator", "Hamilton C6");
+
+        SoftwareTelemetryLog log = softwareTelemetryLogRepository.save(SoftwareTelemetryLog.builder()
+                .user(ownerUser)
+                .equipment(duplicate)
+                .actionType("CALIBRATION_CHECK")
+                .timestamp(LocalDateTime.now())
+                .executionTimeMs(320)
+                .success(true)
+                .responseStatus(200)
+                .metadata("{\"sensor\":\"O2\",\"calibrationStatus\":\"PASS\"}")
+                .build());
+
+        RiskEvaluationEvent riskEvent = riskEvaluationEventRepository.save(RiskEvaluationEvent.builder()
+                .telemetryLog(log)
+                .evaluationTimestamp(LocalDateTime.now())
+                .finalCbrsScore(0.70f)
+                .riskLevel(RiskLevel.MODERATE)
+                .policyEnforcementTaken(PolicyEnforcement.MONITOR)
+                .build());
+
+        SecurityIncident incident = securityIncidentRepository.save(SecurityIncident.builder()
+                .riskEvent(riskEvent)
+                .user(ownerUser)
+                .equipment(duplicate)
+                .incidentType("UNEXPECTED_SENSOR_DRIFT")
+                .severity(IncidentSeverity.MEDIUM)
+                .detectedAt(LocalDateTime.now())
+                .status(IncidentStatus.RESOLVED)
+                .responseAction("RECALIBRATED_SENSOR")
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        SoftwareTelemetryLog reassignedLog = softwareTelemetryLogRepository.findById(log.getLogId()).orElseThrow();
+        SecurityIncident reassignedIncident = securityIncidentRepository.findById(incident.getIncidentId()).orElseThrow();
+
+        assertEquals(survivor.getId(), reassignedLog.getEquipment().getId(),
+                "Reassigned telemetry log must reference the surviving equipment ID");
+        assertEquals("{\"sensor\":\"O2\",\"calibrationStatus\":\"PASS\"}", reassignedLog.getMetadata(),
+                "Telemetry log metadata must be preserved intact after duplicate merge");
+
+        assertEquals(survivor.getId(), reassignedIncident.getEquipment().getId(),
+                "Reassigned security incident must reference the surviving equipment ID");
+        assertEquals(IncidentSeverity.MEDIUM, reassignedIncident.getSeverity(),
+                "Security incident severity attribute must remain intact after duplicate merge");
+    }
+
+    @Test
+    @DisplayName("merging reassigns multiple telemetry and incident records without data loss")
+    void mergeReassignsMultipleTelemetryAndIncidentRecords() {
+        Equipment survivor = asset("EQ-MULTI-KEEP", "SN-MULTI-KEEP", "ECG Machine", "Philips PageWriter TC70");
+        Equipment duplicate = asset("EQ-MULTI-MERGE", "SN-MULTI-MERGE", "ECG Machine", "Philips PageWriter TC70");
+
+        for (int i = 1; i <= 3; i++) {
+            softwareTelemetryLogRepository.save(SoftwareTelemetryLog.builder()
+                    .user(ownerUser)
+                    .equipment(duplicate)
+                    .actionType("ECG_RECORDING_SESSION_" + i)
+                    .timestamp(LocalDateTime.now().minusHours(i))
+                    .success(true)
+                    .build());
+        }
+
+        for (int i = 1; i <= 2; i++) {
+            SoftwareTelemetryLog tLog = softwareTelemetryLogRepository.save(SoftwareTelemetryLog.builder()
+                    .user(ownerUser)
+                    .equipment(duplicate)
+                    .actionType("INCIDENT_LOG_" + i)
+                    .timestamp(LocalDateTime.now().minusHours(i))
+                    .success(false)
+                    .build());
+
+            RiskEvaluationEvent event = riskEvaluationEventRepository.save(RiskEvaluationEvent.builder()
+                    .telemetryLog(tLog)
+                    .evaluationTimestamp(LocalDateTime.now().minusHours(i))
+                    .finalCbrsScore(0.60f + (i * 0.1f))
+                    .riskLevel(RiskLevel.MODERATE)
+                    .policyEnforcementTaken(PolicyEnforcement.MONITOR)
+                    .build());
+
+            securityIncidentRepository.save(SecurityIncident.builder()
+                    .riskEvent(event)
+                    .user(ownerUser)
+                    .equipment(duplicate)
+                    .incidentType("NETWORK_SCAN_INCIDENT_" + i)
+                    .severity(IncidentSeverity.MEDIUM)
+                    .detectedAt(LocalDateTime.now().minusHours(i))
+                    .status(IncidentStatus.OPEN)
+                    .build());
+        }
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.clear();
+
+        long survivorLogCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM software_telemetry_logs WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+
+        long survivorIncidentCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+
+        assertEquals(5, survivorLogCount, "All 5 telemetry logs must be reassigned to the survivor");
+        assertEquals(2, survivorIncidentCount, "All 2 security incidents must be reassigned to the survivor");
     }
 }
