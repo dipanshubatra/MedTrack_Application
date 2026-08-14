@@ -4,6 +4,7 @@ import { readJson, writeJson, remove } from "../utils/safeSessionStorage";
 
 const USER_KEY = "medtrack_user";
 const AUTHORITY_KEY = "medtrack_authority";
+const SESSION_END_REASON_KEY = "medtrack_session_end_reason";
 const DEFAULT_AUTHORITY = { authorityVersion: 1, permissions: [] };
 
 /** How often the client re-checks its authority version against the server. */
@@ -24,11 +25,18 @@ export const AuthProvider = ({ children }) => {
 
   const [authorityLoading, setAuthorityLoading] = useState(false);
 
-  /** Set when the session was ended by an administrator rather than by the user. */
-  const [revokedReason, setRevokedReason] = useState(null);
+  /**
+   * Set when the session ended for a reason the user should see again: ended
+   * by an administrator (authority revocation) or auto-locked for inactivity.
+   * Persisted so the reason survives a page refresh on the login screen.
+   */
+  const [revokedReason, setRevokedReason] = useState(() =>
+    readJson(SESSION_END_REASON_KEY, null)
+  );
 
   const login = (userData) => {
     setRevokedReason(null);
+    remove(SESSION_END_REASON_KEY);
     setUser(userData);
     writeJson(USER_KEY, userData);
     if (userData && userData.id) {
@@ -42,6 +50,17 @@ export const AuthProvider = ({ children }) => {
     setRevokedReason(reason);
     remove(USER_KEY);
     remove(AUTHORITY_KEY);
+    if (reason) {
+      writeJson(SESSION_END_REASON_KEY, reason);
+    } else {
+      remove(SESSION_END_REASON_KEY);
+    }
+  }, []);
+
+  /** Dismisses the session-end notice once the user has read it. */
+  const clearRevokedReason = useCallback(() => {
+    setRevokedReason(null);
+    remove(SESSION_END_REASON_KEY);
   }, []);
 
   // Held in a ref so fetchUserAuthority can call logout without taking it as a dependency, which
@@ -135,6 +154,7 @@ export const AuthProvider = ({ children }) => {
         permissions: authorityState.permissions,
         authorityLoading,
         revokedReason,
+        clearRevokedReason,
         login,
         logout,
         hasPermission,

@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronDown, Hospital, Layers, Lock, Mail, Wrench } from "lu
 import { useAuth } from "../../context/AuthContext";
 import { loginUser } from "../../services/AuthService";
 import MedTrackLogo from "../../components/common/MedTrackLogo";
+import SessionEndNotice from "../../components/auth/SessionEndNotice";
 import "./auth.css";
 
 // Pre-filled only in non-production builds, as a local-dev convenience that
@@ -16,7 +17,7 @@ const DEMO_CREDENTIALS = {
 };
 
 export default function LoginPage({ onNavigate }) {
-  const { login } = useAuth();
+  const { login, revokedReason, clearRevokedReason } = useAuth();
   const [selectedRole, setSelectedRole] = useState("hospital");
   const [email, setEmail] = useState(isDevBuild ? DEMO_CREDENTIALS.hospital.email : "");
   const [password, setPassword] = useState(isDevBuild ? DEMO_CREDENTIALS.hospital.password : "");
@@ -83,6 +84,16 @@ export default function LoginPage({ onNavigate }) {
           <h1>Welcome back!</h1>
           <p>Simplify your workflow and boost your productivity with MedTrack. Get started for free.</p>
         </div>
+
+        {/* Shown only when the previous session ended for a reason worth
+            explaining (admin revocation, inactivity lock). Dismissed by
+            clearRevokedReason; a normal sign-out passes no reason. */}
+        {revokedReason && (
+          <SessionEndNotice
+            reason={revokedReason}
+            onDismiss={clearRevokedReason}
+          />
+        )}
 
         {error && <div className="error-message">{error}</div>}
 
