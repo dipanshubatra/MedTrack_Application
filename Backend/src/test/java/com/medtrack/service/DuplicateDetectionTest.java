@@ -134,6 +134,7 @@ class DuplicateDetectionTest {
     private RiskEvaluationEventRepository riskEvaluationEventRepository;
 
     private String username;
+    private User ownerUser;
     private Hospital hospital;
 
     @BeforeEach
