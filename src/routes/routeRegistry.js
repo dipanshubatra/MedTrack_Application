@@ -73,7 +73,7 @@ const TenderList = lazy(() => import("../pages/hospital/TenderList"));
 const TenderCreate = lazy(() => import("../pages/hospital/TenderCreate"));
 const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
-const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
+const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -198,8 +198,8 @@ export const ROUTES = [
   { page: "tender-create", slugs: ["tender-create", "new-tender"], component: TenderCreate, access: HOSPITAL_ONLY },
   { page: "tender-detail", slugs: ["tender"], component: TenderDetail, access: HOSPITAL_ONLY, param: "tenderId" },
 
-  // --- clinical trial & genomic research consoles -----------------------------
-  { page: "clinical-trial", slugs: ["clinical-trial", "genomics"], component: ClinicalTrialHub, access: AUTHENTICATED },
+  // --- telehealth & remote patient management consoles ------------------------
+  { page: "telehealth", slugs: ["telehealth", "remote-care"], component: TelehealthHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
