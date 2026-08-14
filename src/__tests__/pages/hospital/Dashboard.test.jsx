@@ -38,9 +38,8 @@ it("renders demo data without API calls when user has demo- prefix", async () =>
     { authValue: { user: { id: "demo-hosp-1", role: "hospital", name: "Admin" } } },
   );
 
-  await waitFor(() => {
-    expect(screen.getByText(/MedTrack/i)).toBeInTheDocument();
-  });
+  // The demo branch renders hard-coded equipment instead of hitting the API.
+  await screen.findByText("MRI Machine");
 
   expect(mockGetAllEquipment).not.toHaveBeenCalled();
   expect(mockGetAllTasks).not.toHaveBeenCalled();

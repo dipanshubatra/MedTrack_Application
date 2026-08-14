@@ -302,17 +302,52 @@ export default function Dashboard({ onNavigate }) {
             </div>
           </div>
 
-          {/* Current Tasks List */}
+          {/* Recent Equipment List - the fetched/demo equipment data, which
+              was being stored but never rendered: the section below used to
+              show the tasks list under this heading. */}
           <div className="shrink-0 mb-8">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-4">
                 <h3 className="font-bold text-xl tracking-tight">Recent Equipment</h3>
                 <div className="h-4 w-[1px] bg-gray-200"></div>
-                <span className="text-xs text-gray-500 font-bold">Done 30%</span>
+                <span className="text-xs text-gray-500 font-bold">{equipmentList.length} assets</span>
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-                Week <ChevronDown size={14}/>
-              </button>
+            </div>
+
+            <div className="space-y-3">
+              {equipmentList.map((item, idx) => (
+                <div key={item.id ?? idx} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-xl transition-colors">
+                  <div className="flex items-center gap-4 w-1/2">
+                    <div className="w-10 h-10 rounded-full bg-[#f4f3ef] flex items-center justify-center text-gray-700">
+                      <Box size={16} />
+                    </div>
+                    <span className="font-bold text-sm text-gray-900">{item.name}</span>
+                  </div>
+
+                  <div className="w-1/4 flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${item.status === 'OPERATIONAL' ? 'bg-emerald-500' : item.status === 'NEEDS_MAINTENANCE' ? 'bg-amber-500' : 'bg-red-500'}`}></div>
+                    <span className="text-[11px] font-bold text-gray-700">{item.status}</span>
+                  </div>
+
+                  <div className="w-1/4 flex items-center justify-end">
+                    <button className="p-1 hover:bg-gray-200 rounded-md transition-colors"><MoreHorizontal size={14} /></button>
+                  </div>
+                </div>
+              ))}
+              {equipmentList.length === 0 && (
+                <p className="text-sm text-gray-500 py-2">No equipment to show yet.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Current Tasks List */}
+          <div className="shrink-0 mb-8">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-4">
+                <h3 className="font-bold text-xl tracking-tight">Current Tasks</h3>
+                <div className="h-4 w-[1px] bg-gray-200"></div>
+                <span className="text-xs text-gray-500 font-bold">{tasksList.length} tasks</span>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -324,7 +359,7 @@ export default function Dashboard({ onNavigate }) {
                     </div>
                     <span className="font-bold text-sm text-gray-900">{task.title}</span>
                   </div>
-                  
+
                   <div className="w-1/4 flex items-center gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${task.status === 'Done' ? 'bg-emerald-500' : task.status === 'In progress' ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
                     <span className="text-[11px] font-bold text-gray-700">{task.status}</span>
@@ -338,6 +373,9 @@ export default function Dashboard({ onNavigate }) {
                   </div>
                 </div>
               ))}
+              {tasksList.length === 0 && (
+                <p className="text-sm text-gray-500 py-2">No tasks to show yet.</p>
+              )}
             </div>
           </div>
         </main>
