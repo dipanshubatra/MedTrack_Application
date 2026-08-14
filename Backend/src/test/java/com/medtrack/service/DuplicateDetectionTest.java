@@ -135,12 +135,13 @@ class DuplicateDetectionTest {
 
     private String username;
     private Hospital hospital;
+    private User testUser;
 
     @BeforeEach
     void setUp() {
         username = "duplicates-owner-" + UUID.randomUUID();
 
-        ownerUser = userRepository.save(User.builder()
+        testUser = userRepository.save(User.builder()
                 .name("Duplicates Owner")
                 .username(username)
                 .email(UUID.randomUUID() + "@medtrack.test")
@@ -154,7 +155,7 @@ class DuplicateDetectionTest {
         hospital = hospitalRepository.save(Hospital.builder()
                 .name("Duplicates Trust")
                 .location("Test City")
-                .user(ownerUser)
+                .user(testUser)
                 .build());
     }
 
