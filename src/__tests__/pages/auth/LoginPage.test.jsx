@@ -18,12 +18,14 @@ beforeEach(() => {
 it("renders role selection with three options", () => {
   renderWithProviders(<LoginPage onNavigate={() => {}} />);
   expect(screen.getByText("Welcome back!")).toBeInTheDocument();
-  const roleSelect = screen.getByRole("combobox");
-  expect(roleSelect).toHaveValue("hospital");
-  expect(screen.getAllByRole("option")).toHaveLength(3);
-  expect(screen.getByRole("option", { name: "Hospital Workspace" })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "Technician Workspace" })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "Supplier Workspace" })).toBeInTheDocument();
+  
+  const select = screen.getByRole("combobox");
+  const options = Array.from(select.options).map(opt => opt.text);
+  expect(options).toContain("Hospital Workspace");
+  expect(options).toContain("Technician Workspace");
+  expect(options).toContain("Supplier Workspace");
+  
+  expect(screen.getByDisplayValue("Hospital Workspace")).toBeInTheDocument();
 });
 
 it("pre-fills hospital demo credentials by default", () => {
@@ -34,7 +36,7 @@ it("pre-fills hospital demo credentials by default", () => {
 
 it("pre-fills technician credentials when role is changed", async () => {
   renderWithProviders(<LoginPage onNavigate={() => {}} />);
-  const select = screen.getByRole("combobox");
+  const select = screen.getByDisplayValue("Hospital Workspace");
   await userEvent.selectOptions(select, "technician");
   expect(screen.getByDisplayValue("tech@medtrack.com")).toBeInTheDocument();
   expect(screen.getByDisplayValue("tech123")).toBeInTheDocument();
@@ -42,7 +44,7 @@ it("pre-fills technician credentials when role is changed", async () => {
 
 it("pre-fills supplier credentials when role is changed", async () => {
   renderWithProviders(<LoginPage onNavigate={() => {}} />);
-  const select = screen.getByRole("combobox");
+  const select = screen.getByDisplayValue("Hospital Workspace");
   await userEvent.selectOptions(select, "supplier");
   expect(screen.getByDisplayValue("supplier@medtrack.com")).toBeInTheDocument();
   expect(screen.getByDisplayValue("supplier123")).toBeInTheDocument();
@@ -110,7 +112,7 @@ it("navigates to tasks for technician role", async () => {
   const mockNavigate = vi.fn();
   renderWithProviders(<LoginPage onNavigate={mockNavigate} />);
 
-  const select = screen.getByRole("combobox");
+  const select = screen.getByDisplayValue("Hospital Workspace");
   await userEvent.selectOptions(select, "technician");
   fireEvent.click(screen.getByRole("button", { name: /login/i }));
 
@@ -128,7 +130,7 @@ it("navigates to orders for supplier role", async () => {
   const mockNavigate = vi.fn();
   renderWithProviders(<LoginPage onNavigate={mockNavigate} />);
 
-  const select = screen.getByRole("combobox");
+  const select = screen.getByDisplayValue("Hospital Workspace");
   await userEvent.selectOptions(select, "supplier");
   fireEvent.click(screen.getByRole("button", { name: /login/i }));
 

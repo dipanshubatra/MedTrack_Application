@@ -31,9 +31,7 @@ describe("EquipmentCalibrationHub Component", () => {
   it("filters records by status button clicks", () => {
     renderWithProviders(<EquipmentCalibrationHub onNavigate={() => {}} />);
 
-    // The status filter button shares its label with the record badges, so
-    // target the button role explicitly.
-    const expiringButton = screen.getByRole("button", { name: "Expiring Soon" });
+    const expiringButton = screen.getByRole("button", { name: /^Expiring Soon$/i });
     fireEvent.click(expiringButton);
 
     expect(screen.getByText("Philips IntelliVue Patient Monitor")).toBeInTheDocument();

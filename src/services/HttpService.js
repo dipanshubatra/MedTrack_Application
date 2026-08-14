@@ -1,6 +1,14 @@
 import axios from "axios";
+import { BASE_PATH } from "../routes/routeRegistry";
 
 const errorEmitter = new EventTarget();
+
+// Toast bus for API-level errors: App.jsx forwards "toast" events to the UI
+// toast system, so 401/403 responses surface as non-intrusive toasts instead
+// of blocking alert() dialogs (the intent documented in the interceptor below).
+const emitToast = (message, type = "error") => {
+  errorEmitter.dispatchEvent(new CustomEvent("toast", { detail: { message, type } }));
+};
 
 const API = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "http://localhost:8081",
@@ -38,14 +46,19 @@ API.interceptors.request.use(
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    const status=error.response?.status;
-    if(status===401){
+    const status = error.response?.status;
+    if (status === 401) {
       sessionStorage.removeItem("medtrack_user");
-      alert("Session expired. Please login again.");
-      window.location.href="/login";
-    }
-    else if(status===403){
-      alert("Access denied: You are not authorised to perform this action.");
+      emitToast("Session expired. Please login again.");
+      // The SPA is hosted under a base path on GitHub Pages (BASE_PATH, e.g.
+      // "/MedTrack_Application"). Redirecting to a bare "/login" bypasses it
+      // and lands on a 404; mirror App.jsx's base-path handling so the
+      // session-expiry redirect reaches the real login route.
+      const pathname = window.location.pathname || "";
+      const base = pathname.includes(BASE_PATH) ? BASE_PATH : "";
+      window.location.href = `${base}/login`;
+    } else if (status === 403) {
+      emitToast("Access denied: You are not authorised to perform this action.");
     }
     else{
       console.error("API request failed:", error.response?.data || error.message);
