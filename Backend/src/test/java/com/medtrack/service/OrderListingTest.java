@@ -120,7 +120,7 @@ class OrderListingTest {
             when(orderRepository.findBySupplierId(41L, pageable))
                     .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
 
-            Page<EquipmentOrder> page = orderService.getAllOrders(pageable);
+            Page<EquipmentOrder> page = orderService.getAllOrders(null, pageable);
 
             assertEquals(1, page.getTotalElements());
             verify(orderRepository).findBySupplierId(41L, pageable);
@@ -137,7 +137,7 @@ class OrderListingTest {
                     "City Hospital", "admin@cityhospital.com", pageable))
                     .thenReturn(new PageImpl<>(List.of(deliveredOrder(2L, 8, 3)), pageable, 11));
 
-            Page<EquipmentOrder> page = orderService.getAllOrders(pageable);
+            Page<EquipmentOrder> page = orderService.getAllOrders(null, pageable);
 
             assertEquals(11, page.getTotalElements());
             assertEquals(1, page.getNumber());
@@ -153,7 +153,7 @@ class OrderListingTest {
 
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> orderService.getAllOrders(null));
+                    () -> orderService.getAllOrders(null, null));
 
             assertEquals("Pageable is required", exception.getMessage());
             verify(orderRepository, never()).findAll(any(Pageable.class));

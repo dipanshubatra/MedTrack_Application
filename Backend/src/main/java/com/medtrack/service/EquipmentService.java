@@ -874,18 +874,27 @@ public class EquipmentService {
     /**
      * Deletes an equipment record by ID.
      */
-    public void deleteEquipment(Long id , String username) {
+    public void deleteEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
-        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
+                .orElse(null);
+                
+        if (equipment == null) {
+            if (equipmentRepository.findByIdAndDeletedTrue(id).isPresent()) {
+                return; // Idempotent success
+            }
+            throw new ResourceNotFoundException("Equipment not found or you don't have access");
+        }
 
         logger.info(
                 "Equipment deleted | User: {} | Equipment ID: {} | Name: {}",
-                username,
-                equipment.getId(),
-                equipment.getName()
+                username, equipment.getId(), equipment.getName()
         );
-        equipmentRepository.delete(equipment);
+
+        equipment.setDeleted(true);
+        equipment.setDeletedAt(LocalDateTime.now());
+        equipment.setDeletedBy(username);
+        equipmentRepository.save(equipment);
     }
 
     /**
