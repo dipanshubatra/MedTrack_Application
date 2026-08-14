@@ -74,6 +74,11 @@ const TenderCreate = lazy(() => import("../pages/hospital/TenderCreate"));
 const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
 const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
+const SecurityComplianceHub = lazy(() => import("../pages/security/SecurityComplianceHub"));
+const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
+const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
+const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -204,6 +209,15 @@ export const ROUTES = [
 
   // --- telehealth & remote patient management consoles ------------------------
   { page: "telehealth", slugs: ["telehealth", "remote-care"], component: TelehealthHub, access: AUTHENTICATED },
+
+  // --- enterprise security & compliance consoles -------------------------------
+  { page: "security-compliance", slugs: ["security-compliance", "security-hub"], component: SecurityComplianceHub, access: AUTHENTICATED },
+
+  // --- clinical / operational hub consoles --------------------------------------
+  { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
+  { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
+  { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
