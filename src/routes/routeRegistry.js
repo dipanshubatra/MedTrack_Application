@@ -64,6 +64,8 @@ const TenderList = lazy(() => import("../pages/hospital/TenderList"));
 const TenderCreate = lazy(() => import("../pages/hospital/TenderCreate"));
 const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
+const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
 const EnterpriseSsoPage = lazy(() => import("../pages/auth/EnterpriseSsoPage"));
@@ -175,6 +177,9 @@ export const ROUTES = [
   { page: "tenders", slugs: ["tenders"], component: TenderList, access: HOSPITAL_ONLY },
   { page: "tender-create", slugs: ["tender-create", "new-tender"], component: TenderCreate, access: HOSPITAL_ONLY },
   { page: "tender-detail", slugs: ["tender"], component: TenderDetail, access: HOSPITAL_ONLY, param: "tenderId" },
+
+  // --- pharmacy & med-supply chain: pharmaceutical operations -----------------
+  { page: "pharmacy-supply", slugs: ["pharmacy-supply", "med-supply"], component: PharmacySupplyHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
