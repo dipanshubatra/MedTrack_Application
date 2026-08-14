@@ -239,7 +239,121 @@ public class SparePartService {
         }
     }
 
-    private void validateSparePart(SparePart sparePart) {
+    
+    @Transactional
+    public com.medtrack.dto.SparePartImportSummary bulkImport(org.springframework.web.multipart.MultipartFile file, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        com.medtrack.dto.SparePartImportSummary summary = new com.medtrack.dto.SparePartImportSummary();
+        summary.setFailures(new java.util.ArrayList<>());
+        
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("CSV file is empty");
+        }
+        
+        String csvContent;
+        try {
+            csvContent = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Failed to read file", e);
+        }
+        
+        java.util.List<String> records;
+        try {
+            records = com.medtrack.util.CsvSupport.splitRecords(csvContent);
+        } catch (com.medtrack.util.CsvSupport.MalformedCsvException e) {
+            throw new IllegalArgumentException("Malformed CSV: " + e.getMessage());
+        }
+        
+        if (records.isEmpty()) {
+            throw new IllegalArgumentException("CSV file contains no records");
+        }
+        
+        int startIndex = 0;
+        java.util.List<String> firstRow = com.medtrack.util.CsvSupport.parseLine(records.get(0));
+        if (!firstRow.isEmpty() && firstRow.get(0).toLowerCase().contains("part")) {
+            startIndex = 1;
+        }
+        
+        java.util.List<SparePart> validParts = new java.util.ArrayList<>();
+        int processedRows = 0;
+        
+        for (int i = startIndex; i < records.size(); i++) {
+            processedRows++;
+            String rowData = records.get(i);
+            try {
+                java.util.List<String> fields = com.medtrack.util.CsvSupport.parseLine(rowData);
+                if (fields.size() < 4) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Insufficient columns. Expected at least 4."));
+                    continue;
+                }
+                
+                String partNumber = trimToNull(fields.get(0));
+                String description = trimToNull(fields.get(1));
+                String quantityStr = trimToNull(fields.get(2));
+                String minStockStr = trimToNull(fields.get(3));
+                
+                if (partNumber == null || description == null || quantityStr == null || minStockStr == null) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Missing required fields"));
+                    continue;
+                }
+                
+                int stockLevel;
+                int reorderPoint;
+                try {
+                    stockLevel = Integer.parseInt(quantityStr);
+                    reorderPoint = Integer.parseInt(minStockStr);
+                } catch (NumberFormatException e) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Quantity and minimum stock must be numeric"));
+                    continue;
+                }
+                
+                if (stockLevel < 0 || reorderPoint < 0) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Quantity and minimum stock cannot be negative"));
+                    continue;
+                }
+                
+                Double unitCost = 0.0;
+                
+                final String pNum = partNumber;
+                if (validParts.stream().anyMatch(p -> p.getPartNumber().equalsIgnoreCase(pNum))) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Duplicate part number in import file"));
+                    continue;
+                }
+                
+                if (sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(hospital.getId(), partNumber)) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Spare part with part number already exists"));
+                    continue;
+                }
+                
+                SparePart part = SparePart.builder()
+                        .hospitalId(hospital.getId())
+                        .partNumber(partNumber)
+                        .description(description)
+                        .stockLevel(stockLevel)
+                        .reorderPoint(reorderPoint)
+                        .unitCost(unitCost)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .deleted(false)
+                        .build();
+                        
+                validParts.add(part);
+            } catch (Exception e) {
+                summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, e.getMessage() != null ? e.getMessage() : "Invalid data"));
+            }
+        }
+        
+        if (!validParts.isEmpty()) {
+            sparePartRepository.saveAll(validParts);
+        }
+        
+        summary.setTotalRows(processedRows);
+        summary.setSuccessCount(validParts.size());
+        summary.setFailureCount(summary.getFailures().size());
+        
+        return summary;
+    }
+
+private void validateSparePart(SparePart sparePart) {
         if (sparePart == null) {
             throw new IllegalArgumentException("Spare part payload is required");
         }
