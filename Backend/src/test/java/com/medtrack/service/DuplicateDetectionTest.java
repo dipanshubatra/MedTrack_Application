@@ -62,12 +62,14 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
+import com.medtrack.model.MaintenanceWorkOrderType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -865,5 +867,246 @@ class DuplicateDetectionTest {
 
         SoftwareTelemetryLog reassignedLog = telemetryLogRepository.findById(log.getLogId()).orElseThrow();
         assertEquals(merged.getId(), reassignedLog.getEquipment().getId());
+    }
+
+    @Test
+    @DisplayName("CHILD_REASSIGNMENTS list contains unique and valid SQL update statements")
+    void childReassignmentsListContainsUniqueAndValidSqlUpdateStatements() {
+        List<String> reassignments = DuplicateDetectionService.CHILD_REASSIGNMENTS;
+        assertNotNull(reassignments);
+        assertFalse(reassignments.isEmpty());
+
+        Set<String> uniqueStatements = new LinkedHashSet<>();
+        for (String sql : reassignments) {
+            assertNotNull(sql);
+            assertTrue(sql.startsWith("UPDATE "), "Reassignment statement must be an UPDATE query: " + sql);
+            assertTrue(sql.contains(":keep"), "Reassignment statement must contain :keep parameter: " + sql);
+            assertTrue(sql.contains(":merge"), "Reassignment statement must contain :merge parameter: " + sql);
+
+            boolean added = uniqueStatements.add(sql.trim().toUpperCase(Locale.ROOT));
+            assertTrue(added, "Duplicate SQL query detected in CHILD_REASSIGNMENTS list: " + sql);
+        }
+    }
+
+    @Test
+    @DisplayName("merging reassigns equipment audit log records from duplicate onto survivor")
+    void mergeReassignsEquipmentAuditLogs() {
+        Equipment survivor = asset("EQ-AUD-KEEP", "SN-AUD-KEEP", "Defibrillator", "Zoll R Series");
+        Equipment duplicate = asset("EQ-AUD-MERGE", "SN-AUD-MERGE", "Defibrillator", "Zoll R Series");
+
+        entityManager.createNativeQuery(
+                "INSERT INTO equipment_audit_log (equipment_id, user_id, old_status, new_status, timestamp) "
+                        + "VALUES (:eqId, :userId, 'ACTIVE', 'UNDER_MAINTENANCE', CURRENT_TIMESTAMP)")
+                .setParameter("eqId", duplicate.getId())
+                .setParameter("userId", username)
+                .executeUpdate();
+
+        entityManager.flush();
+
+        long duplicateLogsBefore = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_audit_log WHERE equipment_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+        assertEquals(1L, duplicateLogsBefore);
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.flush();
+        entityManager.clear();
+
+        long duplicateLogsAfter = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_audit_log WHERE equipment_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+        assertEquals(0L, duplicateLogsAfter);
+
+        long survivorLogsAfter = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_audit_log WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+        assertEquals(1L, survivorLogsAfter);
+    }
+
+    @Test
+    @DisplayName("merging reassigns security incident entities from duplicate onto survivor")
+    void mergeReassignsSecurityIncidentEntities() {
+        Equipment survivor = asset("EQ-SEC-KEEP", "SN-SEC-KEEP", "Ventilator", "Hamilton C3");
+        Equipment duplicate = asset("EQ-SEC-MERGE", "SN-SEC-MERGE", "Ventilator", "Hamilton C3");
+
+        UUID riskId = UUID.randomUUID();
+        UUID telemId = UUID.randomUUID();
+
+        entityManager.createNativeQuery(
+                "INSERT INTO software_telemetry_logs (log_id, user_id, equipment_id, timestamp, action_type, success) "
+                        + "VALUES (:telemId, :userId, :eqId, CURRENT_TIMESTAMP, 'SYSTEM_CHECK', true)")
+                .setParameter("telemId", telemId)
+                .setParameter("userId", ownerUser.getId())
+                .setParameter("eqId", duplicate.getId())
+                .executeUpdate();
+
+        entityManager.createNativeQuery(
+                "INSERT INTO risk_evaluation_events (event_id, telemetry_log_id, final_cbrs_score, risk_level, policy_enforcement_taken, evaluation_timestamp) "
+                        + "VALUES (:riskId, :telemId, 50.0, 'MODERATE', 'MONITOR', CURRENT_TIMESTAMP)")
+                .setParameter("riskId", riskId)
+                .setParameter("telemId", telemId)
+                .executeUpdate();
+
+        entityManager.createNativeQuery(
+                "INSERT INTO security_incidents (incident_id, risk_event_id, user_id, equipment_id, incident_type, severity, status, detected_at) "
+                        + "VALUES (RANDOM_UUID(), :riskId, :userId, :eqId, 'UNAUTHORIZED_PORT_SCAN', 'MEDIUM', 'OPEN', CURRENT_TIMESTAMP)")
+                .setParameter("riskId", riskId)
+                .setParameter("userId", ownerUser.getId())
+                .setParameter("eqId", duplicate.getId())
+                .executeUpdate();
+
+        entityManager.flush();
+
+        long duplicateIncidentsBefore = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+        assertEquals(1L, duplicateIncidentsBefore);
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.flush();
+        entityManager.clear();
+
+        long duplicateIncidentsAfter = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+        assertEquals(0L, duplicateIncidentsAfter);
+
+        long survivorIncidentsAfter = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+        assertEquals(1L, survivorIncidentsAfter);
+    }
+
+    @Test
+    @DisplayName("merging reassigns work orders, disposals and audit records concurrently across tables")
+    void mergeReassignsChildRecordsAcrossMultipleTablesConcurrently() {
+        Equipment survivor = asset("EQ-MULTI-KEEP", "SN-MULTI-KEEP", "ECG Monitor", "Philips PageWriter");
+        Equipment duplicate = asset("EQ-MULTI-MERGE", "SN-MULTI-MERGE", "ECG Monitor", "Philips PageWriter");
+
+        MaintenanceWorkOrder workOrder = workOrderRepository.saveAndFlush(MaintenanceWorkOrder.builder()
+                .workOrderCode("WO-MULTI-" + UUID.randomUUID())
+                .hospitalId(hospital.getId())
+                .equipment(duplicate)
+                .title("Calibrate ECG Sensors")
+                .description("Routine calibration task")
+                .maintenanceType(MaintenanceWorkOrderType.PREVENTIVE)
+                .priority(MaintenanceWorkOrderPriority.MEDIUM)
+                .status(MaintenanceWorkOrderStatus.OPEN)
+                .createdAt(LocalDateTime.now())
+                .createdBy(username)
+                .deleted(false)
+                .build());
+
+        EquipmentDisposal disposal = disposalRepository.saveAndFlush(EquipmentDisposal.builder()
+                .equipment(duplicate)
+                .hospital(hospital)
+                .disposalMethod(EquipmentDisposalMethod.SCRAP)
+                .disposalReason("Replaced by modern fleet")
+                .status(EquipmentDisposalStatus.PENDING_APPROVAL)
+                .requestedBy(username)
+                .requestedAt(LocalDateTime.now())
+                .build());
+
+        entityManager.createNativeQuery(
+                "INSERT INTO equipment_audit (equipment_id, username, action, timestamp) "
+                        + "VALUES (:eqId, :username, 'UPDATE', CURRENT_TIMESTAMP)")
+                .setParameter("eqId", duplicate.getId())
+                .setParameter("username", username)
+                .executeUpdate();
+
+        entityManager.flush();
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.flush();
+        entityManager.clear();
+
+        MaintenanceWorkOrder reassignedWorkOrder = workOrderRepository.findById(workOrder.getId()).orElseThrow();
+        assertEquals(survivor.getId(), reassignedWorkOrder.getEquipment().getId());
+
+        EquipmentDisposal reassignedDisposal = disposalRepository.findById(disposal.getId()).orElseThrow();
+        assertEquals(survivor.getId(), reassignedDisposal.getEquipment().getId());
+
+        long duplicateAudits = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_audit WHERE equipment_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+        assertEquals(0L, duplicateAudits);
+
+        long survivorAudits = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_audit WHERE equipment_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+        assertEquals(1L, survivorAudits);
+    }
+
+    @Test
+    @DisplayName("getMergedChildRecordCounts returns correct counts for survivor equipment record")
+    void getMergedChildRecordCountsReturnsCorrectCounts() {
+        Equipment survivor = asset("EQ-CNT-KEEP", "SN-CNT-KEEP", "Patient Monitor", "Philips IntelliVue");
+        Equipment duplicate = asset("EQ-CNT-MERGE", "SN-CNT-MERGE", "Patient Monitor", "Philips IntelliVue");
+
+        MaintenanceWorkOrder workOrder = workOrderRepository.saveAndFlush(MaintenanceWorkOrder.builder()
+                .workOrderCode("WO-CNT-" + UUID.randomUUID())
+                .hospitalId(hospital.getId())
+                .equipment(duplicate)
+                .title("Check display sensors")
+                .maintenanceType(MaintenanceWorkOrderType.PREVENTIVE)
+                .priority(MaintenanceWorkOrderPriority.LOW)
+                .status(MaintenanceWorkOrderStatus.OPEN)
+                .createdAt(LocalDateTime.now())
+                .createdBy(username)
+                .deleted(false)
+                .build());
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.flush();
+        entityManager.clear();
+
+        Map<String, Long> counts = duplicateDetectionService.getMergedChildRecordCounts(survivor.getId());
+        assertNotNull(counts);
+        assertEquals(1L, counts.get("maintenance_work_orders"));
+        assertEquals(0L, counts.get("software_telemetry_logs"));
+
+        Map<String, Long> nullCounts = duplicateDetectionService.getMergedChildRecordCounts(null);
+        assertNotNull(nullCounts);
+        assertTrue(nullCounts.isEmpty());
+    }
+
+    @Test
+    @DisplayName("merging reassigns maintenance policy rule equipment record references")
+    void mergeReassignsMaintenancePolicyRulesRecordId() {
+        Equipment survivor = asset("EQ-POL-KEEP", "SN-POL-KEEP", "Ventilator", "Drager Evita");
+        Equipment duplicate = asset("EQ-POL-MERGE", "SN-POL-MERGE", "Ventilator", "Drager Evita");
+
+        entityManager.createNativeQuery(
+                "INSERT INTO maintenance_policy_rules (policy_code, hospital_id, name, rule_scope, equipment_record_id, priority, frequency, maintenance_type, sla_warning_days, sla_breach_days, lead_time_days, active, deleted, status, start_date, created_at) "
+                        + "VALUES ('POL-EVITA-1', :hospId, 'Evita Monthly Check', 'INDIVIDUAL_EQUIPMENT', :eqId, 'High', 'MONTHLY', 'Preventive', 3, 1, 7, true, false, 'ACTIVE', CURRENT_DATE, CURRENT_TIMESTAMP)")
+                .setParameter("hospId", hospital.getId())
+                .setParameter("eqId", duplicate.getId())
+                .executeUpdate();
+
+        entityManager.flush();
+
+        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
+        entityManager.flush();
+        entityManager.clear();
+
+        long duplicateRules = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM maintenance_policy_rules WHERE equipment_record_id = :eqId")
+                .setParameter("eqId", duplicate.getId())
+                .getSingleResult()).longValue();
+        assertEquals(0L, duplicateRules);
+
+        long survivorRules = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM maintenance_policy_rules WHERE equipment_record_id = :eqId")
+                .setParameter("eqId", survivor.getId())
+                .getSingleResult()).longValue();
+        assertEquals(1L, survivorRules);
     }
 }
