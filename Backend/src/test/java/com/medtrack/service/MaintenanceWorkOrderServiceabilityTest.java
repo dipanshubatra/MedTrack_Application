@@ -61,15 +61,30 @@ class MaintenanceWorkOrderServiceabilityTest {
     private UserRepository userRepository;
 
     @Mock
+    private SparePartService sparePartService;
+
+    @Mock
+    private com.medtrack.repository.EquipmentDisposalRepository disposalRepository;
+
+    @Spy
     private MaintenanceWorkOrderValidator workOrderValidator;
 
-    @InjectMocks
     private MaintenanceWorkOrderService workOrderService;
 
     private Equipment equipment;
 
     @BeforeEach
     void setUp() {
+        workOrderService = new MaintenanceWorkOrderService(
+                workOrderRepository,
+                equipmentRepository,
+                maintenanceTaskRepository,
+                userRepository,
+                workOrderValidator,
+                disposalRepository,
+                sparePartService
+        );
+
         equipment = Equipment.builder()
                 .id(EQUIPMENT_ID)
                 .equipmentCode("EQ-100")

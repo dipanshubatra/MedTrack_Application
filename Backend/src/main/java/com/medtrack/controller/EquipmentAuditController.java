@@ -3,11 +3,19 @@ package com.medtrack.controller;
 import com.medtrack.dto.EquipmentAuditResponse;
 import com.medtrack.service.EquipmentAuditService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -23,8 +31,49 @@ public class EquipmentAuditController {
             @PathVariable Long id,
             Principal principal
     ) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            throw new IllegalArgumentException("Authenticated principal username is required");
+        }
         return ResponseEntity.ok(
-                equipmentAuditService.getEquipmentHistory(id)
+                equipmentAuditService.getEquipmentHistory(id, principal.getName())
         );
+    }
+
+    @GetMapping("/audit-history")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<EquipmentAuditResponse>> getHospitalAuditHistory(
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String user,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            Principal principal
+    ) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            throw new IllegalArgumentException("Authenticated principal username is required");
+        }
+        if (action != null || user != null || (startDate != null && endDate != null)) {
+            return ResponseEntity.ok(
+                    equipmentAuditService.getFilteredHospitalHistory(
+                            principal.getName(), action, user, startDate, endDate)
+            );
+        }
+        return ResponseEntity.ok(
+                equipmentAuditService.getHospitalHistory(principal.getName())
+        );
+    }
+
+    @GetMapping("/audit-history/export")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<byte[]> exportHospitalAuditHistoryCsv(Principal principal) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            throw new IllegalArgumentException("Authenticated principal username is required");
+        }
+        String csvContent = equipmentAuditService.exportAuditHistoryCsv(principal.getName());
+        byte[] csvBytes = csvContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"equipment_audit_history.csv\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csvBytes);
     }
 }

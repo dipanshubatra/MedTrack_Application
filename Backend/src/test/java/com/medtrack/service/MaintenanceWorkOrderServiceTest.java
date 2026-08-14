@@ -7,7 +7,10 @@ import com.medtrack.dto.MaintenanceWorkOrderCompletionRequest;
 import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
@@ -45,10 +48,15 @@ class MaintenanceWorkOrderServiceTest {
     @Mock
     private UserRepository userRepository;
 
-    @Mock
+    @Spy
     private MaintenanceWorkOrderValidator workOrderValidator;
 
-    @InjectMocks
+    @Mock
+    private SparePartService sparePartService;
+
+    @Mock
+    private com.medtrack.repository.EquipmentDisposalRepository disposalRepository;
+
     private MaintenanceWorkOrderService workOrderService;
 
     private Hospital hospital;
@@ -61,6 +69,15 @@ class MaintenanceWorkOrderServiceTest {
 
     @BeforeEach
     void setUp() {
+        workOrderService = new MaintenanceWorkOrderService(
+                workOrderRepository,
+                equipmentRepository,
+                maintenanceTaskRepository,
+                userRepository,
+                workOrderValidator,
+                disposalRepository,
+                sparePartService
+        );
 
         hospital = Hospital.builder()
                 .id(hospitalId)
@@ -428,6 +445,239 @@ class MaintenanceWorkOrderServiceTest {
                         username
                 )
         );
+    }
+
+    @Test
+    void shouldRejectDuplicateWorkOrderWhenActiveWorkOrderExistsForTask() {
+        Long taskId = 50L;
+        MaintenanceWorkOrderRequest request =
+                MaintenanceWorkOrderRequest.builder()
+                        .equipmentId(100L)
+                        .maintenanceTaskId(taskId)
+                        .title("Duplicate Work Order")
+                        .maintenanceType(MaintenanceWorkOrderType.PREVENTIVE)
+                        .priority(MaintenanceWorkOrderPriority.HIGH)
+                        .build();
+
+        MaintenanceTask task = MaintenanceTask.builder()
+                .id(taskId)
+                .hospitalId(hospitalId)
+                .equipmentRecord(equipment)
+                .status(MaintenanceStatus.SCHEDULED)
+                .build();
+
+        when(equipmentRepository.findById(100L))
+                .thenReturn(Optional.of(equipment));
+
+        when(maintenanceTaskRepository.findById(taskId))
+                .thenReturn(Optional.of(task));
+
+        when(workOrderRepository.existsByHospitalIdAndMaintenanceTaskIdAndStatusIn(
+                eq(hospitalId), eq(taskId), anyList()))
+                .thenReturn(true);
+
+        doThrow(new IllegalArgumentException("An active work order already exists for maintenance task ID: " + taskId))
+                .when(workOrderValidator).validateNoActiveWorkOrderForTask(true, taskId);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> workOrderService.createWorkOrder(request, hospitalId, username)
+        );
+    }
+
+    @Test
+    void shouldSynchronizeLinkedTaskAndEquipmentStatusOnStartWorkOrder() {
+        Long workOrderId = 10L;
+        Long taskId = 50L;
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        MaintenanceTask task = MaintenanceTask.builder()
+                .id(taskId)
+                .hospitalId(hospitalId)
+                .status(MaintenanceStatus.SCHEDULED)
+                .build();
+
+        User assignedUser = User.builder().id(5L).username("tech1").build();
+
+        MaintenanceWorkOrder workOrder = buildWorkOrder(MaintenanceWorkOrderStatus.ASSIGNED);
+        workOrder.setMaintenanceTask(task);
+        workOrder.setAssignedUser(assignedUser);
+
+        when(workOrderRepository.findByIdAndHospitalId(workOrderId, hospitalId))
+                .thenReturn(Optional.of(workOrder));
+
+        when(workOrderRepository.save(any(MaintenanceWorkOrder.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        MaintenanceWorkOrderResponse response = workOrderService.startWorkOrder(
+                workOrderId, hospitalId, username
+        );
+
+        assertNotNull(response);
+        assertEquals(MaintenanceWorkOrderStatus.IN_PROGRESS, response.getStatus());
+        assertEquals(MaintenanceStatus.IN_PROGRESS, task.getStatus());
+        assertEquals(EquipmentStatus.UNDER_MAINTENANCE, equipment.getStatus());
+
+        verify(maintenanceTaskRepository).save(task);
+        verify(equipmentRepository).save(equipment);
+    }
+
+    @Test
+    void shouldSynchronizeLinkedTaskAndEquipmentStatusOnCompleteWorkOrder() {
+        Long workOrderId = 10L;
+        Long taskId = 50L;
+        equipment.setStatus(EquipmentStatus.UNDER_MAINTENANCE);
+
+        MaintenanceTask task = MaintenanceTask.builder()
+                .id(taskId)
+                .hospitalId(hospitalId)
+                .status(MaintenanceStatus.IN_PROGRESS)
+                .build();
+
+        MaintenanceWorkOrder workOrder = buildWorkOrder(MaintenanceWorkOrderStatus.IN_PROGRESS);
+        workOrder.setMaintenanceTask(task);
+        workOrder.setStartedAt(LocalDateTime.now().minusHours(2));
+
+        MaintenanceWorkOrderCompletionRequest completionRequest =
+                MaintenanceWorkOrderCompletionRequest.builder()
+                        .completionNotes("Completed maintenance successfully")
+                        .hoursWorked(2.0)
+                        .build();
+
+        when(workOrderRepository.findByIdAndHospitalId(workOrderId, hospitalId))
+                .thenReturn(Optional.of(workOrder));
+
+        when(workOrderRepository.save(any(MaintenanceWorkOrder.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        when(workOrderRepository.countByHospitalIdAndEquipmentIdAndStatusIn(
+                eq(hospitalId), eq(equipment.getId()), anyList()))
+                .thenReturn(0L);
+
+        MaintenanceWorkOrderResponse response = workOrderService.completeWorkOrder(
+                workOrderId, completionRequest, hospitalId, username
+        );
+
+        assertNotNull(response);
+        assertEquals(MaintenanceWorkOrderStatus.COMPLETED, response.getStatus());
+        assertEquals(MaintenanceStatus.COMPLETED, task.getStatus());
+        assertNotNull(task.getCompletedAt());
+        assertEquals(EquipmentStatus.ACTIVE, equipment.getStatus());
+
+        verify(maintenanceTaskRepository).save(task);
+        verify(equipmentRepository).save(equipment);
+    }
+
+    @Test
+    void shouldSynchronizeLinkedTaskStatusOnCancelWorkOrder() {
+        Long workOrderId = 10L;
+        Long taskId = 50L;
+        MaintenanceTask task = MaintenanceTask.builder().id(taskId).hospitalId(hospitalId).status(MaintenanceStatus.IN_PROGRESS).build();
+        MaintenanceWorkOrder workOrder = buildWorkOrder(MaintenanceWorkOrderStatus.IN_PROGRESS);
+        workOrder.setMaintenanceTask(task);
+
+        var cancelRequest = com.medtrack.dto.MaintenanceWorkOrderStatusRequest.builder().reason("Part unavailable").build();
+
+        when(workOrderRepository.findByIdAndHospitalId(workOrderId, hospitalId)).thenReturn(Optional.of(workOrder));
+        when(workOrderRepository.save(any(MaintenanceWorkOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(workOrderRepository.countByHospitalIdAndEquipmentIdAndStatusIn(eq(hospitalId), eq(equipment.getId()), anyList())).thenReturn(0L);
+
+        MaintenanceWorkOrderResponse response = workOrderService.cancelWorkOrder(workOrderId, cancelRequest, hospitalId, username);
+
+        assertNotNull(response);
+        assertEquals(MaintenanceWorkOrderStatus.CANCELLED, response.getStatus());
+        assertEquals(MaintenanceStatus.ON_HOLD, task.getStatus());
+        verify(maintenanceTaskRepository).save(task);
+    }
+
+    @Test
+    void shouldSynchronizeLinkedTaskAndEquipmentStatusOnUpdateStatusToCompleted() {
+        Long workOrderId = 10L;
+        Long taskId = 50L;
+        equipment.setStatus(EquipmentStatus.UNDER_MAINTENANCE);
+
+        MaintenanceTask task = MaintenanceTask.builder()
+                .id(taskId)
+                .hospitalId(hospitalId)
+                .status(MaintenanceStatus.IN_PROGRESS)
+                .build();
+
+        MaintenanceWorkOrder workOrder = buildWorkOrder(MaintenanceWorkOrderStatus.IN_PROGRESS);
+        workOrder.setMaintenanceTask(task);
+
+        var updateRequest = com.medtrack.dto.MaintenanceWorkOrderStatusRequest.builder()
+                .status(MaintenanceWorkOrderStatus.COMPLETED)
+                .build();
+
+        when(workOrderRepository.findByIdAndHospitalId(workOrderId, hospitalId))
+                .thenReturn(Optional.of(workOrder));
+
+        when(workOrderRepository.save(any(MaintenanceWorkOrder.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        when(workOrderRepository.countByHospitalIdAndEquipmentIdAndStatusIn(
+                eq(hospitalId), eq(equipment.getId()), anyList()))
+                .thenReturn(0L);
+
+        MaintenanceWorkOrderResponse response = workOrderService.updateStatus(
+                workOrderId, updateRequest, hospitalId, username
+        );
+
+        assertNotNull(response);
+        assertEquals(MaintenanceWorkOrderStatus.COMPLETED, response.getStatus());
+        assertEquals(MaintenanceStatus.COMPLETED, task.getStatus());
+        assertEquals(EquipmentStatus.ACTIVE, equipment.getStatus());
+
+        verify(maintenanceTaskRepository).save(task);
+        verify(equipmentRepository).save(equipment);
+    }
+
+    @Test
+    void shouldDeductSparePartsWhenCompletingWorkOrderWithPartsUsed() {
+        Long workOrderId = 10L;
+        MaintenanceWorkOrder workOrder = buildWorkOrder(MaintenanceWorkOrderStatus.IN_PROGRESS);
+        workOrder.setStartedAt(LocalDateTime.now().minusHours(2));
+
+        MaintenanceWorkOrderCompletionRequest request = MaintenanceWorkOrderCompletionRequest.builder()
+                .completionNotes("Replaced air filters and oil seal")
+                .hoursWorked(2.0)
+                .partsUsed("PRT-1001: 2, PRT-1002: 1")
+                .build();
+
+        com.medtrack.dto.SparePartDeductionItem item1 = com.medtrack.dto.SparePartDeductionItem.builder()
+                .partNumber("PRT-1001").quantity(2).build();
+        com.medtrack.dto.SparePartDeductionItem item2 = com.medtrack.dto.SparePartDeductionItem.builder()
+                .partNumber("PRT-1002").quantity(1).build();
+        java.util.List<com.medtrack.dto.SparePartDeductionItem> items = java.util.List.of(item1, item2);
+
+        when(workOrderRepository.findByIdAndHospitalId(workOrderId, hospitalId))
+                .thenReturn(Optional.of(workOrder));
+        when(workOrderValidator.validateAndExtractSparePartUsage("PRT-1001: 2, PRT-1002: 1"))
+                .thenReturn(items);
+        when(workOrderRepository.save(any(MaintenanceWorkOrder.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        MaintenanceWorkOrderResponse response = workOrderService.completeWorkOrder(
+                workOrderId, request, hospitalId, username
+        );
+
+        assertNotNull(response);
+        assertEquals(MaintenanceWorkOrderStatus.COMPLETED, response.getStatus());
+        verify(sparePartService).deductSparePartsForWorkOrder(items, hospitalId, username);
+        verify(workOrderRepository).save(workOrder);
+    }
+
+    @Test
+    void shouldParsePartsUsedStringCorrectlyIntoDeductionItems() {
+        String partsText = "FILTER-01: 3, SENSOR-99 (2)";
+        java.util.List<com.medtrack.dto.SparePartDeductionItem> parsed =
+                com.medtrack.dto.SparePartDeductionItem.parsePartsUsed(partsText);
+
+        assertEquals(2, parsed.size());
+        assertEquals("FILTER-01", parsed.get(0).getPartNumber());
+        assertEquals(3, parsed.get(0).getQuantity());
+        assertEquals("SENSOR-99", parsed.get(1).getPartNumber());
+        assertEquals(2, parsed.get(1).getQuantity());
     }
 
     private MaintenanceWorkOrder buildWorkOrder(

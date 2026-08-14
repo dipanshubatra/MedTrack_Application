@@ -87,4 +87,22 @@ public interface MaintenanceWorkOrderRepository
             Long assignedUserId,
             MaintenanceWorkOrderStatus status
     );
+
+    /**
+     * Check whether an active work order exists for a maintenance task.
+     */
+    boolean existsByHospitalIdAndMaintenanceTaskIdAndStatusIn(
+            Long hospitalId,
+            Long maintenanceTaskId,
+            List<MaintenanceWorkOrderStatus> statuses
+    );
+
+    /**
+     * Count active work orders for an equipment item.
+     */
+    long countByHospitalIdAndEquipmentIdAndStatusIn(
+            Long hospitalId,
+            Long equipmentId,
+            List<MaintenanceWorkOrderStatus> statuses
+    );
 }

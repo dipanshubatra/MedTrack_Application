@@ -238,8 +238,9 @@ public class OperationsEventController {
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             throw new AccessDeniedException("An authenticated account is required");
         }
-        String normalizedEmail = authentication.getName().trim().toLowerCase(Locale.ROOT);
-        return userRepository.findByEmail(normalizedEmail)
+        String identifier = authentication.getName().trim();
+        return userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(Locale.ROOT)))
                 .orElseThrow(() -> new AccessDeniedException("An authenticated account is required"));
     }
 }

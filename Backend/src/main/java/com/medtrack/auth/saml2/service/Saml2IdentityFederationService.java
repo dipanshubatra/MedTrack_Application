@@ -1,6 +1,9 @@
 package com.medtrack.auth.saml2.service;
 
+import com.medtrack.auth.jwt.dto.JwtTokenIssueRequest;
+import com.medtrack.auth.jwt.service.JwtSecurityTokenService;
 import com.medtrack.auth.saml2.dto.Saml2AcsConsumeRequest;
+
 import com.medtrack.auth.saml2.dto.Saml2IdpRegistrationRequest;
 import com.medtrack.auth.saml2.model.Saml2IdentityProviderRecord;
 import com.medtrack.auth.saml2.repository.Saml2IdentityProviderRecordRepository;
@@ -21,12 +24,16 @@ import java.util.*;
 public class Saml2IdentityFederationService {
 
     private final Saml2IdentityProviderRecordRepository idpRepository;
+    private final JwtSecurityTokenService jwtSecurityTokenService;
     private static final String SP_ENTITY_ID = "https://medtrack.health/saml2/sp/metadata";
 
     @Autowired
-    public Saml2IdentityFederationService(Saml2IdentityProviderRecordRepository idpRepository) {
+    public Saml2IdentityFederationService(Saml2IdentityProviderRecordRepository idpRepository,
+                                         JwtSecurityTokenService jwtSecurityTokenService) {
         this.idpRepository = idpRepository;
+        this.jwtSecurityTokenService = jwtSecurityTokenService;
     }
+
 
     /**
      * Register New Enterprise Identity Provider (IdP)
@@ -88,12 +95,19 @@ public class Saml2IdentityFederationService {
         String nameId = "doctor.smith@mayoclinic.org";
         List<String> roles = List.of("ROLE_MEDTRACK_DOCTOR", "ROLE_EHR_CLINICIAN", "ROLE_HIPAA_AUDITOR");
 
+        // Issue JWT token for federated SSO identity via JwtSecurityTokenService
+        JwtTokenIssueRequest jwtRequest = new JwtTokenIssueRequest();
+        jwtRequest.setUserId("9901");
+        jwtRequest.setRoles(List.of("HOSPITAL"));
+        Map<String, Object> tokenPayload = jwtSecurityTokenService.issueJwtToken(jwtRequest);
+
         Map<String, Object> result = new HashMap<>();
         result.put("status", "SUCCESS");
         result.put("subjectNameId", nameId);
         result.put("nameIdFormat", idp.getNameIdFormat());
         result.put("idpEntityId", idp.getIdpEntityId());
         result.put("spEntityId", SP_ENTITY_ID);
+        result.put("issuedJwtToken", tokenPayload.get("token"));
         result.put("attributes", Map.of(
                 "email", nameId,
                 "firstName", "John",
@@ -103,6 +117,7 @@ public class Saml2IdentityFederationService {
         ));
         result.put("relayState", request.getRelayState());
         return result;
+
     }
 
     /**

@@ -8,7 +8,7 @@ Issue, a Pull Request and (once CI deploys) a live GitHub Pages link, logged bel
 
 ## Deployment Checklist (per feature)
 
-1. `git checkout main` -> `git checkout -b feature/frontend-<feature-name>-hub`
+1. `git checkout main` -> `git pull upstream main` -> `git checkout -b feature/frontend-<feature-name>-hub`
 2. Write the 500+ line React page under `src/pages/<domain>/` and register it in `src/routes/routeRegistry.js`
 3. Stage, commit, push to the fork (`git push -u origin feature/...`)
 4. Open Issue -> `gh issue create --repo kRamu81/MedTrack_Application --title "[FEATURE] ..."`
@@ -54,3 +54,8 @@ Fixes #<issue>
 | # | Feature | Domain | Branch | Issue | PR | Live Link | Date |
 |---|---------|--------|--------|-------|----|-----------|------|
 | 1 | Biomedical & Clinical AI Hub | Biomedical & Clinical AI | `feature/frontend-biomedical-ai-hub` | [#1126](https://github.com/kRamu81/MedTrack_Application/issues/1126) | [#1127](https://github.com/kRamu81/MedTrack_Application/pull/1127) | https://kRamu81.github.io/MedTrack_Application/clinical-ai | 2026-08-14 |
+| 2 | Real-Time Telemetry & ICU Monitoring Hub | ICU Telemetry & Monitoring | `feature/frontend-icu-telemetry-hub` | [#1129](https://github.com/kRamu81/MedTrack_Application/issues/1129) | [#1130](https://github.com/kRamu81/MedTrack_Application/pull/1130) | https://kRamu81.github.io/MedTrack_Application/icu-telemetry | 2026-08-14 |
+| 3 | Pharmacy & Med-Supply Chain Hub | Pharmacy & Med-Supply Chain | `feature/frontend-pharmacy-supply-hub` | [#1132](https://github.com/kRamu81/MedTrack_Application/issues/1132) | [#1133](https://github.com/kRamu81/MedTrack_Application/pull/1133) | https://kRamu81.github.io/MedTrack_Application/pharmacy-supply | 2026-08-14 |
+| 4 | Clinical Trial & Genomic Research Hub | Clinical Trial & Genomic Research | `feature/frontend-clinical-trial-hub` | [#1135](https://github.com/kRamu81/MedTrack_Application/issues/1135) | [#1136](https://github.com/kRamu81/MedTrack_Application/pull/1136) | https://kRamu81.github.io/MedTrack_Application/clinical-trial | 2026-08-14 |
+| 5 | Hospital Operations & Emergency Triage Hub | Hospital Operations & Emergency Triage | `feature/frontend-emergency-triage-hub` | [#1138](https://github.com/kRamu81/MedTrack_Application/issues/1138) | [#1139](https://github.com/kRamu81/MedTrack_Application/pull/1139) | https://kRamu81.github.io/MedTrack_Application/emergency-triage | 2026-08-14 |
+| 6 | Telehealth & Remote Patient Management Hub | Telehealth & Remote Patient Management | `feature/frontend-telehealth-hub` | [#1140](https://github.com/kRamu81/MedTrack_Application/issues/1140) | [#1141](https://github.com/kRamu81/MedTrack_Application/pull/1141) | https://kRamu81.github.io/MedTrack_Application/telehealth | 2026-08-14 |

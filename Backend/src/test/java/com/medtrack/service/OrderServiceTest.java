@@ -7,6 +7,7 @@ import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.repository.EquipmentOrderRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
@@ -122,7 +123,9 @@ public class OrderServiceTest {
                 1L, "Shipped", "Dispatched to delivery terminal", supplierAuth);
 
         assertNotNull(updated);
-        assertEquals("Shipped", updated.getStatus());
+        // The two columns carry two vocabularies: the workflow status and the supplier-facing
+        // shipping label. Assigning the caller's raw string to both is the bug this now avoids.
+        assertEquals("DISPATCHED", updated.getStatus());
         assertEquals("Shipped", updated.getShippingStatus());
         assertNotNull(updated.getDispatchedAt());
         assertNotNull(updated.getTrackingNo());
@@ -133,7 +136,7 @@ public class OrderServiceTest {
     @Test
     void updateOrderStatus_Delivered_SetsDeliveredAt() {
         mockOrder.setShippingStatus("Shipped");
-        mockOrder.setStatus("Shipped");
+        mockOrder.setStatus("DISPATCHED");
         mockOrder.setDispatchedAt(LocalDateTime.now().minusDays(3));
 
         when(supplierAccessGuard.resolveCallerId(supplierAuth)).thenReturn(7L);
@@ -144,7 +147,7 @@ public class OrderServiceTest {
                 1L, "Delivered", "Handed over to facilities desk", supplierAuth);
 
         assertNotNull(updated);
-        assertEquals("Delivered", updated.getStatus());
+        assertEquals("DELIVERED", updated.getStatus());
         assertEquals("Delivered", updated.getShippingStatus());
         assertNotNull(updated.getDeliveredAt());
         verify(orderRepository).save(mockOrder);
@@ -170,7 +173,8 @@ public class OrderServiceTest {
         EquipmentOrder updated = orderService.updateOrderStatus(1L, "Shipped", "notes", supplierAuth);
 
         assertNotNull(updated);
-        assertEquals("Shipped", updated.getStatus());
+        assertEquals("DISPATCHED", updated.getStatus());
+        assertEquals("Shipped", updated.getShippingStatus());
     }
 
     @Test
@@ -235,7 +239,8 @@ public class OrderServiceTest {
      void generateInvoicePdf_ReturnsPdfBytes() {
         authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
-         when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
+         when(orderRepository.findVisibleToHospitalUserById(
+                 1L, "City Hospital", "admin@cityhospital.com")).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);
 
          byte[] result = orderService.generateInvoicePdf(1L);
@@ -249,7 +254,8 @@ public class OrderServiceTest {
      void emailInvoice_TriggersEmailService() {
         authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
-         when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
+         when(orderRepository.findVisibleToHospitalUserById(
+                 1L, "City Hospital", "admin@cityhospital.com")).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);
 
          orderService.emailInvoice(1L);
@@ -331,5 +337,112 @@ public class OrderServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
         verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_QuantityNull_ThrowsIllegalArgumentException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(null)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
+        assertEquals("Quantity must be greater than zero", ex.getMessage());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_QuantityZero_ThrowsIllegalArgumentException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(0)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
+        assertEquals("Quantity must be greater than zero", ex.getMessage());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_QuantityNegative_ThrowsIllegalArgumentException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(-5)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
+        assertEquals("Quantity must be greater than zero", ex.getMessage());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_QuantityPositive_Accepted() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setName("MRI Scanner");
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(10)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(i -> i.getArgument(0));
+
+        EquipmentOrder order = orderService.placeOrder(request, authentication);
+        assertNotNull(order);
+        assertEquals(10, order.getQuantity());
+        verify(orderRepository, times(1)).save(any(EquipmentOrder.class));
     }
 }

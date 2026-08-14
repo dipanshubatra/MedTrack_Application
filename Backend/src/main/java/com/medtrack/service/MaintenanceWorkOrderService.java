@@ -9,12 +9,15 @@ import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.dto.MaintenanceWorkOrderStatusRequest;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentStatus;
+import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
@@ -39,6 +42,13 @@ import java.util.UUID;
 @Transactional
 public class MaintenanceWorkOrderService {
 
+    private static final List<MaintenanceWorkOrderStatus> ACTIVE_WORK_ORDER_STATUSES = List.of(
+            MaintenanceWorkOrderStatus.OPEN,
+            MaintenanceWorkOrderStatus.ASSIGNED,
+            MaintenanceWorkOrderStatus.IN_PROGRESS,
+            MaintenanceWorkOrderStatus.ON_HOLD
+    );
+
     private final MaintenanceWorkOrderRepository workOrderRepository;
 
     private final EquipmentRepository equipmentRepository;
@@ -47,6 +57,8 @@ public class MaintenanceWorkOrderService {
 
     private final UserRepository userRepository;
     private final MaintenanceWorkOrderValidator workOrderValidator;
+    private final EquipmentDisposalRepository disposalRepository;
+    private final SparePartService sparePartService;
 
     /**
      * Create a new maintenance work order.
@@ -96,6 +108,24 @@ public class MaintenanceWorkOrderService {
                     maintenanceTask,
                     hospitalId
             );
+
+            boolean activeWorkOrderExists = workOrderRepository
+                    .existsByHospitalIdAndMaintenanceTaskIdAndStatusIn(
+                            hospitalId,
+                            request.getMaintenanceTaskId(),
+                            ACTIVE_WORK_ORDER_STATUSES
+                    );
+
+            workOrderValidator.validateNoActiveWorkOrderForTask(
+                    activeWorkOrderExists,
+                    request.getMaintenanceTaskId()
+            );
+
+            boolean isTaskCompleted = maintenanceTask.getStatus() == MaintenanceStatus.COMPLETED;
+            workOrderValidator.validateTaskEligibilityForWorkOrder(isTaskCompleted);
+
+            Long taskEqId = maintenanceTask.getEquipmentRecord() != null ? maintenanceTask.getEquipmentRecord().getId() : null;
+            workOrderValidator.validateEquipmentTaskMatching(equipment.getId(), taskEqId);
         }
 
         User assignedUser = null;
@@ -352,9 +382,9 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, MaintenanceWorkOrderStatus.IN_PROGRESS);
+        return toResponse(saved);
     }
 
     /**
@@ -417,12 +447,14 @@ public class MaintenanceWorkOrderService {
         MaintenanceWorkOrder workOrder =
                 getOwnedWorkOrder(id, hospitalId);
 
-        if (workOrder.getStatus()
-                != MaintenanceWorkOrderStatus.IN_PROGRESS) {
+        workOrderValidator.validateCompletion(workOrder, request);
 
-            throw new IllegalStateException(
-                    "Only IN_PROGRESS work orders can be completed"
-            );
+        if (request != null && request.getPartsUsed() != null && !request.getPartsUsed().isBlank()) {
+            List<com.medtrack.dto.SparePartDeductionItem> deductionItems =
+                    workOrderValidator.validateAndExtractSparePartUsage(request.getPartsUsed());
+            if (!deductionItems.isEmpty() && hospitalId != null) {
+                sparePartService.deductSparePartsForWorkOrder(deductionItems, hospitalId, username);
+            }
         }
 
         workOrder.setStatus(
@@ -432,6 +464,8 @@ public class MaintenanceWorkOrderService {
         workOrder.setCompletedAt(
                 LocalDateTime.now()
         );
+
+        workOrderValidator.validateCompletionTimestamp(workOrder);
 
         workOrder.setCompletionNotes(
                 request.getCompletionNotes()
@@ -452,9 +486,9 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, MaintenanceWorkOrderStatus.COMPLETED);
+        return toResponse(saved);
     }
 
     /**
@@ -509,9 +543,9 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, MaintenanceWorkOrderStatus.CANCELLED);
+        return toResponse(saved);
     }
 
     /**
@@ -566,9 +600,28 @@ public class MaintenanceWorkOrderService {
         if (target
                 == MaintenanceWorkOrderStatus.COMPLETED) {
 
+            if (request != null && request.getReason() != null && !request.getReason().isBlank()) {
+                workOrder.setCompletionNotes(request.getReason().trim());
+            }
+
+            if (workOrder.getCompletionNotes() == null
+                    || workOrder.getCompletionNotes().isBlank()) {
+                throw new IllegalArgumentException(
+                        "Completion notes are required when completing a work order"
+                );
+            }
+
+            if (workOrder.getStartedAt() == null) {
+                throw new IllegalStateException(
+                        "Work order cannot be completed before it is started"
+                );
+            }
+
             workOrder.setCompletedAt(
                     LocalDateTime.now()
             );
+
+            workOrderValidator.validateCompletionTimestamp(workOrder);
         }
 
         if (target
@@ -611,9 +664,62 @@ public class MaintenanceWorkOrderService {
         workOrder.setUpdatedBy(username);
         workOrder.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(
-                workOrderRepository.save(workOrder)
-        );
+        MaintenanceWorkOrder saved = workOrderRepository.save(workOrder);
+        synchronizeLinkedTaskAndEquipment(saved, target);
+        return toResponse(saved);
+    }
+
+    /**
+     * Synchronizes status with the associated MaintenanceTask and Equipment entities.
+     */
+    private void synchronizeLinkedTaskAndEquipment(
+            MaintenanceWorkOrder workOrder,
+            MaintenanceWorkOrderStatus targetStatus
+    ) {
+        if (workOrder == null) {
+            return;
+        }
+
+        MaintenanceTask task = workOrder.getMaintenanceTask();
+        if (task != null) {
+            if (targetStatus == MaintenanceWorkOrderStatus.IN_PROGRESS) {
+                task.setStatus(MaintenanceStatus.IN_PROGRESS);
+                maintenanceTaskRepository.save(task);
+            } else if (targetStatus == MaintenanceWorkOrderStatus.COMPLETED) {
+                task.setStatus(MaintenanceStatus.COMPLETED);
+                task.setCompletedAt(
+                        workOrder.getCompletedAt() != null
+                                ? workOrder.getCompletedAt()
+                                : LocalDateTime.now()
+                );
+                maintenanceTaskRepository.save(task);
+            } else if (targetStatus == MaintenanceWorkOrderStatus.CANCELLED) {
+                task.setStatus(MaintenanceStatus.SCHEDULED);
+                task.setCompletedAt(null);
+                maintenanceTaskRepository.save(task);
+            }
+        }
+
+        Equipment equipment = workOrder.getEquipment();
+        if (equipment != null && equipment.getId() != null && workOrder.getHospitalId() != null) {
+            if (targetStatus == MaintenanceWorkOrderStatus.IN_PROGRESS) {
+                if (equipment.getStatus() == EquipmentStatus.ACTIVE) {
+                    equipment.setStatus(EquipmentStatus.UNDER_MAINTENANCE);
+                    equipmentRepository.save(equipment);
+                }
+            } else if (targetStatus == MaintenanceWorkOrderStatus.COMPLETED
+                    || targetStatus == MaintenanceWorkOrderStatus.CANCELLED) {
+                long activeCount = workOrderRepository.countByHospitalIdAndEquipmentIdAndStatusIn(
+                        workOrder.getHospitalId(),
+                        equipment.getId(),
+                        ACTIVE_WORK_ORDER_STATUSES
+                );
+                if (activeCount == 0 && equipment.getStatus() == EquipmentStatus.UNDER_MAINTENANCE) {
+                    equipment.setStatus(EquipmentStatus.ACTIVE);
+                    equipmentRepository.save(equipment);
+                }
+            }
+        }
     }
 
     /**
@@ -824,6 +930,22 @@ public class MaintenanceWorkOrderService {
                             + status.name().toLowerCase()
                             + " and cannot have new maintenance work raised against it"
             );
+        }
+
+        if (equipment.getHospital() != null) {
+            boolean pendingDisposal = disposalRepository
+                    .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(
+                            equipment.getId(), equipment.getHospital().getId())
+                    .stream()
+                    .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                            || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+            if (pendingDisposal) {
+                throw new IllegalArgumentException(
+                        "Equipment "
+                                + equipment.getEquipmentCode()
+                                + " has an active disposal request awaiting approval or completion and cannot have new maintenance work raised against it"
+                );
+            }
         }
     }
 

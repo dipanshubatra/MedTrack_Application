@@ -42,6 +42,17 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             + "JOIN equipment e ON e.id = mt.equipment_record_id "
             + "WHERE mt.deleted = FALSE "
             + "AND mt.hospital_id = :hospitalId "
+            + "AND mt.equipment_record_id = :equipmentRecordId "
+            + "AND e.hospital_id = :hospitalId",
+            nativeQuery = true)
+    List<MaintenanceTask> findByHospitalIdAndEquipmentRecordId(
+            @Param("hospitalId") Long hospitalId,
+            @Param("equipmentRecordId") Long equipmentRecordId);
+
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId "
             + "AND e.hospital_id = :hospitalId "
             + "AND (:status IS NULL OR mt.status = :status) "
             + "AND (:equipmentId IS NULL OR mt.equipment_id = :equipmentId) "
@@ -419,6 +430,17 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("ruleId") Long ruleId,
             @Param("windowStart") LocalDate windowStart,
             @Param("windowEnd") LocalDate windowEnd);
+
+    @Query("SELECT task FROM MaintenanceTask task "
+            + "WHERE task.deadline >= :windowStart "
+            + "AND task.deadline <= :windowEnd "
+            + "AND task.assignedTechnicianRecord IS NOT NULL "
+            + "AND task.status <> com.medtrack.model.MaintenanceStatus.COMPLETED "
+            + "AND task.equipmentRecord.status NOT IN :decommissionedStatuses")
+    List<MaintenanceTask> findAlertableUpcomingTasks(
+            @Param("windowStart") LocalDate windowStart,
+            @Param("windowEnd") LocalDate windowEnd,
+            @Param("decommissionedStatuses") java.util.Collection<com.medtrack.model.EquipmentStatus> decommissionedStatuses);
 
     @Query("SELECT task FROM MaintenanceTask task "
             + "WHERE task.hospitalId = :hospitalId "

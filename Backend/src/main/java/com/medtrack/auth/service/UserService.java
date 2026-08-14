@@ -28,6 +28,11 @@ import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
 
+import com.medtrack.auth.scim.dto.ScimUserDto;
+import com.medtrack.auth.scim.service.ScimUserProvisioningService;
+import com.medtrack.auth.jwt.service.JwtSecurityTokenService;
+import java.util.Map;
+
 import com.medtrack.auth.dto.ForgotPasswordRequest;
 import com.medtrack.auth.dto.VerifyOtpRequest;
 import com.medtrack.auth.dto.ResetPasswordRequest;
@@ -35,6 +40,7 @@ import com.medtrack.auth.model.PasswordResetToken;
 import com.medtrack.auth.repository.PasswordResetTokenRepository;
 import com.medtrack.auth.event.UserLoginEvent;
 import com.medtrack.auth.event.UserRegisteredEvent;
+
 
 /**
  * UserService encapsulates the business logic for user management, credential validation,
@@ -88,6 +94,8 @@ public class UserService {
     private final EmailService emailService;
     private final KafkaEventPublisher kafkaEventPublisher;
     private final PublicRegistrationRolePolicy publicRegistrationRolePolicy;
+    private final ScimUserProvisioningService scimUserProvisioningService;
+
 
     @Value("${security.account.lock-duration:30}")
     private int lockDurationMinutes;
@@ -152,6 +160,19 @@ public class UserService {
         // Persist the user record to the database
         User savedUser = userRepository.save(user);
 
+
+        // Cross-Subsystem Logic: Auto-provision user into SCIM 2.0 User Registry under RFC 7643
+        try {
+            ScimUserDto scimDto = new ScimUserDto();
+            scimDto.setUserName(savedUser.getUsername());
+            scimDto.setExternalId("usr_db_" + savedUser.getId());
+            scimDto.setEmails(List.of(Map.of("value", savedUser.getEmail(), "type", "work", "primary", true)));
+            scimDto.setName(Map.of("givenName", savedUser.getName(), "familyName", savedUser.getOrganization() != null ? savedUser.getOrganization() : "MedTrack Hospital"));
+            scimUserProvisioningService.createScimUser(scimDto);
+        } catch (Exception e) {
+            log.warn("SCIM 2.0 Auto-Provisioning failed for user {}: {}", savedUser.getUsername(), e.getMessage());
+        }
+
         // Publish UserRegisteredEvent
         UserRegisteredEvent registeredEvent = UserRegisteredEvent.builder()
                 .userId(savedUser.getId())
@@ -161,6 +182,7 @@ public class UserService {
                 .timestamp(java.time.Instant.now().toString())
                 .build();
         kafkaEventPublisher.publishUserRegistered(registeredEvent);
+
 
         // Map the persisted user to authentication response payload containing JWT token
         return mapToAuthResponse(savedUser, "Account created successfully");
