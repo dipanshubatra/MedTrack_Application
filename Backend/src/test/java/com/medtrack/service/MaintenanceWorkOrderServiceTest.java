@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -683,6 +684,82 @@ class MaintenanceWorkOrderServiceTest {
         assertEquals(3, parsed.get(0).getQuantity());
         assertEquals("SENSOR-99", parsed.get(1).getPartNumber());
         assertEquals(2, parsed.get(1).getQuantity());
+    }
+
+    @Test
+    void createWorkOrder_throwsException_whenDueDateBeforeScheduledDate() {
+        MaintenanceWorkOrderRequest request = new MaintenanceWorkOrderRequest();
+        request.setEquipmentId(equipment.getId());
+        request.setTitle("Calibrate Ventilator");
+        request.setMaintenanceType(MaintenanceWorkOrderType.PREVENTIVE);
+        request.setPriority(MaintenanceWorkOrderPriority.HIGH);
+        request.setScheduledDate(LocalDate.now().plusDays(10));
+        request.setDueDate(LocalDate.now().plusDays(2));
+
+        when(equipmentRepository.findById(equipment.getId())).thenReturn(Optional.of(equipment));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(equipment.getId(), hospitalId))
+                .thenReturn(java.util.Collections.emptyList());
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> workOrderService.createWorkOrder(request, hospitalId, username)
+        );
+
+        assertEquals("Due date cannot be before scheduled date", ex.getMessage());
+        verify(workOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createWorkOrder_succeeds_whenScheduledDateAndDueDateAreValid() {
+        MaintenanceWorkOrderRequest request = new MaintenanceWorkOrderRequest();
+        request.setEquipmentId(equipment.getId());
+        request.setTitle("Calibrate Ventilator");
+        request.setMaintenanceType(MaintenanceWorkOrderType.PREVENTIVE);
+        request.setPriority(MaintenanceWorkOrderPriority.HIGH);
+        request.setScheduledDate(LocalDate.now());
+        request.setDueDate(LocalDate.now().plusDays(5));
+
+        when(equipmentRepository.findById(equipment.getId())).thenReturn(Optional.of(equipment));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(equipment.getId(), hospitalId))
+                .thenReturn(java.util.Collections.emptyList());
+        when(workOrderRepository.save(any())).thenAnswer(invocation -> {
+            MaintenanceWorkOrder wo = invocation.getArgument(0);
+            wo.setId(100L);
+            return wo;
+        });
+
+        MaintenanceWorkOrderResponse response = workOrderService.createWorkOrder(request, hospitalId, username);
+
+        assertNotNull(response);
+        assertEquals("Calibrate Ventilator", response.getTitle());
+        verify(workOrderRepository).save(any());
+    }
+
+    @Test
+    void createWorkOrder_succeeds_whenScheduledDateAndDueDateAreSame() {
+        LocalDate sameDate = LocalDate.now().plusDays(3);
+        MaintenanceWorkOrderRequest request = new MaintenanceWorkOrderRequest();
+        request.setEquipmentId(equipment.getId());
+        request.setTitle("Inspect Pump");
+        request.setMaintenanceType(MaintenanceWorkOrderType.CORRECTIVE);
+        request.setPriority(MaintenanceWorkOrderPriority.MEDIUM);
+        request.setScheduledDate(sameDate);
+        request.setDueDate(sameDate);
+
+        when(equipmentRepository.findById(equipment.getId())).thenReturn(Optional.of(equipment));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(equipment.getId(), hospitalId))
+                .thenReturn(java.util.Collections.emptyList());
+        when(workOrderRepository.save(any())).thenAnswer(invocation -> {
+            MaintenanceWorkOrder wo = invocation.getArgument(0);
+            wo.setId(101L);
+            return wo;
+        });
+
+        MaintenanceWorkOrderResponse response = workOrderService.createWorkOrder(request, hospitalId, username);
+
+        assertNotNull(response);
+        assertEquals("Inspect Pump", response.getTitle());
+        verify(workOrderRepository).save(any());
     }
 
     private MaintenanceWorkOrder buildWorkOrder(

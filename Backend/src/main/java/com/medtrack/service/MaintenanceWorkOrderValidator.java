@@ -18,11 +18,26 @@ public class MaintenanceWorkOrderValidator {
             MaintenanceWorkOrderRequest request
     ) {
 
+        if (request == null) {
+            return;
+        }
+
         LocalDate scheduledDate =
                 request.getScheduledDate();
 
         LocalDate dueDate =
                 request.getDueDate();
+
+        validateDateBounds(scheduledDate, dueDate);
+    }
+
+    /**
+     * Validates that due date is not strictly prior to scheduled date.
+     */
+    public void validateDateBounds(
+            LocalDate scheduledDate,
+            LocalDate dueDate
+    ) {
 
         if (scheduledDate != null
                 && dueDate != null
