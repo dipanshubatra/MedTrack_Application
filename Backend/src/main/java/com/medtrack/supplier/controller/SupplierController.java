@@ -1,6 +1,7 @@
 package com.medtrack.supplier.controller;
 
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.supplier.dto.BulkStatusUpdateRequest;
 import com.medtrack.supplier.dto.SupplierPerformanceResponse;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.supplier.service.SupplierOrderService;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
 @RestController
 @RequestMapping("/api/supplier")
 @RequiredArgsConstructor
+@Slf4j
 @CrossOrigin(origins = "http://localhost:3000")
 @Tag(name = "Supplier Orders", description = "Endpoints for suppliers to query and retrieve localized equipment purchase orders.")
 public class SupplierController {
@@ -33,7 +36,7 @@ public class SupplierController {
     private final SupplierAccessGuard supplierAccessGuard;
 
     @GetMapping("/orders")
-    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
+    @PreAuthorize("hasRole('SUPPLIER')")
     @Operation(summary = "Get paginated, filtered supplier orders", description = "Allows suppliers to search and filter through synchronized equipment purchase orders. Suppliers only ever see their own orders; HOSPITAL admins may filter by any supplier.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully retrieved orders", content = @Content(schema = @Schema(implementation = Page.class))),
@@ -93,6 +96,25 @@ public class SupplierController {
         EquipmentOrder updatedOrder = supplierOrderService.updateOrderStatus(orderId, newStatus, authentication);
         return ResponseEntity.ok(updatedOrder);
     }
+
+        @PutMapping("/orders/bulk-status")
+        @PreAuthorize("hasRole('SUPPLIER')")
+        @Operation(summary = "Bulk update supplier order status", description = "Updates order status for multiple orders simultaneously.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Successfully updated order statuses", content = @Content(schema = @Schema(implementation = java.util.List.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid request or status transitions")
+        })
+        public ResponseEntity<java.util.List<EquipmentOrder>> bulkUpdateOrderStatus(
+                        @jakarta.validation.Valid @RequestBody BulkStatusUpdateRequest request,
+                        Authentication authentication) {
+
+                log.info("Incoming request for bulk status update: orders={}, newStatus={}", request.getOrderIds(),
+                                request.getStatus());
+                java.util.List<EquipmentOrder> updatedOrders =
+                                supplierOrderService.bulkUpdateOrderStatus(request, authentication);
+                log.info("Successfully performed bulk status update for {} orders", updatedOrders.size());
+                return ResponseEntity.ok(updatedOrders);
+        }
 
         // -----------------------------------------------------------------------
         // Phase 7 – Supplier Performance Scoring
