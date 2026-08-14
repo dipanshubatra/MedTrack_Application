@@ -1066,7 +1066,7 @@ export default function IcuTelemetryHub({ onNavigate }) {
                       <Siren size={14} /> Trigger rapid review
                     </button>
                     {typeof onNavigate === "function" && (
-                      <button onClick={() => onNavigate("clinical-ai")} className="ml-auto flex items-center gap-1.5 rounded-xl border border-slate-700 px-3.5 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-800">
+                      <button onClick={() => onNavigate("risk-dashboard")} className="ml-auto flex items-center gap-1.5 rounded-xl border border-slate-700 px-3.5 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-800">
                         <BrainIcon size={14} /> AI risk models
                       </button>
                     )}
