@@ -86,7 +86,8 @@ public class WarrantyExpiryAlertScheduler {
 
             long daysUntil = ChronoUnit.DAYS.between(today, equipment.getWarrantyExpiry());
             Integer threshold = windowFor(daysUntil);
-            if (threshold == null || alreadyAlerted(equipment.getId(), expiry, threshold)) {
+            if (threshold == null || alreadyAlerted(
+                    equipment.getId(), equipment.getWarrantyExpiry(), threshold)) {
                 continue;
             }
             publishAlert(equipment, threshold, daysUntil);

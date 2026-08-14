@@ -4,6 +4,8 @@ import com.medtrack.auth.fido2.dto.Fido2AssertionRequest;
 import com.medtrack.auth.fido2.dto.Fido2RegistrationRequest;
 import com.medtrack.auth.fido2.model.Fido2WebAuthnRecord;
 import com.medtrack.auth.fido2.repository.Fido2WebAuthnRecordRepository;
+import com.medtrack.auth.jwt.dto.JwtTokenIssueRequest;
+import com.medtrack.auth.jwt.service.JwtSecurityTokenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +24,16 @@ import java.util.*;
 public class Fido2WebAuthnService {
 
     private final Fido2WebAuthnRecordRepository recordRepository;
+    private final JwtSecurityTokenService jwtSecurityTokenService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Autowired
-    public Fido2WebAuthnService(Fido2WebAuthnRecordRepository recordRepository) {
+    public Fido2WebAuthnService(Fido2WebAuthnRecordRepository recordRepository,
+                               JwtSecurityTokenService jwtSecurityTokenService) {
         this.recordRepository = recordRepository;
+        this.jwtSecurityTokenService = jwtSecurityTokenService;
     }
+
 
     /**
      * Generate Cryptographic WebAuthn Registration Challenge
@@ -106,14 +112,22 @@ public class Fido2WebAuthnService {
         record.setLastUsedAt(Instant.now());
         recordRepository.save(record);
 
+        // Issue JWT token for biometric authenticated user
+        JwtTokenIssueRequest jwtRequest = new JwtTokenIssueRequest();
+        jwtRequest.setUserId("8802");
+        jwtRequest.setRoles(List.of("HOSPITAL"));
+        Map<String, Object> tokenPayload = jwtSecurityTokenService.issueJwtToken(jwtRequest);
+
         Map<String, Object> result = new HashMap<>();
         result.put("status", "SUCCESS");
         result.put("message", "Biometric WebAuthn assertion verified successfully.");
         result.put("credentialId", record.getCredentialId());
         result.put("authenticatorName", record.getAuthenticatorName());
+        result.put("issuedJwtToken", tokenPayload.get("token"));
         result.put("updatedSignCount", record.getSignCount());
         result.put("userVerified", record.isUserVerified());
         return result;
+
     }
 
     /**

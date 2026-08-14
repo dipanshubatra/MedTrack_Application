@@ -33,6 +33,11 @@ const GuidesPage = lazy(() => import("../pages/GuidesPage"));
 const SecurityPage = lazy(() => import("../pages/SecurityPage"));
 const SystemStatusPage = lazy(() => import("../pages/SystemStatusPage"));
 const DualRangeSliderStudio = lazy(() => import("../components/common/DualRangeSliderStudio"));
+const ResearchPage = lazy(() => import("../pages/ResearchPage"));
+const SupplierCentrePage = lazy(() => import("../pages/SupplierCentrePage"));
+const PrivacyPage = lazy(() => import("../pages/PrivacyPage"));
+const CookieConsentPage = lazy(() => import("../pages/CookieConsentPage"));
+const DoNotSellPage = lazy(() => import("../pages/DoNotSellPage"));
 
 const LoginPage = lazy(() => import("../pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("../pages/auth/RegisterPage"));
@@ -52,6 +57,10 @@ const PreventiveMaintenanceRules = lazy(() => import("../pages/hospital/Preventi
 const MaintenanceSlaDashboard = lazy(() => import("../pages/hospital/MaintenanceSlaDashboard"));
 const EquipmentCalibrationHub = lazy(() => import("../pages/hospital/EquipmentCalibrationHub"));
 const RetiredAssets = lazy(() => import("../pages/hospital/RetiredAssets"));
+const EquipmentLifecyclePredictor = lazy(() => import("../pages/hospital/EquipmentLifecyclePredictor"));
+const ProcurementRequestWizard = lazy(() => import("../pages/hospital/ProcurementRequestWizard"));
+const ApprovalInbox = lazy(() => import("../pages/hospital/ApprovalInbox"));
+const DynamicRiskDashboard = lazy(() => import("../pages/hospital/DynamicRiskDashboard"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -64,7 +73,7 @@ const TenderList = lazy(() => import("../pages/hospital/TenderList"));
 const TenderCreate = lazy(() => import("../pages/hospital/TenderCreate"));
 const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
-const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -99,6 +108,8 @@ const SecurityPlaybookPage = lazy(() => import("../pages/auth/SecurityPlaybookPa
 const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentResponsePlaybookPage"));
 const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
 const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
+const SocOperationsConsolePage = lazy(() => import("../pages/auth/SocOperationsConsolePage"));
+
 
 /**
  * Path prefix the bundle is served under on GitHub Pages.
@@ -149,6 +160,11 @@ export const ROUTES = [
   { page: "help", slugs: ["help", "help-center"], component: HelpCenterPage, access: PUBLIC },
   { page: "awards", slugs: ["awards"], component: AwardsPage, access: PUBLIC },
   { page: "terms", slugs: ["terms"], component: TermsPage, access: PUBLIC },
+  { page: "privacy", slugs: ["privacy"], component: PrivacyPage, access: PUBLIC },
+  { page: "cookies", slugs: ["cookies", "cookie-consent"], component: CookieConsentPage, access: PUBLIC },
+  { page: "do-not-sell", slugs: ["do-not-sell"], component: DoNotSellPage, access: PUBLIC },
+  { page: "research", slugs: ["research"], component: ResearchPage, access: PUBLIC },
+  { page: "supplier-centre", slugs: ["supplier-centre"], component: SupplierCentrePage, access: PUBLIC },
   { page: "guides", slugs: ["guides"], component: GuidesPage, access: PUBLIC },
   { page: "security", slugs: ["security"], component: SecurityPage, access: PUBLIC },
   { page: "status", slugs: ["status"], component: SystemStatusPage, access: PUBLIC },
@@ -170,6 +186,10 @@ export const ROUTES = [
   { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId" },
   { page: "schedule-maintenance", slugs: ["schedule-maintenance"], component: ScheduleMaintenancePage, access: HOSPITAL_ONLY },
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
+  { page: "equipment-lifecycle", slugs: ["equipment-lifecycle", "lifecycle"], component: EquipmentLifecyclePredictor, access: HOSPITAL_ONLY },
+  { page: "procurement-wizard", slugs: ["procurement-wizard"], component: ProcurementRequestWizard, access: HOSPITAL_ONLY },
+  { page: "risk-dashboard", slugs: ["risk-dashboard", "la-razt"], component: DynamicRiskDashboard, access: HOSPITAL_ONLY },
+  { page: "approval-inbox", slugs: ["approval-inbox"], component: ApprovalInbox, access: HOSPITAL_ONLY },
   { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
   { page: "sla-dashboard", slugs: ["sla-dashboard"], component: MaintenanceSlaDashboard, access: HOSPITAL_ONLY },
   { page: "calibration", slugs: ["calibration", "equipment-calibration"], component: EquipmentCalibrationHub, access: HOSPITAL_ONLY },
@@ -178,8 +198,8 @@ export const ROUTES = [
   { page: "tender-create", slugs: ["tender-create", "new-tender"], component: TenderCreate, access: HOSPITAL_ONLY },
   { page: "tender-detail", slugs: ["tender"], component: TenderDetail, access: HOSPITAL_ONLY, param: "tenderId" },
 
-  // --- pharmacy & med-supply chain: pharmaceutical operations -----------------
-  { page: "pharmacy-supply", slugs: ["pharmacy-supply", "med-supply"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  // --- telehealth & remote patient management consoles ------------------------
+  { page: "telehealth", slugs: ["telehealth", "remote-care"], component: TelehealthHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
@@ -226,7 +246,9 @@ export const ROUTES = [
   { page: "incident-response", slugs: ["incident-response", "ir-playbook"], component: IncidentResponsePlaybookPage, access: AUTHENTICATED },
   { page: "compliance-evidence", slugs: ["evidence", "compliance-evidence"], component: ComplianceEvidencePage, access: AUTHENTICATED },
   { page: "compliance-reporting", slugs: ["compliance-reporting", "reporting"], component: ComplianceReportingPage, access: AUTHENTICATED },
+  { page: "soc-console", slugs: ["soc-console", "soc-command-center"], component: SocOperationsConsolePage, access: AUTHENTICATED },
 ];
+
 
 /**
  * Routes carrying a dynamic path segment, e.g. `/edit-equipment/EQ-1001`.
@@ -304,6 +326,20 @@ export function buildPath(page, data) {
     return `/${slug}/${encodeURIComponent(data)}`;
   }
   return slug ? `/${slug}` : "/";
+}
+
+/**
+ * Builds a full, base-path-aware URL for a navigation target.
+ *
+ * The app is served from a sub-path on GitHub Pages (BASE_PATH, e.g.
+ * "/MedTrack_Application"), so a bare path like "/login" bypasses it and
+ * 404s. Mirror App.jsx's base-path detection so fallback navigation (plain
+ * <a href> targets and window.location redirects used when onNavigate is
+ * unavailable) lands on the real route in both dev and the deployed site.
+ */
+export function buildHref(page, data) {
+  const basePath = window.location.pathname.includes(BASE_PATH) ? BASE_PATH : "";
+  return `${basePath}${buildPath(page, data)}`;
 }
 
 /**

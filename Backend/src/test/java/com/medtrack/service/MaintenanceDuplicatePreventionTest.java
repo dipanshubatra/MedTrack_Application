@@ -1,6 +1,7 @@
 package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
+import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
@@ -66,6 +67,8 @@ public class MaintenanceDuplicatePreventionTest {
         hospitalUser.setId(10L);
         hospitalUser.setEmail("admin@hospital.org");
         hospitalUser.setUsername("admin_user");
+        hospitalUser.setRole("hospital");
+        hospitalUser.setAccountStatus(AccountStatus.ACTIVE);
 
         hospital = new Hospital();
         hospital.setId(100L);
@@ -76,6 +79,8 @@ public class MaintenanceDuplicatePreventionTest {
         technician.setId(20L);
         technician.setEmail("tech@hospital.org");
         technician.setName("John Tech");
+        technician.setRole("technician");
+        technician.setAccountStatus(AccountStatus.ACTIVE);
 
         equipment = new Equipment();
         equipment.setId(500L);
@@ -87,10 +92,10 @@ public class MaintenanceDuplicatePreventionTest {
     @Test
     @DisplayName("scheduleTask throws exception when active task exists for equipment")
     void testScheduleTaskThrowsOnDuplicateActiveTask() {
-        when(authentication.getName()).thenReturn("admin_user");
-        when(userRepository.findByUsername("admin_user")).thenReturn(Optional.of(hospitalUser));
+        when(authentication.getName()).thenReturn("admin@hospital.org");
+        when(userRepository.findByEmail("admin@hospital.org")).thenReturn(Optional.of(hospitalUser));
         when(hospitalRepository.findByUserId(10L)).thenReturn(Optional.of(hospital));
-        when(equipmentRepository.findByEquipmentCodeAndHospitalId("EQ-VENT-001", 100L))
+        when(equipmentRepository.findByEquipmentCode("EQ-VENT-001"))
                 .thenReturn(Optional.of(equipment));
 
         when(taskRepository.existsActiveTaskForEquipmentWithCode(
@@ -115,10 +120,10 @@ public class MaintenanceDuplicatePreventionTest {
     @Test
     @DisplayName("scheduleTask succeeds when no active task exists for equipment")
     void testScheduleTaskSucceedsWhenNoDuplicate() {
-        when(authentication.getName()).thenReturn("admin_user");
-        when(userRepository.findByUsername("admin_user")).thenReturn(Optional.of(hospitalUser));
+        when(authentication.getName()).thenReturn("admin@hospital.org");
+        when(userRepository.findByEmail("admin@hospital.org")).thenReturn(Optional.of(hospitalUser));
         when(hospitalRepository.findByUserId(10L)).thenReturn(Optional.of(hospital));
-        when(equipmentRepository.findByEquipmentCodeAndHospitalId("EQ-VENT-001", 100L))
+        when(equipmentRepository.findByEquipmentCode("EQ-VENT-001"))
                 .thenReturn(Optional.of(equipment));
 
         when(taskRepository.existsActiveTaskForEquipmentWithCode(
@@ -151,10 +156,10 @@ public class MaintenanceDuplicatePreventionTest {
     @Test
     @DisplayName("scheduleTask performs case-insensitive duplicate type validation")
     void testScheduleTaskCaseInsensitiveDuplicateCheck() {
-        when(authentication.getName()).thenReturn("admin_user");
-        when(userRepository.findByUsername("admin_user")).thenReturn(Optional.of(hospitalUser));
+        when(authentication.getName()).thenReturn("admin@hospital.org");
+        when(userRepository.findByEmail("admin@hospital.org")).thenReturn(Optional.of(hospitalUser));
         when(hospitalRepository.findByUserId(10L)).thenReturn(Optional.of(hospital));
-        when(equipmentRepository.findByEquipmentCodeAndHospitalId("EQ-VENT-001", 100L))
+        when(equipmentRepository.findByEquipmentCode("EQ-VENT-001"))
                 .thenReturn(Optional.of(equipment));
 
         when(taskRepository.existsActiveTaskForEquipmentWithCode(
@@ -206,6 +211,7 @@ public class MaintenanceDuplicatePreventionTest {
 
         MaintenanceUpdateRequest updateRequest = new MaintenanceUpdateRequest();
         updateRequest.setStatus(MaintenanceStatus.COMPLETED);
+        updateRequest.setSignature("John Tech");
 
         MaintenanceTask result = maintenanceService.updateTask(99L, updateRequest, authentication);
 

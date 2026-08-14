@@ -125,20 +125,13 @@ public class SecurityConfig {
                     "/api/auth/forgot-password",
                     "/api/auth/verify-otp",
                     "/api/auth/reset-password",
-                    // /api/auth/scim/**, /api/auth/commandcenter/**, /api/auth/vulnerability/**
-                    // and /api/auth/pam/** used to be listed here. None of them is an
-                    // authentication endpoint: they provision and deprovision user accounts,
-                    // request and approve privilege elevation, acknowledge security alerts and
-                    // govern CVE patching. Because permitAll() matchers are evaluated before the
-                    // trailing .anyRequest().authenticated() rule, every route under them -
-                    // including every mutating one - was reachable with no token at all. Explicit
-                    // rules for all four trees are declared below.
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html"
                 ).permitAll()
+
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                 // Resolves the SSO identity provider for an email domain before the caller
                 // has a session, so this single lookup endpoint must stay public.
@@ -229,6 +222,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -245,6 +239,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -261,6 +256,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -277,6 +273,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -293,6 +290,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -409,4 +407,13 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
+
+    /**
+     * Audit Event Logger for Authentication Failures and Security Violations
+     */
+    @Bean
+    public org.springframework.security.authentication.event.LoggerListener loggerListener() {
+        return new org.springframework.security.authentication.event.LoggerListener();
+    }
 }
+

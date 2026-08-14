@@ -40,9 +40,20 @@ public class SparePartService {
 
     public List<SparePartResponse> getAllSpareParts(String username) {
         Hospital hospital = getHospitalForUser(username);
-        return sparePartRepository.findByHospitalId(hospital.getId()).stream()
+        return sparePartRepository.findByHospitalIdAndDeletedFalse(hospital.getId()).stream()
                 .map(SparePartResponse::from)
                 .toList();
+    }
+
+    public SparePartResponse getSparePart(Long id, String username) {
+        if (id == null) {
+            throw new IllegalArgumentException("Spare part ID is required");
+        }
+        Hospital hospital = getHospitalForUser(username);
+        SparePart sparePart = sparePartRepository
+                .findByIdAndHospitalIdAndDeletedFalse(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Active spare part not found with ID: " + id));
+        return SparePartResponse.from(sparePart);
     }
 
     public List<SparePartResponse> getLowStockAlerts(String username) {
@@ -195,6 +206,37 @@ public class SparePartService {
 
         part.setStockLevel(updatedLevel);
         return SparePartResponse.from(sparePartRepository.save(part));
+    }
+
+    @Transactional
+    public void deductSparePartsForWorkOrder(
+            List<com.medtrack.dto.SparePartDeductionItem> items,
+            Long hospitalId,
+            String username) {
+        if (items == null || items.isEmpty() || hospitalId == null) {
+            return;
+        }
+
+        for (com.medtrack.dto.SparePartDeductionItem item : items) {
+            if (item.getPartNumber() == null || item.getPartNumber().isBlank()) {
+                continue;
+            }
+            String partNumber = item.getPartNumber().trim();
+            int quantity = item.getQuantity() != null && item.getQuantity() > 0 ? item.getQuantity() : 1;
+
+            SparePart part = sparePartRepository
+                    .findActiveByHospitalIdAndPartNumberForUpdate(hospitalId, partNumber)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Spare part with part number '" + partNumber + "' not found in hospital inventory"));
+
+            if (part.getStockLevel() < quantity) {
+                throw new IllegalArgumentException("Insufficient stock for spare part: " + partNumber
+                        + ". Available: " + part.getStockLevel() + ", Required: " + quantity);
+            }
+
+            part.setStockLevel(part.getStockLevel() - quantity);
+            sparePartRepository.save(part);
+        }
     }
 
     private void validateSparePart(SparePart sparePart) {

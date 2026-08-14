@@ -72,6 +72,7 @@ public class PreventiveMaintenanceService {
     private final UserRepository userRepository;
     private final MaintenanceActivityService activityService;
     private final EventPublisherService eventPublisherService;
+    private final MaintenanceRuleAuditService auditService;
 
     // ------------------------------------------------------------------
     // Rule CRUD
@@ -201,6 +202,69 @@ public class PreventiveMaintenanceService {
         MaintenancePolicyRule rule = ruleRepository.findByIdAndHospitalId(id, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance rule not found or access denied"));
         return MaintenanceRuleResponse.from(rule, resolveEquipmentName(rule));
+    }
+
+    /**
+     * Automatically deactivates all active INDIVIDUAL_EQUIPMENT maintenance policy rules associated
+     * with an equipment record when that equipment is decommissioned or disposed.
+     *
+     * @param equipmentId target equipment record ID
+     * @param hospitalId  owning hospital ID
+     * @param username    actor or system initiator
+     * @return list of deactivated rules
+     */
+    @Transactional
+    public List<MaintenancePolicyRule> deactivateRulesForDecommissionedEquipment(
+            Long equipmentId,
+            Long hospitalId,
+            String username
+    ) {
+        if (equipmentId == null || hospitalId == null) {
+            return List.of();
+        }
+
+        List<MaintenancePolicyRule> activeRules = ruleRepository
+                .findByHospitalIdAndEquipmentRecordIdAndActiveTrue(hospitalId, equipmentId);
+        if (activeRules.isEmpty()) {
+            return List.of();
+        }
+
+        List<MaintenancePolicyRule> updatedRules = new ArrayList<>();
+        String actor = username != null && !username.isBlank() ? username.trim() : "SYSTEM";
+
+        for (MaintenancePolicyRule rule : activeRules) {
+            MaintenancePolicyStatus previousStatus = rule.getStatus() != null
+                    ? rule.getStatus()
+                    : MaintenancePolicyStatus.ACTIVE;
+
+            rule.setActive(false);
+            rule.setStatus(MaintenancePolicyStatus.ARCHIVED);
+            rule.setUpdatedAt(LocalDateTime.now());
+
+            MaintenancePolicyRule saved = ruleRepository.save(rule);
+            updatedRules.add(saved);
+
+            if (auditService != null) {
+                auditService.record(
+                        hospitalId,
+                        saved.getId(),
+                        com.medtrack.model.MaintenanceRuleAuditAction.DEACTIVATED,
+                        previousStatus,
+                        MaintenancePolicyStatus.ARCHIVED,
+                        actor,
+                        "Rule automatically deactivated due to equipment decommissioning/disposal (Equipment ID: "
+                                + equipmentId + ")"
+                );
+            }
+        }
+
+        log.info(
+                "Deactivated {} maintenance policy rule(s) for decommissioned equipment {} in hospital {}",
+                updatedRules.size(),
+                equipmentId,
+                hospitalId
+        );
+        return List.copyOf(updatedRules);
     }
 
     // ------------------------------------------------------------------
@@ -802,8 +866,10 @@ public class PreventiveMaintenanceService {
         return switch (frequency) {
             case DAILY -> anchor.plusDays(step);
             case WEEKLY -> anchor.plusWeeks(step);
+            case BIWEEKLY -> anchor.plusWeeks(2L * step);
             case MONTHLY -> anchor.plusMonths(step);
             case QUARTERLY -> anchor.plusMonths(3L * step);
+            case SEMIANNUAL -> anchor.plusMonths(6L * step);
             case YEARLY -> anchor.plusYears(step);
             case CUSTOM -> anchor.plusDays(
                     (long) step * (rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7));

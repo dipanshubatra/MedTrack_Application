@@ -60,8 +60,7 @@ class AnalyticsWarrantyEligibilityTest {
 
     @BeforeEach
     void setUp() {
-        Hospital hospital = Hospital.builder().id(HOSPITAL_ID).name("Riverside Medical").build();
-        when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.existsById(HOSPITAL_ID)).thenReturn(true);
 
         // Everything the method touches beyond the warranty count is stubbed to an empty result so
         // each assertion below is about the warranty path alone.
@@ -77,10 +76,10 @@ class AnalyticsWarrantyEligibilityTest {
                 HOSPITAL_ID, MaintenanceStatus.COMPLETED)).thenReturn(null);
         lenient().when(taskRepository.countByHospitalIdAndStatusNotAndPriority(
                 HOSPITAL_ID, MaintenanceStatus.COMPLETED, "Critical")).thenReturn(0L);
-        lenient().when(orderRepository.sumTotalCostByHospitalAndShippingStatus(
-                "Riverside Medical", "Delivered")).thenReturn(null);
-        lenient().when(orderRepository.findByHospitalAndShippingStatus(
-                "Riverside Medical", "Delivered")).thenReturn(List.of());
+        lenient().when(orderRepository.sumTotalCostByHospitalIdAndShippingStatus(
+                HOSPITAL_ID, "Delivered")).thenReturn(null);
+        lenient().when(orderRepository.findByHospitalIdAndShippingStatus(
+                HOSPITAL_ID, "Delivered")).thenReturn(List.of());
     }
 
     @Test
