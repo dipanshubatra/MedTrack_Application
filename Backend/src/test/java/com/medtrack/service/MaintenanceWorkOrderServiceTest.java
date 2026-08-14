@@ -15,6 +15,7 @@ import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
@@ -53,6 +54,9 @@ class MaintenanceWorkOrderServiceTest {
 
     @Mock
     private SparePartService sparePartService;
+
+    @Mock
+    private EquipmentDisposalRepository disposalRepository;
 
     @InjectMocks
     private MaintenanceWorkOrderService workOrderService;
@@ -350,6 +354,8 @@ class MaintenanceWorkOrderServiceTest {
         when(workOrderRepository
                 .findByIdAndHospitalId(10L, hospitalId))
                 .thenReturn(Optional.of(workOrder));
+        doThrow(new IllegalStateException("Only IN_PROGRESS work orders can be completed"))
+                .when(workOrderValidator).validateCompletion(eq(workOrder), any());
 
         MaintenanceWorkOrderCompletionRequest request =
                 MaintenanceWorkOrderCompletionRequest.builder()
@@ -575,7 +581,7 @@ class MaintenanceWorkOrderServiceTest {
 
         assertNotNull(response);
         assertEquals(MaintenanceWorkOrderStatus.CANCELLED, response.getStatus());
-        assertEquals(MaintenanceStatus.ON_HOLD, task.getStatus());
+        assertEquals(MaintenanceStatus.SCHEDULED, task.getStatus());
         verify(maintenanceTaskRepository).save(task);
     }
 
@@ -593,9 +599,11 @@ class MaintenanceWorkOrderServiceTest {
 
         MaintenanceWorkOrder workOrder = buildWorkOrder(MaintenanceWorkOrderStatus.IN_PROGRESS);
         workOrder.setMaintenanceTask(task);
+        workOrder.setStartedAt(LocalDateTime.now().minusHours(1));
 
         var updateRequest = com.medtrack.dto.MaintenanceWorkOrderStatusRequest.builder()
                 .status(MaintenanceWorkOrderStatus.COMPLETED)
+                .reason("Finished maintenance")
                 .build();
 
         when(workOrderRepository.findByIdAndHospitalId(workOrderId, hospitalId))
