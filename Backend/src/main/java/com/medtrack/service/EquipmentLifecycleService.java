@@ -233,9 +233,15 @@ public class EquipmentLifecycleService {
             equipment.setLocationEffectiveDate(action.getEffectiveDate());
         } else if (action.getActionType() == EquipmentLifecycleActionType.RETIREMENT) {
             equipment.setStatus(EquipmentStatus.RETIRED);
+            equipment.setLocation(null);
+            equipment.setRoomLocation(null);
+            equipment.setWardLocation(null);
             deactivateMaintenanceRules(equipment, action.getApprovedBy());
         } else if (action.getActionType() == EquipmentLifecycleActionType.DISPOSAL) {
             equipment.setStatus(EquipmentStatus.DISPOSED);
+            equipment.setLocation(null);
+            equipment.setRoomLocation(null);
+            equipment.setWardLocation(null);
             deactivateMaintenanceRules(equipment, action.getApprovedBy());
         } else if (action.getActionType() == EquipmentLifecycleActionType.REPLACEMENT) {
             if (action.getReplacementEquipment() == null) {
@@ -243,6 +249,9 @@ public class EquipmentLifecycleService {
             }
             equipment.setReplacementEquipment(action.getReplacementEquipment());
             equipment.setStatus(EquipmentStatus.RETIRED);
+            equipment.setLocation(null);
+            equipment.setRoomLocation(null);
+            equipment.setWardLocation(null);
             deactivateMaintenanceRules(equipment, action.getApprovedBy());
         }
     }

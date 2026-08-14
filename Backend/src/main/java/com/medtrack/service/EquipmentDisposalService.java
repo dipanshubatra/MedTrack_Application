@@ -272,6 +272,9 @@ public class EquipmentDisposalService {
 
         Equipment equipment = disposal.getEquipment();
         equipment.setStatus(EquipmentStatus.DISPOSED);
+        equipment.setLocation(null);
+        equipment.setRoomLocation(null);
+        equipment.setWardLocation(null);
         equipmentRepository.save(equipment);
 
         if (preventiveMaintenanceService != null && equipment.getId() != null && disposal.getHospital() != null) {
