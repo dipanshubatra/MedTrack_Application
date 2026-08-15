@@ -407,15 +407,13 @@ public class EquipmentController {
 
     @GetMapping("/export")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<byte[]> exportEquipment(Principal principal) {
+    public void exportEquipment(Principal principal, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        response.setContentType("text/csv");
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=equipment.csv");
 
-        byte[] csv = equipmentService.exportEquipmentCsv(principal.getName());
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=equipment.csv")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csv);
+        try (java.io.PrintWriter writer = response.getWriter()) {
+            equipmentService.exportEquipmentCsv(principal.getName(), writer);
+        }
     }
 
     /**

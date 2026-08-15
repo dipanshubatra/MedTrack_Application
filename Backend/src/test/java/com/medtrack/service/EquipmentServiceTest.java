@@ -630,8 +630,8 @@ public class EquipmentServiceTest {
     void exportEquipmentCsv_IncludesFinanceColumns() {
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
         when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
-        when(equipmentRepository.findByHospitalId(mockHospital.getId()))
-                .thenReturn(Collections.singletonList(mockEquipment));
+        when(equipmentRepository.findStreamByHospitalId(mockHospital.getId()))
+                .thenReturn(java.util.stream.Stream.of(mockEquipment));
 
         mockEquipment.setPurchaseCost(new BigDecimal("250000.00"));
         mockEquipment.setUsefulLifeYears(10);

@@ -1660,40 +1660,47 @@ public class EquipmentService {
      * @return UTF-8 encoded CSV, prefixed with a byte order mark for Excel
      */
     public byte[] exportEquipmentCsv(String username) {
-        Hospital hospital = getHospitalForUser(username);
-        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
-
-        StringBuilder csv = new StringBuilder(CsvSupport.UTF8_BOM);
-        csv.append(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
-
-        for (Equipment equipment : equipmentList) {
-            csv.append(CsvSupport.encodeRow(
-                    equipment.getEquipmentCode(),
-                    equipment.getName(),
-                    equipment.getModel(),
-                    equipment.getSerialNumber(),
-                    equipment.getDepartment(),
-                    // Enum constants, not display names. The import accepts both, so the round
-                    // trip works either way, but the constant is the stable identifier.
-                    equipment.getCategory(),
-                    equipment.getStatus(),
-                    equipment.getPurchaseDate(),
-                    equipment.getWarrantyExpiry(),
-                    // Depreciation & valuation columns, so an export can feed an accounting
-                    // package or round-trip through the import without losing the finance data.
-                    equipment.getPurchaseCost(),
-                    equipment.getUsefulLifeYears(),
-                    equipment.getDepreciationMethod(),
-                    // Warranty & service contract columns (issue #703), so the report export
-                    // carries the full coverage picture and round-trips through the import.
-                    equipment.getWarrantyProvider(),
-                    equipment.getWarrantyContractNumber(),
-                    equipment.getWarrantyStartDate(),
-                    equipment.getWarrantyCoverageType(),
-                    equipment.getWarrantyTerms()));
+        try (java.io.StringWriter sw = new java.io.StringWriter()) {
+            exportEquipmentCsv(username, sw);
+            return sw.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to export equipment", e);
         }
+    }
 
-        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public void exportEquipmentCsv(String username, java.io.Writer writer) throws java.io.IOException {
+        Hospital hospital = getHospitalForUser(username);
+
+        writer.write(CsvSupport.UTF8_BOM);
+        writer.write(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
+
+        try (java.util.stream.Stream<Equipment> equipmentStream = equipmentRepository.findStreamByHospitalId(hospital.getId())) {
+            equipmentStream.forEach(equipment -> {
+                try {
+                    writer.write(CsvSupport.encodeRow(
+                            equipment.getEquipmentCode(),
+                            equipment.getName(),
+                            equipment.getModel(),
+                            equipment.getSerialNumber(),
+                            equipment.getDepartment(),
+                            equipment.getCategory(),
+                            equipment.getStatus(),
+                            equipment.getPurchaseDate(),
+                            equipment.getWarrantyExpiry(),
+                            equipment.getPurchaseCost(),
+                            equipment.getUsefulLifeYears(),
+                            equipment.getDepreciationMethod(),
+                            equipment.getWarrantyProvider(),
+                            equipment.getWarrantyContractNumber(),
+                            equipment.getWarrantyStartDate(),
+                            equipment.getWarrantyCoverageType(),
+                            equipment.getWarrantyTerms()));
+                } catch (java.io.IOException e) {
+                    throw new RuntimeException("Failed to write CSV row", e);
+                }
+            });
+        }
     }
 
     /**
