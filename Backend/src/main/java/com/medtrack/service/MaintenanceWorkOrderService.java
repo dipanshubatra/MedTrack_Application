@@ -94,6 +94,8 @@ public class MaintenanceWorkOrderService {
 
         validateEquipmentIsServiceable(equipment);
 
+        workOrderValidator.validateCreationDates(request);
+
         MaintenanceTask maintenanceTask = null;
 
         if (request.getMaintenanceTaskId() != null) {
