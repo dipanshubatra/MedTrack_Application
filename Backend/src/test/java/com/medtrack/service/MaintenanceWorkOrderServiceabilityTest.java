@@ -7,6 +7,7 @@ import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
@@ -61,15 +62,30 @@ class MaintenanceWorkOrderServiceabilityTest {
     private UserRepository userRepository;
 
     @Mock
+    private SparePartService sparePartService;
+
+    @Mock
+    private com.medtrack.repository.EquipmentDisposalRepository disposalRepository;
+
+    @Spy
     private MaintenanceWorkOrderValidator workOrderValidator;
 
-    @InjectMocks
     private MaintenanceWorkOrderService workOrderService;
 
     private Equipment equipment;
 
     @BeforeEach
     void setUp() {
+        workOrderService = new MaintenanceWorkOrderService(
+                workOrderRepository,
+                equipmentRepository,
+                maintenanceTaskRepository,
+                userRepository,
+                workOrderValidator,
+                disposalRepository,
+                sparePartService
+        );
+
         equipment = Equipment.builder()
                 .id(EQUIPMENT_ID)
                 .equipmentCode("EQ-100")

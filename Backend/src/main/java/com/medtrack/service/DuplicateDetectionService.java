@@ -65,12 +65,24 @@ public class DuplicateDetectionService {
             "UPDATE maintenance_policy_rules SET equipment_record_id = :keep "
                     + "WHERE equipment_record_id = :merge",
             "UPDATE equipment_audit SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE equipment_audit_log SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE software_telemetry_logs SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE security_incidents SET equipment_id = :keep WHERE equipment_id = :merge",
             "UPDATE equipment SET replacement_equipment_id = :keep WHERE replacement_equipment_id = :merge",
             "UPDATE equipment_lifecycle_actions SET replacement_equipment_id = :keep "
-                    + "WHERE replacement_equipment_id = :merge");
+                    + "WHERE replacement_equipment_id = :merge",
+            "UPDATE software_telemetry_logs SET equipment_id = :keep WHERE equipment_id = :merge",
+            "UPDATE security_incidents SET equipment_id = :keep WHERE equipment_id = :merge");
 
     private static final double SERIAL_THRESHOLD = 0.75;
     private static final double CODE_THRESHOLD = 0.75;
+
+    /**
+     * The bar a name/model pair has to clear. Higher than the identifier thresholds because a name
+     * and a model are descriptive rather than unique - plenty of genuinely distinct assets are
+     * close on both - so the evidence has to be stronger before it is called a duplicate. See
+     * {@link #nameModelSimilarity}, which is what this is now actually applied to.
+     */
     private static final double NAME_MODEL_THRESHOLD = 0.8;
     private static final double EXACT_SIMILARITY = 0.999;
 
@@ -136,12 +148,10 @@ public class DuplicateDetectionService {
                 matchedOn = "ASSET_CODE";
             }
         }
-        if (!isBlank(name) && !isBlank(existing.getName())) {
-            double sim = StringSimilarity.similarity(name, existing.getName());
-            if (sim > best) {
-                best = sim;
-                matchedOn = "NAME_MODEL";
-            }
+        Double nameModelSimilarity = nameModelSimilarity(name, model, existing);
+        if (nameModelSimilarity != null && nameModelSimilarity > best) {
+            best = nameModelSimilarity;
+            matchedOn = "NAME_MODEL";
         }
         if (best == 0.0 || best < thresholdFor(matchedOn)) {
             return null;
@@ -157,6 +167,42 @@ public class DuplicateDetectionService {
                 .similarity(Math.round(best * 1000.0) / 1000.0)
                 .matchedOn(matchedOn)
                 .build();
+    }
+
+    /**
+     * How alike two assets are on name <em>and</em> model, or {@code null} when the pair cannot be
+     * compared that way at all.
+     *
+     * <p>The rule this replaces scored the name alone while still calling itself {@code NAME_MODEL}
+     * and still applying {@link #NAME_MODEL_THRESHOLD}, a bar chosen for a combined comparison.
+     * {@code model} was taken as a parameter and never read. Hospitals name assets by device type,
+     * so a Hamilton C6 and a Dräger Evita V300 - both named {@code Ventilator}, different serials,
+     * different asset codes, plainly different machines - scored {@code 1.0} and came back marked
+     * {@code exact}. The warning fired on every second infusion pump and defibrillator in the
+     * inventory, and a warning that is usually wrong stops being read, which costs the real
+     * duplicates it exists to catch.</p>
+     *
+     * <p>The score is the <em>lower</em> of the two similarities, not their average. A duplicate is
+     * a pair that matches on both parts: {@code MRI Scanner / Signa HDxt} against
+     * {@code MRI Scaner / Signa HDxt} is a typo and still scores high, while a shared name with an
+     * unrelated model collapses to the model's low score and falls out. Averaging would let a
+     * perfect name carry a mismatched model over the bar, which is the behaviour being fixed.</p>
+     *
+     * <p>{@code null} - no name/model opinion - when either side is missing a name or a model. That
+     * is deliberately the same precondition {@link #findDuplicateGroups} applies when it buckets on
+     * {@code name|model}, so the entry-time warning and the reconciliation list now agree about what
+     * a name/model duplicate is instead of contradicting each other. Assets with no model recorded
+     * are still matched on serial number and asset code, which are the identifiers that actually
+     * identify.</p>
+     */
+    private Double nameModelSimilarity(String name, String model, Equipment existing) {
+        if (isBlank(name) || isBlank(model)
+                || isBlank(existing.getName()) || isBlank(existing.getModel())) {
+            return null;
+        }
+        return Math.min(
+                StringSimilarity.similarity(name, existing.getName()),
+                StringSimilarity.similarity(model, existing.getModel()));
     }
 
     private double thresholdFor(String matchedOn) {
@@ -296,6 +342,7 @@ public class DuplicateDetectionService {
             reassign(statement, keepId, mergeId);
         }
         reassignTaskMetadata(keepId, mergeId, keep.getEquipmentCode(), keep.getName());
+        verifyAndAuditReassignments(keepId, mergeId);
 
         Equipment savedKeep = equipmentRepository.save(keep);
 
@@ -403,6 +450,31 @@ public class DuplicateDetectionService {
                 .setParameter("keepName", keepName != null ? keepName : "")
                 .setParameter("merge", mergeId)
                 .executeUpdate();
+    }
+
+    /**
+     * Verifies that telemetry logs and security incidents were successfully reassigned to the surviving
+     * equipment record during a merge.
+     */
+    private void verifyAndAuditReassignments(Long keepId, Long mergeId) {
+        if (keepId == null || mergeId == null) {
+            return;
+        }
+        long telemetryCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM software_telemetry_logs WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        long incidentCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        if (telemetryCount > 0 || incidentCount > 0) {
+            org.slf4j.LoggerFactory.getLogger(DuplicateDetectionService.class)
+                    .info("Merged equipment child records for keepId={}, mergeId={}: telemetryLogs={}, securityIncidents={}",
+                            keepId, mergeId, telemetryCount, incidentCount);
+        }
     }
 
     private boolean isBlank(String value) {

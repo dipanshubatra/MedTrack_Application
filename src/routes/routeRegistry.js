@@ -73,6 +73,13 @@ const TenderList = lazy(() => import("../pages/hospital/TenderList"));
 const TenderCreate = lazy(() => import("../pages/hospital/TenderCreate"));
 const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
+const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
+const SecurityComplianceHub = lazy(() => import("../pages/security/SecurityComplianceHub"));
+const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
+const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
+const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
+
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
 const EnterpriseSsoPage = lazy(() => import("../pages/auth/EnterpriseSsoPage"));
@@ -140,6 +147,10 @@ const HOSPITAL_ONLY = ["hospital"];
  * @property {string|string[]} access PUBLIC, AUTHENTICATED, or an array of permitted roles
  * @property {boolean}  chrome    whether the navbar and footer are shown (defaults to true)
  * @property {string}   param     name of the dynamic path segment, if the route takes one
+ * @property {string}   permission fine-grained permission code the session must hold
+ *              (see src/security/permissions.js). Enforced by AppRoutes after the
+ *              role check, so a permission revoked through the RBAC console locks
+ *              the route immediately. Optional - most routes are role-gated only.
  */
 export const ROUTES = [
   // --- public marketing and content -----------------------------------------
@@ -177,11 +188,11 @@ export const ROUTES = [
 
   // --- hospital ---------------------------------------------------------------
   { page: "dashboard", slugs: ["dashboard"], component: Dashboard, access: AUTHENTICATED, chrome: false },
-  { page: "equipment", slugs: ["equipment"], component: EquipmentList, access: AUTHENTICATED },
-  { page: "maintenance", slugs: ["maintenance"], component: MaintenanceSchedule, access: AUTHENTICATED },
+  { page: "equipment", slugs: ["equipment"], component: EquipmentList, access: AUTHENTICATED, permission: "READ_EQUIPMENT" },
+  { page: "maintenance", slugs: ["maintenance"], component: MaintenanceSchedule, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
   { page: "analytics", slugs: ["analytics"], component: AnalyticsDashboard, access: HOSPITAL_ONLY },
-  { page: "add-equipment", slugs: ["add-equipment"], component: AddEquipmentForm, access: HOSPITAL_ONLY },
-  { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId" },
+  { page: "add-equipment", slugs: ["add-equipment"], component: AddEquipmentForm, access: HOSPITAL_ONLY, permission: "WRITE_EQUIPMENT" },
+  { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId", permission: "WRITE_EQUIPMENT" },
   { page: "schedule-maintenance", slugs: ["schedule-maintenance"], component: ScheduleMaintenancePage, access: HOSPITAL_ONLY },
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
   { page: "equipment-lifecycle", slugs: ["equipment-lifecycle", "lifecycle"], component: EquipmentLifecyclePredictor, access: HOSPITAL_ONLY },
@@ -196,9 +207,21 @@ export const ROUTES = [
   { page: "tender-create", slugs: ["tender-create", "new-tender"], component: TenderCreate, access: HOSPITAL_ONLY },
   { page: "tender-detail", slugs: ["tender"], component: TenderDetail, access: HOSPITAL_ONLY, param: "tenderId" },
 
+  // --- telehealth & remote patient management consoles ------------------------
+  { page: "telehealth", slugs: ["telehealth", "remote-care"], component: TelehealthHub, access: AUTHENTICATED },
+
+  // --- enterprise security & compliance consoles -------------------------------
+  { page: "security-compliance", slugs: ["security-compliance", "security-hub"], component: SecurityComplianceHub, access: AUTHENTICATED },
+
+  // --- clinical / operational hub consoles --------------------------------------
+  { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
+  { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
+  { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
+
   // --- technician -------------------------------------------------------------
-  { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
-  { page: "update-task", slugs: ["update-task", "updatetask"], component: UpdateTask, access: AUTHENTICATED, param: "task" },
+  { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
+  { page: "update-task", slugs: ["update-task", "updatetask"], component: UpdateTask, access: AUTHENTICATED, param: "task", permission: "UPDATE_MAINTENANCE" },
 
   // --- supplier ---------------------------------------------------------------
   { page: "orders", slugs: ["orders"], component: OrdersList, access: AUTHENTICATED },

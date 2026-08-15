@@ -210,7 +210,8 @@ class UserResolutionServiceTest {
                     null,
                     equipmentRepository,
                     hospitalRepository,
-                    userRepository
+                    userRepository,
+                    null
             );
 
             when(userRepository.findByUsername("hospital@medtrack.com")).thenReturn(Optional.empty());
@@ -294,7 +295,9 @@ class UserResolutionServiceTest {
                     lifecycleRepository,
                     equipmentRepository,
                     hospitalRepository,
-                    userRepository
+                    userRepository,
+                    null,
+                    null
             );
 
             when(userRepository.findByUsername("hospital@medtrack.com")).thenReturn(Optional.empty());

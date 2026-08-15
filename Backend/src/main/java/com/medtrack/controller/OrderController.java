@@ -19,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Sort;
 
@@ -43,8 +44,27 @@ public class OrderController {
      */
     @GetMapping
     public ResponseEntity<PagedResponse<EquipmentOrder>> getAllOrders(
+            @RequestParam(required = false) String status,
             @PageableDefault(sort = "orderDate") Pageable pageable) {
-        return ResponseEntity.ok(PagedResponse.of(orderService.getAllOrders(pageable)));
+
+        if (pageable.getPageNumber() < 0 || pageable.getPageSize() <= 0) {
+            throw new IllegalArgumentException("Page number must be >= 0 and page size must be > 0");
+        }
+        if (pageable.getPageSize() > 100) {
+            throw new IllegalArgumentException("Page size must not exceed 100");
+        }
+
+        Set<String> allowedSortProperties = Set.of(
+                "id", "orderCode", "equipmentName", "quantity", 
+                "unitCost", "totalCost", "status", "orderDate", "shippingStatus");
+
+        for (Sort.Order order : pageable.getSort()) {
+            if (!allowedSortProperties.contains(order.getProperty())) {
+                throw new IllegalArgumentException("Invalid sort property: " + order.getProperty());
+            }
+        }
+
+        return ResponseEntity.ok(PagedResponse.of(orderService.getAllOrders(status, pageable)));
     }
 
     /**
