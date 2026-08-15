@@ -62,12 +62,14 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
+import com.medtrack.model.MaintenanceWorkOrderType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -134,6 +136,7 @@ class DuplicateDetectionTest {
     private RiskEvaluationEventRepository riskEvaluationEventRepository;
 
     private String username;
+    private User ownerUser;
     private Hospital hospital;
     private User testUser;
 

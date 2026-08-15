@@ -17,6 +17,8 @@ import com.medtrack.model.FacilityLocation;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
+import com.medtrack.model.MaintenanceWorkOrder;
+import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentLifecycleActionRepository;
 import com.medtrack.repository.EquipmentLocationHistoryRepository;
@@ -25,6 +27,7 @@ import com.medtrack.repository.FacilityLocationRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceScheduleRevisionRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
+import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,6 +83,9 @@ class EquipmentLifecycleDisposalValidationTest {
 
     @Mock
     private MaintenanceTaskRepository taskRepository;
+
+    @Mock
+    private MaintenanceWorkOrderRepository workOrderRepository;
 
     @Mock
     private MaintenanceScheduleRevisionRepository revisionRepository;
@@ -209,5 +215,256 @@ class EquipmentLifecycleDisposalValidationTest {
         verify(revisionRepository, never()).save(any());
         verify(activityService, never()).recordScheduleAmendment(any(), any(), any());
         assertThat(task.getDeadline()).isEqualTo(LocalDate.now().plusDays(10));
+    }
+
+    @Test
+    @DisplayName("createAction should reject retirement action when equipment has active work orders")
+    void createActionRejectsRetirementWhenActiveWorkOrdersExist() {
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+
+        MaintenanceWorkOrder activeWorkOrder = MaintenanceWorkOrder.builder()
+                .id(1L)
+                .workOrderCode("WO-100")
+                .hospitalId(HOSPITAL_ID)
+                .equipment(equipment)
+                .status(MaintenanceWorkOrderStatus.IN_PROGRESS)
+                .build();
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID))
+                .thenReturn(List.of(activeWorkOrder));
+
+        EquipmentLifecycleActionRequest request = new EquipmentLifecycleActionRequest();
+        request.setActionType(EquipmentLifecycleActionType.RETIREMENT);
+
+        assertThatThrownBy(() -> lifecycleService.createAction(EQUIPMENT_ID, request, USERNAME))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("EQ-100")
+                .hasMessageContaining("active maintenance work orders")
+                .hasMessageContaining("WO-100");
+
+        verify(lifecycleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createAction should reject disposal action when equipment has scheduled tasks")
+    void createActionRejectsDisposalWhenActiveTasksExist() {
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID)).thenReturn(List.of());
+
+        MaintenanceTask activeTask = MaintenanceTask.builder()
+                .id(20L)
+                .taskCode("MNT-200")
+                .hospitalId(HOSPITAL_ID)
+                .equipmentRecord(equipment)
+                .status(MaintenanceStatus.SCHEDULED)
+                .build();
+        when(taskRepository.findByHospitalIdAndEquipmentRecordId(HOSPITAL_ID, EQUIPMENT_ID))
+                .thenReturn(List.of(activeTask));
+
+        EquipmentLifecycleActionRequest request = new EquipmentLifecycleActionRequest();
+        request.setActionType(EquipmentLifecycleActionType.DISPOSAL);
+
+        assertThatThrownBy(() -> lifecycleService.createAction(EQUIPMENT_ID, request, USERNAME))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("EQ-100")
+                .hasMessageContaining("scheduled maintenance tasks")
+                .hasMessageContaining("MNT-200");
+
+        verify(lifecycleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("completeAction should reject retirement action when equipment has active work orders")
+    void completeActionRejectsRetirementWhenActiveWorkOrdersExist() {
+        EquipmentLifecycleAction action = EquipmentLifecycleAction.builder()
+                .id(15L)
+                .equipment(equipment)
+                .hospital(hospital)
+                .actionType(EquipmentLifecycleActionType.RETIREMENT)
+                .status(EquipmentLifecycleStatus.APPROVED)
+                .approvedBy(USERNAME)
+                .build();
+
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(lifecycleRepository.findByIdAndHospitalId(15L, HOSPITAL_ID)).thenReturn(Optional.of(action));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+
+        MaintenanceWorkOrder activeWorkOrder = MaintenanceWorkOrder.builder()
+                .id(2L)
+                .workOrderCode("WO-200")
+                .hospitalId(HOSPITAL_ID)
+                .equipment(equipment)
+                .status(MaintenanceWorkOrderStatus.ASSIGNED)
+                .build();
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID))
+                .thenReturn(List.of(activeWorkOrder));
+
+        assertThatThrownBy(() -> lifecycleService.completeAction(15L, USERNAME))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("EQ-100")
+                .hasMessageContaining("active maintenance work orders");
+
+        verify(lifecycleRepository, never()).save(any());
+        assertThat(equipment.getStatus()).isEqualTo(EquipmentStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("completeAction should reject disposal action when equipment has scheduled tasks")
+    void completeActionRejectsDisposalWhenActiveTasksExist() {
+        EquipmentLifecycleAction action = EquipmentLifecycleAction.builder()
+                .id(16L)
+                .equipment(equipment)
+                .hospital(hospital)
+                .actionType(EquipmentLifecycleActionType.DISPOSAL)
+                .status(EquipmentLifecycleStatus.APPROVED)
+                .approvedBy(USERNAME)
+                .build();
+
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(lifecycleRepository.findByIdAndHospitalId(16L, HOSPITAL_ID)).thenReturn(Optional.of(action));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID)).thenReturn(List.of());
+
+        MaintenanceTask activeTask = MaintenanceTask.builder()
+                .id(21L)
+                .taskCode("MNT-201")
+                .hospitalId(HOSPITAL_ID)
+                .equipmentRecord(equipment)
+                .status(MaintenanceStatus.IN_PROGRESS)
+                .build();
+        when(taskRepository.findByHospitalIdAndEquipmentRecordId(HOSPITAL_ID, EQUIPMENT_ID))
+                .thenReturn(List.of(activeTask));
+
+        assertThatThrownBy(() -> lifecycleService.completeAction(16L, USERNAME))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("EQ-100")
+                .hasMessageContaining("scheduled maintenance tasks");
+
+        verify(lifecycleRepository, never()).save(any());
+        assertThat(equipment.getStatus()).isEqualTo(EquipmentStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("createAction should succeed for retirement action when no active maintenance exists")
+    void createActionAllowsRetirementWhenNoActiveMaintenanceExists() {
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID)).thenReturn(List.of());
+        when(taskRepository.findByHospitalIdAndEquipmentRecordId(HOSPITAL_ID, EQUIPMENT_ID)).thenReturn(List.of());
+        when(lifecycleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        EquipmentLifecycleActionRequest request = new EquipmentLifecycleActionRequest();
+        request.setActionType(EquipmentLifecycleActionType.RETIREMENT);
+
+        EquipmentLifecycleActionResponse response = lifecycleService.createAction(EQUIPMENT_ID, request, USERNAME);
+
+        assertThat(response).isNotNull();
+        verify(lifecycleRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("completeAction should succeed for disposal action when no active maintenance exists")
+    void completeActionAllowsDisposalWhenNoActiveMaintenanceExists() {
+        EquipmentLifecycleAction action = EquipmentLifecycleAction.builder()
+                .id(17L)
+                .equipment(equipment)
+                .hospital(hospital)
+                .actionType(EquipmentLifecycleActionType.DISPOSAL)
+                .status(EquipmentLifecycleStatus.APPROVED)
+                .approvedBy(USERNAME)
+                .build();
+
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(lifecycleRepository.findByIdAndHospitalId(17L, HOSPITAL_ID)).thenReturn(Optional.of(action));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID)).thenReturn(List.of());
+        when(taskRepository.findByHospitalIdAndEquipmentRecordId(HOSPITAL_ID, EQUIPMENT_ID)).thenReturn(List.of());
+        when(lifecycleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        EquipmentLifecycleActionResponse response = lifecycleService.completeAction(17L, USERNAME);
+
+        assertThat(response).isNotNull();
+        assertThat(equipment.getStatus()).isEqualTo(EquipmentStatus.DISPOSED);
+        verify(lifecycleRepository).save(any());
+        verify(preventiveMaintenanceService).deactivateRulesForDecommissionedEquipment(EQUIPMENT_ID, HOSPITAL_ID, USERNAME);
+    }
+
+    @Test
+    @DisplayName("createAction should reject replacement action when equipment has active work orders")
+    void createActionRejectsReplacementWhenActiveWorkOrdersExist() {
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(equipmentRepository.findByIdAndHospitalId(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(equipment));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+
+        MaintenanceWorkOrder activeWorkOrder = MaintenanceWorkOrder.builder()
+                .id(3L)
+                .workOrderCode("WO-300")
+                .hospitalId(HOSPITAL_ID)
+                .equipment(equipment)
+                .status(MaintenanceWorkOrderStatus.OPEN)
+                .build();
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID))
+                .thenReturn(List.of(activeWorkOrder));
+
+        EquipmentLifecycleActionRequest request = new EquipmentLifecycleActionRequest();
+        request.setActionType(EquipmentLifecycleActionType.REPLACEMENT);
+        request.setReplacementEquipmentId(REPLACEMENT_EQUIPMENT_ID);
+
+        assertThatThrownBy(() -> lifecycleService.createAction(EQUIPMENT_ID, request, USERNAME))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("EQ-100")
+                .hasMessageContaining("active maintenance work orders")
+                .hasMessageContaining("WO-300");
+
+        verify(lifecycleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("completeAction should reject replacement action when equipment has active tasks")
+    void completeActionRejectsReplacementWhenActiveTasksExist() {
+        EquipmentLifecycleAction action = EquipmentLifecycleAction.builder()
+                .id(18L)
+                .equipment(equipment)
+                .hospital(hospital)
+                .actionType(EquipmentLifecycleActionType.REPLACEMENT)
+                .status(EquipmentLifecycleStatus.APPROVED)
+                .replacementEquipment(replacementEquipment)
+                .approvedBy(USERNAME)
+                .build();
+
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByUserId(user.getId())).thenReturn(Optional.of(hospital));
+        when(lifecycleRepository.findByIdAndHospitalId(18L, HOSPITAL_ID)).thenReturn(Optional.of(action));
+        when(disposalRepository.findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(EQUIPMENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(workOrderRepository.findAllByHospitalIdAndEquipmentIdOrderByCreatedAtDesc(HOSPITAL_ID, EQUIPMENT_ID)).thenReturn(List.of());
+
+        MaintenanceTask activeTask = MaintenanceTask.builder()
+                .id(22L)
+                .taskCode("MNT-202")
+                .hospitalId(HOSPITAL_ID)
+                .equipmentRecord(equipment)
+                .status(MaintenanceStatus.NEEDS_PART)
+                .build();
+        when(taskRepository.findByHospitalIdAndEquipmentRecordId(HOSPITAL_ID, EQUIPMENT_ID))
+                .thenReturn(List.of(activeTask));
+
+        assertThatThrownBy(() -> lifecycleService.completeAction(18L, USERNAME))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("EQ-100")
+                .hasMessageContaining("scheduled maintenance tasks");
+
+        verify(lifecycleRepository, never()).save(any());
+        assertThat(equipment.getStatus()).isEqualTo(EquipmentStatus.ACTIVE);
     }
 }

@@ -114,7 +114,15 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
      * @param locationId the facility location to count occupants of
      * @return the number of live assets currently assigned there
      */
-    @Query("SELECT COUNT(e) FROM Equipment e WHERE e.location.id = :locationId")
+    @Query("""
+            SELECT COUNT(e)
+            FROM Equipment e
+            WHERE e.location.id = :locationId
+            AND e.status NOT IN (
+                com.medtrack.model.EquipmentStatus.RETIRED,
+                com.medtrack.model.EquipmentStatus.DISPOSED
+            )
+            """)
     long countByLocationId(@Param("locationId") Long locationId);
 
     /**
