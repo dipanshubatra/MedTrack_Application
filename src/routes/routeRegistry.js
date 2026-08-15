@@ -75,6 +75,13 @@ const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
 const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
 const SecurityComplianceHub = lazy(() => import("../pages/security/SecurityComplianceHub"));
+const ClinicalAIHub = lazy(() => import("../pages/clinical/ClinicalAIHub"));
+const BiomedicalAiGovernancePage = lazy(() => import("../pages/ai/BiomedicalAiGovernancePage"));
+const QuantumCryptoKmsVaultPage = lazy(() => import("../pages/security/QuantumCryptoKmsVaultPage"));
+const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/ConfidentialComputeEnclavePage"));
+const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
+const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
+const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
@@ -215,6 +222,15 @@ export const ROUTES = [
 
   // --- clinical / operational hub consoles --------------------------------------
   { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
+  { page: "icu-vitals-telemetry", slugs: ["icu-vitals-telemetry", "bedside-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
+  { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
+  { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
+  { page: "quantum-kms", slugs: ["quantum-kms", "kms-vault"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
+  { page: "confidential-compute", slugs: ["confidential-compute", "enclaves"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
+  { page: "ctem", slugs: ["ctem", "ctem-hub"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
+
+  // --- radiology imaging & PACS console ----------------------------------------
+  { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
