@@ -84,6 +84,7 @@ const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVital
 const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
 const BiomedicalAiGovernancePage = lazy(() => import("../pages/ai/BiomedicalAiGovernancePage"));
@@ -225,6 +226,9 @@ export const ROUTES = [
 
   // --- enterprise security & compliance consoles -------------------------------
   { page: "security-compliance", slugs: ["security-compliance", "security-hub"], component: SecurityComplianceHub, access: AUTHENTICATED },
+  { page: "confidential-compute", slugs: ["confidential-compute", "confidential-compute-enclave"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
+  { page: "ctem", slugs: ["ctem", "ctem-attack-surface"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
+  { page: "quantum-kms", slugs: ["quantum-kms", "quantum-crypto"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
 
   // --- clinical / operational hub consoles --------------------------------------
   { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
@@ -238,6 +242,7 @@ export const ROUTES = [
   // --- radiology imaging & PACS console ----------------------------------------
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
   { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
