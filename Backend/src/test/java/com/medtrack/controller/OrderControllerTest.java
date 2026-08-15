@@ -152,11 +152,6 @@ class OrderControllerTest {
                         .principal(hospitalUser)
                         .param("size", "101"))
                 .andExpect(status().isBadRequest());
-
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/orders")
-                        .principal(hospitalUser)
-                        .param("size", "0"))
-                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -67,6 +67,12 @@ class RateLimitingFilterTest {
         ReflectionTestUtils.setField(filter, "writeRefillTokens", writeCapacity);
         ReflectionTestUtils.setField(filter, "writeRefillDurationStr", "1m");
 
+        ReflectionTestUtils.setField(filter, "aiTechnicianCapacity", authCapacity);
+        ReflectionTestUtils.setField(filter, "aiTechnicianRefillDurationStr", "1m");
+
+        ReflectionTestUtils.setField(filter, "aiAdminCapacity", authCapacity);
+        ReflectionTestUtils.setField(filter, "aiAdminRefillDurationStr", "1m");
+
         ReflectionTestUtils.setField(filter, "trustedProxiesRaw", trustedProxies);
         ReflectionTestUtils.setField(filter, "maxTrackedClients", 1000);
         ReflectionTestUtils.setField(filter, "clientTtlStr", "10m");

@@ -357,11 +357,12 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         response.setCharacterEncoding("UTF-8");
 
         Map<String, Object> errorDetails = new LinkedHashMap<>();
-        errorDetails.put("timestamp", Instant.now().toString());
+        errorDetails.put("type", "about:blank");
+        errorDetails.put("title", HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
         errorDetails.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
-        errorDetails.put("error", HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
-        errorDetails.put("message", "AI Assistant request rate limit exceeded. Please try again later.");
+        errorDetails.put("detail", "AI Assistant request rate limit exceeded. Please try again later.");
         errorDetails.put("path", request.getRequestURI());
+        errorDetails.put("timestamp", Instant.now().toString());
 
         objectMapper.writeValue(response.getWriter(), errorDetails);
         response.getWriter().flush();
