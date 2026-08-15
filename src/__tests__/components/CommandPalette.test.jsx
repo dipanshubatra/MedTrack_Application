@@ -91,9 +91,12 @@ describe("CommandPalette", () => {
     renderPalette({ onNavigate, authValue: hospitalAuth });
     const input = screen.getByRole("textbox", { name: "Search pages and actions" });
     fireEvent.change(input, { target: { value: "equip" } });
+    // "equip" ranks label-prefix matches first: "Equipment" then "Equipment Lifecycle"
+    // (the equipment-lifecycle page's humanised label; ties break alphabetically), and only
+    // then substring matches such as "Add Equipment". ArrowDown moves to the second result.
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(onNavigate).toHaveBeenCalledWith("add-equipment");
+    expect(onNavigate).toHaveBeenCalledWith("equipment-lifecycle");
   });
 
   it("navigates when an option is clicked", () => {
