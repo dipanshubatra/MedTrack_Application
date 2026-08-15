@@ -84,4 +84,12 @@ public class SparePartController {
         sparePartService.deleteSparePart(id, authentication.getName());
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/bulk-import")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<com.medtrack.dto.SparePartImportSummary> bulkImport(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            Authentication authentication) {
+        return ResponseEntity.ok(sparePartService.bulkImport(file, authentication.getName()));
+    }
 }

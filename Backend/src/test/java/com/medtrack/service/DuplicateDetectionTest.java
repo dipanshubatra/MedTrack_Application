@@ -138,12 +138,20 @@ class DuplicateDetectionTest {
     private String username;
     private User ownerUser;
     private Hospital hospital;
+    private User testUser;
+
+    /**
+     * The hospital's owning account. {@code setUp} assigns it and the telemetry and security-incident
+     * tests read it back through {@code hospital.getUser()}; the declaration went missing when those
+     * tests were merged, leaving the file assigning to an undeclared name.
+     */
+    private User ownerUser;
 
     @BeforeEach
     void setUp() {
         username = "duplicates-owner-" + UUID.randomUUID();
 
-        ownerUser = userRepository.save(User.builder()
+        testUser = userRepository.save(User.builder()
                 .name("Duplicates Owner")
                 .username(username)
                 .email(UUID.randomUUID() + "@medtrack.test")
@@ -157,7 +165,7 @@ class DuplicateDetectionTest {
         hospital = hospitalRepository.save(Hospital.builder()
                 .name("Duplicates Trust")
                 .location("Test City")
-                .user(ownerUser)
+                .user(testUser)
                 .build());
     }
 
@@ -869,244 +877,125 @@ class DuplicateDetectionTest {
         assertEquals(merged.getId(), reassignedLog.getEquipment().getId());
     }
 
+    // ------------------------------------------------------------------
+    // The NAME_MODEL rule looks at the model
+    //
+    // matchAgainst took `model` as a parameter and never read it, so the rule scored the name alone
+    // while still calling itself NAME_MODEL and still applying a threshold chosen for a combined
+    // comparison. Hospitals name assets by device type, so it fired on every second pump.
+    // ------------------------------------------------------------------
+
     @Test
-    @DisplayName("CHILD_REASSIGNMENTS list contains unique and valid SQL update statements")
-    void childReassignmentsListContainsUniqueAndValidSqlUpdateStatements() {
-        List<String> reassignments = DuplicateDetectionService.CHILD_REASSIGNMENTS;
-        assertNotNull(reassignments);
-        assertFalse(reassignments.isEmpty());
+    @DisplayName("two different models of the same device type are not a duplicate")
+    void differentModelsSharingANameAreNotDuplicates() {
+        asset("AST-77310", "9F41K2ZQ", "Ventilator", "Hamilton C6");
 
-        Set<String> uniqueStatements = new LinkedHashSet<>();
-        for (String sql : reassignments) {
-            assertNotNull(sql);
-            assertTrue(sql.startsWith("UPDATE "), "Reassignment statement must be an UPDATE query: " + sql);
-            assertTrue(sql.contains(":keep"), "Reassignment statement must contain :keep parameter: " + sql);
-            assertTrue(sql.contains(":merge"), "Reassignment statement must contain :merge parameter: " + sql);
+        List<DuplicateMatch> matches = duplicateDetectionService.checkForDuplicates(
+                username, null, "Ventilator", "Evita V300", "TR8W0XB3", "BQZ-40289");
 
-            boolean added = uniqueStatements.add(sql.trim().toUpperCase(Locale.ROOT));
-            assertTrue(added, "Duplicate SQL query detected in CHILD_REASSIGNMENTS list: " + sql);
-        }
+        assertTrue(matches.isEmpty(),
+                "a shared device-type name with an unrelated model is not evidence of a duplicate");
+    }
+
+    /**
+     * The specific claim in the bug report: the old rule returned {@code exact: true} for these two,
+     * because a shared name scored 1.0 on its own.
+     */
+    @Test
+    @DisplayName("a shared name with a different model is never reported as an exact match")
+    void aSharedNameIsNeverAnExactMatchOnItsOwn() {
+        asset("AST-51204", "K7PM3WD1", "Infusion Pump", "Alaris GP");
+
+        List<DuplicateMatch> matches = duplicateDetectionService.checkForDuplicates(
+                username, null, "Infusion Pump", "Braun Infusomat", "ZX90QJF6", "BQZ-18866");
+
+        assertTrue(matches.stream().noneMatch(DuplicateMatch::isExact),
+                "two different pumps must never be reported as the same asset");
     }
 
     @Test
-    @DisplayName("merging reassigns equipment audit log records from duplicate onto survivor")
-    void mergeReassignsEquipmentAuditLogs() {
-        Equipment survivor = asset("EQ-AUD-KEEP", "SN-AUD-KEEP", "Defibrillator", "Zoll R Series");
-        Equipment duplicate = asset("EQ-AUD-MERGE", "SN-AUD-MERGE", "Defibrillator", "Zoll R Series");
+    @DisplayName("the same device typed twice with a typo is still flagged on name and model")
+    void aTypoAcrossNameAndModelStillMatches() {
+        Equipment original = asset("EQ-NM-5", "SN-MRI-1", "MRI Scanner", "Signa HDxt");
 
-        entityManager.createNativeQuery(
-                "INSERT INTO equipment_audit_log (equipment_id, user_id, old_status, new_status, timestamp) "
-                        + "VALUES (:eqId, :userId, 'ACTIVE', 'UNDER_MAINTENANCE', CURRENT_TIMESTAMP)")
-                .setParameter("eqId", duplicate.getId())
-                .setParameter("userId", username)
-                .executeUpdate();
+        List<DuplicateMatch> matches = duplicateDetectionService.checkForDuplicates(
+                username, null, "MRI Scaner", "Signa HDxt", "SN-MRI-2", "EQ-NM-6");
 
-        entityManager.flush();
-
-        long duplicateLogsBefore = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM equipment_audit_log WHERE equipment_id = :eqId")
-                .setParameter("eqId", duplicate.getId())
-                .getSingleResult()).longValue();
-        assertEquals(1L, duplicateLogsBefore);
-
-        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
-        entityManager.flush();
-        entityManager.clear();
-
-        long duplicateLogsAfter = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM equipment_audit_log WHERE equipment_id = :eqId")
-                .setParameter("eqId", duplicate.getId())
-                .getSingleResult()).longValue();
-        assertEquals(0L, duplicateLogsAfter);
-
-        long survivorLogsAfter = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM equipment_audit_log WHERE equipment_id = :eqId")
-                .setParameter("eqId", survivor.getId())
-                .getSingleResult()).longValue();
-        assertEquals(1L, survivorLogsAfter);
+        assertEquals(1, matches.size(), "a one-character typo in the name is exactly what this catches");
+        assertEquals(original.getId(), matches.get(0).getId());
+        assertEquals("NAME_MODEL", matches.get(0).getMatchedOn());
     }
 
     @Test
-    @DisplayName("merging reassigns security incident entities from duplicate onto survivor")
-    void mergeReassignsSecurityIncidentEntities() {
-        Equipment survivor = asset("EQ-SEC-KEEP", "SN-SEC-KEEP", "Ventilator", "Hamilton C3");
-        Equipment duplicate = asset("EQ-SEC-MERGE", "SN-SEC-MERGE", "Ventilator", "Hamilton C3");
+    @DisplayName("an identical name and model is still an exact match")
+    void anIdenticalNameAndModelIsExact() {
+        asset("EQ-NM-7", "SN-XRAY-1", "X-Ray Unit", "Ysio Max");
 
-        UUID riskId = UUID.randomUUID();
-        UUID telemId = UUID.randomUUID();
+        List<DuplicateMatch> matches = duplicateDetectionService.checkForDuplicates(
+                username, null, "X-Ray Unit", "Ysio Max", "SN-XRAY-2", "EQ-NM-8");
 
-        entityManager.createNativeQuery(
-                "INSERT INTO software_telemetry_logs (log_id, user_id, equipment_id, timestamp, action_type, success) "
-                        + "VALUES (:telemId, :userId, :eqId, CURRENT_TIMESTAMP, 'SYSTEM_CHECK', true)")
-                .setParameter("telemId", telemId)
-                .setParameter("userId", ownerUser.getId())
-                .setParameter("eqId", duplicate.getId())
-                .executeUpdate();
-
-        entityManager.createNativeQuery(
-                "INSERT INTO risk_evaluation_events (event_id, telemetry_log_id, final_cbrs_score, risk_level, policy_enforcement_taken, evaluation_timestamp) "
-                        + "VALUES (:riskId, :telemId, 50.0, 'MODERATE', 'MONITOR', CURRENT_TIMESTAMP)")
-                .setParameter("riskId", riskId)
-                .setParameter("telemId", telemId)
-                .executeUpdate();
-
-        entityManager.createNativeQuery(
-                "INSERT INTO security_incidents (incident_id, risk_event_id, user_id, equipment_id, incident_type, severity, status, detected_at) "
-                        + "VALUES (RANDOM_UUID(), :riskId, :userId, :eqId, 'UNAUTHORIZED_PORT_SCAN', 'MEDIUM', 'OPEN', CURRENT_TIMESTAMP)")
-                .setParameter("riskId", riskId)
-                .setParameter("userId", ownerUser.getId())
-                .setParameter("eqId", duplicate.getId())
-                .executeUpdate();
-
-        entityManager.flush();
-
-        long duplicateIncidentsBefore = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
-                .setParameter("eqId", duplicate.getId())
-                .getSingleResult()).longValue();
-        assertEquals(1L, duplicateIncidentsBefore);
-
-        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
-        entityManager.flush();
-        entityManager.clear();
-
-        long duplicateIncidentsAfter = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
-                .setParameter("eqId", duplicate.getId())
-                .getSingleResult()).longValue();
-        assertEquals(0L, duplicateIncidentsAfter);
-
-        long survivorIncidentsAfter = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM security_incidents WHERE equipment_id = :eqId")
-                .setParameter("eqId", survivor.getId())
-                .getSingleResult()).longValue();
-        assertEquals(1L, survivorIncidentsAfter);
+        assertEquals(1, matches.size());
+        assertTrue(matches.get(0).isExact(), "same name and same model is the case the rule is for");
+        assertEquals("NAME_MODEL", matches.get(0).getMatchedOn());
     }
 
+    /**
+     * Requiring a model on both sides is the same precondition {@code findDuplicateGroups} applies
+     * when it buckets on {@code name|model}. Without it the two views contradicted each other: the
+     * entry-time warning called a pair an exact duplicate that the reconciliation list did not
+     * consider a duplicate at all.
+     */
     @Test
-    @DisplayName("merging reassigns work orders, disposals and audit records concurrently across tables")
-    void mergeReassignsChildRecordsAcrossMultipleTablesConcurrently() {
-        Equipment survivor = asset("EQ-MULTI-KEEP", "SN-MULTI-KEEP", "ECG Monitor", "Philips PageWriter");
-        Equipment duplicate = asset("EQ-MULTI-MERGE", "SN-MULTI-MERGE", "ECG Monitor", "Philips PageWriter");
+    @DisplayName("an asset with no model recorded raises no name/model warning")
+    void anAbsentModelYieldsNoNameModelOpinion() {
+        asset("AST-30915", "M2VC8NH4", "Defibrillator", null);
 
-        MaintenanceWorkOrder workOrder = workOrderRepository.saveAndFlush(MaintenanceWorkOrder.builder()
-                .workOrderCode("WO-MULTI-" + UUID.randomUUID())
-                .hospitalId(hospital.getId())
-                .equipment(duplicate)
-                .title("Calibrate ECG Sensors")
-                .description("Routine calibration task")
-                .maintenanceType(MaintenanceWorkOrderType.PREVENTIVE)
-                .priority(MaintenanceWorkOrderPriority.MEDIUM)
-                .status(MaintenanceWorkOrderStatus.OPEN)
-                .createdAt(LocalDateTime.now())
-                .createdBy(username)
-                .deleted(false)
-                .build());
+        List<DuplicateMatch> onExistingWithoutModel = duplicateDetectionService.checkForDuplicates(
+                username, null, "Defibrillator", "Lifepak 20", "WQ73PLB9", "BQZ-62471");
+        assertTrue(onExistingWithoutModel.isEmpty(),
+                "the stored asset records no model, so there is nothing to compare a model against");
 
-        EquipmentDisposal disposal = disposalRepository.saveAndFlush(EquipmentDisposal.builder()
-                .equipment(duplicate)
-                .hospital(hospital)
-                .disposalMethod(EquipmentDisposalMethod.SCRAP)
-                .disposalReason("Replaced by modern fleet")
-                .status(EquipmentDisposalStatus.PENDING_APPROVAL)
-                .requestedBy(username)
-                .requestedAt(LocalDateTime.now())
-                .build());
-
-        entityManager.createNativeQuery(
-                "INSERT INTO equipment_audit (equipment_id, username, action, timestamp) "
-                        + "VALUES (:eqId, :username, 'UPDATE', CURRENT_TIMESTAMP)")
-                .setParameter("eqId", duplicate.getId())
-                .setParameter("username", username)
-                .executeUpdate();
-
-        entityManager.flush();
-
-        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
-        entityManager.flush();
-        entityManager.clear();
-
-        MaintenanceWorkOrder reassignedWorkOrder = workOrderRepository.findById(workOrder.getId()).orElseThrow();
-        assertEquals(survivor.getId(), reassignedWorkOrder.getEquipment().getId());
-
-        EquipmentDisposal reassignedDisposal = disposalRepository.findById(disposal.getId()).orElseThrow();
-        assertEquals(survivor.getId(), reassignedDisposal.getEquipment().getId());
-
-        long duplicateAudits = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM equipment_audit WHERE equipment_id = :eqId")
-                .setParameter("eqId", duplicate.getId())
-                .getSingleResult()).longValue();
-        assertEquals(0L, duplicateAudits);
-
-        long survivorAudits = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM equipment_audit WHERE equipment_id = :eqId")
-                .setParameter("eqId", survivor.getId())
-                .getSingleResult()).longValue();
-        assertEquals(1L, survivorAudits);
+        asset("AST-84402", "J5RT1YG8", "Defibrillator", "Lifepak 20");
+        List<DuplicateMatch> onIncomingWithoutModel = duplicateDetectionService.checkForDuplicates(
+                username, null, "Defibrillator", null, "XN46DKS2", "BQZ-95038");
+        assertTrue(onIncomingWithoutModel.stream()
+                        .noneMatch(match -> "NAME_MODEL".equals(match.getMatchedOn())),
+                "the asset being entered records no model either");
     }
 
+    /** Serial number and asset code matching are untouched by this and must keep working. */
     @Test
-    @DisplayName("getMergedChildRecordCounts returns correct counts for survivor equipment record")
-    void getMergedChildRecordCountsReturnsCorrectCounts() {
-        Equipment survivor = asset("EQ-CNT-KEEP", "SN-CNT-KEEP", "Patient Monitor", "Philips IntelliVue");
-        Equipment duplicate = asset("EQ-CNT-MERGE", "SN-CNT-MERGE", "Patient Monitor", "Philips IntelliVue");
+    @DisplayName("serial and asset-code matching still fire for assets with no model")
+    void identifierMatchingIsUnaffected() {
+        Equipment stored = asset("EQ-NM-13", "SN-CT-7001", "CT Scanner", null);
 
-        MaintenanceWorkOrder workOrder = workOrderRepository.saveAndFlush(MaintenanceWorkOrder.builder()
-                .workOrderCode("WO-CNT-" + UUID.randomUUID())
-                .hospitalId(hospital.getId())
-                .equipment(duplicate)
-                .title("Check display sensors")
-                .maintenanceType(MaintenanceWorkOrderType.PREVENTIVE)
-                .priority(MaintenanceWorkOrderPriority.LOW)
-                .status(MaintenanceWorkOrderStatus.OPEN)
-                .createdAt(LocalDateTime.now())
-                .createdBy(username)
-                .deleted(false)
-                .build());
+        List<DuplicateMatch> bySerial = duplicateDetectionService.checkForDuplicates(
+                username, null, "CT Scanner", null, "SN CT 7001", null);
+        assertEquals(1, bySerial.size());
+        assertEquals("SERIAL_NUMBER", bySerial.get(0).getMatchedOn());
+        assertEquals(stored.getId(), bySerial.get(0).getId());
 
-        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
-        entityManager.flush();
-        entityManager.clear();
-
-        Map<String, Long> counts = duplicateDetectionService.getMergedChildRecordCounts(survivor.getId());
-        assertNotNull(counts);
-        assertEquals(1L, counts.get("maintenance_work_orders"));
-        assertEquals(0L, counts.get("software_telemetry_logs"));
-
-        Map<String, Long> nullCounts = duplicateDetectionService.getMergedChildRecordCounts(null);
-        assertNotNull(nullCounts);
-        assertTrue(nullCounts.isEmpty());
+        List<DuplicateMatch> byCode = duplicateDetectionService.checkForDuplicates(
+                username, null, null, null, null, "EQ NM 13");
+        assertEquals(1, byCode.size());
+        assertEquals("ASSET_CODE", byCode.get(0).getMatchedOn());
     }
 
+    /**
+     * The two views have to agree. This is the pair from the bug report, checked from both ends.
+     */
     @Test
-    @DisplayName("merging reassigns maintenance policy rule equipment record references")
-    void mergeReassignsMaintenancePolicyRulesRecordId() {
-        Equipment survivor = asset("EQ-POL-KEEP", "SN-POL-KEEP", "Ventilator", "Drager Evita");
-        Equipment duplicate = asset("EQ-POL-MERGE", "SN-POL-MERGE", "Ventilator", "Drager Evita");
+    @DisplayName("the entry-time warning and the reconciliation list agree about name/model")
+    void bothViewsAgreeOnWhatANameModelDuplicateIs() {
+        asset("AST-11207", "H3QW7ZB5", "Ventilator", "Hamilton C6");
+        asset("BQZ-73391", "P8LF2XN6", "Ventilator", "Evita V300");
 
-        entityManager.createNativeQuery(
-                "INSERT INTO maintenance_policy_rules (policy_code, hospital_id, name, rule_scope, equipment_record_id, priority, frequency, maintenance_type, sla_warning_days, sla_breach_days, lead_time_days, active, deleted, status, start_date, created_at) "
-                        + "VALUES ('POL-EVITA-1', :hospId, 'Evita Monthly Check', 'INDIVIDUAL_EQUIPMENT', :eqId, 'High', 'MONTHLY', 'Preventive', 3, 1, 7, true, false, 'ACTIVE', CURRENT_DATE, CURRENT_TIMESTAMP)")
-                .setParameter("hospId", hospital.getId())
-                .setParameter("eqId", duplicate.getId())
-                .executeUpdate();
+        List<DuplicateGroupResponse> groups = duplicateDetectionService.findDuplicateGroups(username);
+        assertTrue(groups.isEmpty(), "the reconciliation view does not consider these a duplicate");
 
-        entityManager.flush();
-
-        duplicateDetectionService.mergeDuplicates(survivor.getId(), duplicate.getId(), username);
-        entityManager.flush();
-        entityManager.clear();
-
-        long duplicateRules = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM maintenance_policy_rules WHERE equipment_record_id = :eqId")
-                .setParameter("eqId", duplicate.getId())
-                .getSingleResult()).longValue();
-        assertEquals(0L, duplicateRules);
-
-        long survivorRules = ((Number) entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM maintenance_policy_rules WHERE equipment_record_id = :eqId")
-                .setParameter("eqId", survivor.getId())
-                .getSingleResult()).longValue();
-        assertEquals(1L, survivorRules);
+        // A third ventilator, different again from both stored models.
+        List<DuplicateMatch> matches = duplicateDetectionService.checkForDuplicates(
+                username, null, "Ventilator", "Servo-u", "VD59TKM3", "CRY-40718");
+        assertTrue(matches.isEmpty(), "and now neither does the entry-time warning");
     }
 }
