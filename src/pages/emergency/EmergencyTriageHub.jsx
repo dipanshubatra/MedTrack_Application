@@ -436,10 +436,23 @@ function BedCapacityTab({ beds, search, onInspect, onHoldBed }) {
             const demandSeries = seededSeries(u.id.length * 3 + 1, 12, u.predictedDemand * 10, 18, 0, 100);
             const full = pct >= 100;
             return (
-              <button
+              // A div rather than a <button>: the card carries the inspect action while its
+              // "Reserve bed" control is a real button, and interactive content nested inside
+              // a button is invalid HTML (browsers close the outer button early and React
+              // warns about a hydration error). role/tabIndex/onKeyDown keep it keyboard
+              // accessible, matching the button it replaces.
+              <div
                 key={u.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onInspect(u)}
-                className={`rounded-2xl border bg-slate-900/70 p-4 text-left shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-slate-700 animate-fade-up ${full ? "border-rose-500/40" : "border-slate-800"}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onInspect(u);
+                  }
+                }}
+                className={`cursor-pointer rounded-2xl border bg-slate-900/70 p-4 text-left shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-slate-700 animate-fade-up ${full ? "border-rose-500/40" : "border-slate-800"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
@@ -476,6 +489,7 @@ function BedCapacityTab({ beds, search, onInspect, onHoldBed }) {
 
                 <div className="mt-3 flex items-center justify-between border-t border-slate-800/70 pt-3">
                   <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); onHoldBed(u.id); }}
                     disabled={u.occupied >= u.total}
                     className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold transition ${u.occupied >= u.total ? "text-slate-600" : "text-sky-400 hover:bg-sky-500/10"}`}
@@ -486,7 +500,7 @@ function BedCapacityTab({ beds, search, onInspect, onHoldBed }) {
                     Inspect <ChevronRight size={13} />
                   </span>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
