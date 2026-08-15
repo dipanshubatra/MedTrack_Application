@@ -135,6 +135,7 @@ class DuplicateDetectionTest {
 
     private String username;
     private Hospital hospital;
+    private User ownerUser;
 
     @BeforeEach
     void setUp() {
