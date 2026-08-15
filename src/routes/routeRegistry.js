@@ -77,8 +77,15 @@ const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
 const SecurityComplianceHub = lazy(() => import("../pages/security/SecurityComplianceHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
+const BiomedicalAiGovernancePage = lazy(() => import("../pages/ai/BiomedicalAiGovernancePage"));
+const ClinicalAIHub = lazy(() => import("../pages/clinical/ClinicalAIHub"));
+const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
+const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/ConfidentialComputeEnclavePage"));
+const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
+const QuantumCryptoKmsVaultPage = lazy(() => import("../pages/security/QuantumCryptoKmsVaultPage"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -212,12 +219,19 @@ export const ROUTES = [
 
   // --- enterprise security & compliance consoles -------------------------------
   { page: "security-compliance", slugs: ["security-compliance", "security-hub"], component: SecurityComplianceHub, access: AUTHENTICATED },
+  { page: "confidential-compute", slugs: ["confidential-compute", "confidential-compute-enclave"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
+  { page: "ctem", slugs: ["ctem", "ctem-attack-surface"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
+  { page: "quantum-kms", slugs: ["quantum-kms", "quantum-crypto"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
 
   // --- clinical / operational hub consoles --------------------------------------
   { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
+  { page: "clinical-ai", slugs: ["clinical-ai", "clinical-ai-hub"], component: ClinicalAIHub, access: AUTHENTICATED },
+  { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "biomedical-ai"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
+  { page: "icu-vitals-telemetry", slugs: ["icu-vitals-telemetry", "icu-vitals"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
