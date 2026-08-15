@@ -224,8 +224,8 @@ export const ROUTES = [
   { page: "update-task", slugs: ["update-task", "updatetask"], component: UpdateTask, access: AUTHENTICATED, param: "task", permission: "UPDATE_MAINTENANCE" },
 
   // --- supplier ---------------------------------------------------------------
-  { page: "orders", slugs: ["orders"], component: OrdersList, access: AUTHENTICATED },
-  { page: "orderstatus", slugs: ["orderstatus"], component: OrderStatus, access: AUTHENTICATED, param: "order" },
+  { page: "orders", slugs: ["orders"], component: OrdersList, access: AUTHENTICATED, permission: "READ_ORDERS" },
+  { page: "orderstatus", slugs: ["orderstatus"], component: OrderStatus, access: AUTHENTICATED, param: "order", permission: "READ_ORDERS" },
   { page: "tender-bids", slugs: ["tender-bids", "open-tenders"], component: TenderBids, access: AUTHENTICATED },
 
   // --- security consoles: tenant-wide policy, hospital admin only -------------
