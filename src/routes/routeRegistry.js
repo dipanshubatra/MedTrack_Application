@@ -75,10 +75,21 @@ const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
 const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
 const SecurityComplianceHub = lazy(() => import("../pages/security/SecurityComplianceHub"));
+const ClinicalAIHub = lazy(() => import("../pages/clinical/ClinicalAIHub"));
+const BiomedicalAiGovernancePage = lazy(() => import("../pages/ai/BiomedicalAiGovernancePage"));
+const QuantumCryptoKmsVaultPage = lazy(() => import("../pages/security/QuantumCryptoKmsVaultPage"));
+const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/ConfidentialComputeEnclavePage"));
+const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
+const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
+const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
+const BiomedicalAiGovernancePage = lazy(() => import("../pages/ai/BiomedicalAiGovernancePage"));
+const ClinicalAIHub = lazy(() => import("../pages/clinical/ClinicalAIHub"));
+const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -114,6 +125,9 @@ const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentRe
 const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
 const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
 const SocOperationsConsolePage = lazy(() => import("../pages/auth/SocOperationsConsolePage"));
+const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/ConfidentialComputeEnclavePage"));
+const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
+const QuantumCryptoKmsVaultPage = lazy(() => import("../pages/security/QuantumCryptoKmsVaultPage"));
 
 
 /**
@@ -212,20 +226,36 @@ export const ROUTES = [
 
   // --- enterprise security & compliance consoles -------------------------------
   { page: "security-compliance", slugs: ["security-compliance", "security-hub"], component: SecurityComplianceHub, access: AUTHENTICATED },
+  { page: "confidential-compute", slugs: ["confidential-compute", "confidential-compute-enclave"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
+  { page: "ctem", slugs: ["ctem", "ctem-attack-surface"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
+  { page: "quantum-kms", slugs: ["quantum-kms", "quantum-crypto"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
 
   // --- clinical / operational hub consoles --------------------------------------
   { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
+  { page: "icu-vitals-telemetry", slugs: ["icu-vitals-telemetry", "bedside-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
+  { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
+  { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
+  { page: "quantum-kms", slugs: ["quantum-kms", "kms-vault"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
+  { page: "confidential-compute", slugs: ["confidential-compute", "enclaves"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
+  { page: "ctem", slugs: ["ctem", "ctem-hub"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
+
+  // --- radiology imaging & PACS console ----------------------------------------
+  { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
+  { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
+  { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
+  { page: "icu-vitals", slugs: ["icu-vitals", "vitals-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
   { page: "update-task", slugs: ["update-task", "updatetask"], component: UpdateTask, access: AUTHENTICATED, param: "task", permission: "UPDATE_MAINTENANCE" },
 
   // --- supplier ---------------------------------------------------------------
-  { page: "orders", slugs: ["orders"], component: OrdersList, access: AUTHENTICATED },
-  { page: "orderstatus", slugs: ["orderstatus"], component: OrderStatus, access: AUTHENTICATED, param: "order" },
+  { page: "orders", slugs: ["orders"], component: OrdersList, access: AUTHENTICATED, permission: "READ_ORDERS" },
+  { page: "orderstatus", slugs: ["orderstatus"], component: OrderStatus, access: AUTHENTICATED, param: "order", permission: "READ_ORDERS" },
   { page: "tender-bids", slugs: ["tender-bids", "open-tenders"], component: TenderBids, access: AUTHENTICATED },
 
   // --- security consoles: tenant-wide policy, hospital admin only -------------
@@ -265,6 +295,9 @@ export const ROUTES = [
   { page: "compliance-evidence", slugs: ["evidence", "compliance-evidence"], component: ComplianceEvidencePage, access: AUTHENTICATED },
   { page: "compliance-reporting", slugs: ["compliance-reporting", "reporting"], component: ComplianceReportingPage, access: AUTHENTICATED },
   { page: "soc-console", slugs: ["soc-console", "soc-command-center"], component: SocOperationsConsolePage, access: AUTHENTICATED },
+  { page: "confidential-compute", slugs: ["confidential-compute", "secure-enclave"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
+  { page: "ctem", slugs: ["ctem", "attack-surface"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
+  { page: "quantum-crypto", slugs: ["quantum-crypto", "quantum-kms"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
 ];
 
 

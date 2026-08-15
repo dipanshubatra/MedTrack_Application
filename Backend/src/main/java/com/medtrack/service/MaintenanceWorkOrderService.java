@@ -31,6 +31,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -63,6 +65,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Create a new maintenance work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse createWorkOrder(
             MaintenanceWorkOrderRequest request,
             Long hospitalId,
@@ -290,6 +293,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Assign a work order to a technician.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse assignWorkOrder(
             Long id,
             MaintenanceWorkOrderAssignmentRequest request,
@@ -343,6 +347,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Start execution of a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse startWorkOrder(
             Long id,
             Long hospitalId,
@@ -392,6 +397,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Put an active work order on hold.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse holdWorkOrder(
             Long id,
             MaintenanceWorkOrderStatusRequest request,
@@ -439,6 +445,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Complete a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse completeWorkOrder(
             Long id,
             MaintenanceWorkOrderCompletionRequest request,
@@ -496,6 +503,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Cancel a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse cancelWorkOrder(
             Long id,
             MaintenanceWorkOrderStatusRequest request,
@@ -556,6 +564,7 @@ public class MaintenanceWorkOrderService {
      * <p>This method deliberately validates every transition rather
      * than allowing arbitrary status changes.</p>
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse updateStatus(
             Long id,
             MaintenanceWorkOrderStatusRequest request,
@@ -728,6 +737,7 @@ public class MaintenanceWorkOrderService {
      * Dashboard summary for a hospital.
      */
     @Transactional
+    @Cacheable(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderDashboardResponse getDashboard(
             Long hospitalId
     ) {
@@ -864,6 +874,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Soft delete/archive a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public void archiveWorkOrder(
             Long id,
             Long hospitalId,
