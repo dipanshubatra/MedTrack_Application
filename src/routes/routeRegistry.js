@@ -75,13 +75,13 @@ const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
 const TelehealthHub = lazy(() => import("../pages/telehealth/TelehealthHub"));
 const SecurityComplianceHub = lazy(() => import("../pages/security/SecurityComplianceHub"));
-const PharmacovigilanceHub = lazy(() => import("../pages/pharmacovigilance/PharmacovigilanceHub"));
 const ClinicalAIHub = lazy(() => import("../pages/clinical/ClinicalAIHub"));
 const BiomedicalAiGovernancePage = lazy(() => import("../pages/ai/BiomedicalAiGovernancePage"));
 const QuantumCryptoKmsVaultPage = lazy(() => import("../pages/security/QuantumCryptoKmsVaultPage"));
 const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/ConfidentialComputeEnclavePage"));
 const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
 const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
+const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
@@ -229,8 +229,8 @@ export const ROUTES = [
   { page: "confidential-compute", slugs: ["confidential-compute", "enclaves"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
   { page: "ctem", slugs: ["ctem", "ctem-hub"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
 
-  // --- pharmacovigilance & drug safety console ---------------------------------
-  { page: "pharmacovigilance", slugs: ["pharmacovigilance", "drug-safety", "pv-hub"], component: PharmacovigilanceHub, access: AUTHENTICATED },
+  // --- radiology imaging & PACS console ----------------------------------------
+  { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
