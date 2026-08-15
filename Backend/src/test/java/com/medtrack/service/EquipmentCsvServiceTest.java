@@ -75,8 +75,18 @@ class EquipmentCsvServiceTest {
         lenient().when(hospitalRepository.findByUserId(1L)).thenReturn(Optional.of(hospital));
     }
 
+    private byte[] exportAsBytes() {
+        org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
+        try {
+            equipmentService.exportEquipmentCsv(USERNAME, response);
+            return response.getContentAsByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private String exportAsText() {
-        String csv = new String(equipmentService.exportEquipmentCsv(USERNAME), StandardCharsets.UTF_8);
+        String csv = new String(exportAsBytes(), StandardCharsets.UTF_8);
         return csv.startsWith(CsvSupport.UTF8_BOM) ? csv.substring(CsvSupport.UTF8_BOM.length()) : csv;
     }
 
@@ -156,7 +166,7 @@ class EquipmentCsvServiceTest {
     void exportFormatting() {
         when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.empty());
 
-        String csv = new String(equipmentService.exportEquipmentCsv(USERNAME), StandardCharsets.UTF_8);
+        String csv = new String(exportAsBytes(), StandardCharsets.UTF_8);
 
         assertTrue(csv.startsWith(CsvSupport.UTF8_BOM), "Excel needs the BOM to read UTF-8");
         assertTrue(csv.endsWith("\r\n"), "RFC 4180 mandates CRLF between records");
@@ -182,7 +192,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
@@ -258,7 +268,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
@@ -286,7 +296,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
@@ -315,7 +325,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);

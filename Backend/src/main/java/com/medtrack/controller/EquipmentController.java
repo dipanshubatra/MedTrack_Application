@@ -408,12 +408,7 @@ public class EquipmentController {
     @GetMapping("/export")
     @PreAuthorize("hasRole('HOSPITAL')")
     public void exportEquipment(Principal principal, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
-        response.setContentType("text/csv");
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=equipment.csv");
-
-        try (java.io.PrintWriter writer = response.getWriter()) {
-            equipmentService.exportEquipmentCsv(principal.getName(), writer);
-        }
+        equipmentService.exportEquipmentCsv(principal.getName(), response);
     }
 
     /**
