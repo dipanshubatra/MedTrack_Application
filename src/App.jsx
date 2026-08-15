@@ -8,6 +8,7 @@ import CommandPalette from "./components/common/CommandPalette";
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 import { errorEmitter } from "./services/HttpService";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import SessionGuard from "./components/common/SessionGuard";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
 import ScrollToTopButton from "./components/common/ScrollToTopButton";
