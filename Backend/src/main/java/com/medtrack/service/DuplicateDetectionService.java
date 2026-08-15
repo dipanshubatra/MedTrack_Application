@@ -70,9 +70,7 @@ public class DuplicateDetectionService {
             "UPDATE security_incidents SET equipment_id = :keep WHERE equipment_id = :merge",
             "UPDATE equipment SET replacement_equipment_id = :keep WHERE replacement_equipment_id = :merge",
             "UPDATE equipment_lifecycle_actions SET replacement_equipment_id = :keep "
-                    + "WHERE replacement_equipment_id = :merge",
-            "UPDATE software_telemetry_logs SET equipment_id = :keep WHERE equipment_id = :merge",
-            "UPDATE security_incidents SET equipment_id = :keep WHERE equipment_id = :merge");
+                    + "WHERE replacement_equipment_id = :merge");
 
     private static final double SERIAL_THRESHOLD = 0.75;
     private static final double CODE_THRESHOLD = 0.75;
@@ -453,8 +451,9 @@ public class DuplicateDetectionService {
     }
 
     /**
-     * Verifies that telemetry logs and security incidents were successfully reassigned to the surviving
-     * equipment record during a merge.
+     * Verifies that all child table records (telemetry logs, security incidents, equipment status audit logs,
+     * equipment audit records, disposals, lifecycle actions, and work orders) were successfully reassigned
+     * to the surviving equipment record during a duplicate merge.
      */
     private void verifyAndAuditReassignments(Long keepId, Long mergeId) {
         if (keepId == null || mergeId == null) {
@@ -470,11 +469,73 @@ public class DuplicateDetectionService {
                 .setParameter("keep", keepId)
                 .getSingleResult()).longValue();
 
-        if (telemetryCount > 0 || incidentCount > 0) {
+        long statusAuditLogCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_audit_log WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        long auditCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_audit WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        long disposalCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_disposals WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        long lifecycleCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM equipment_lifecycle_actions WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        long workOrderCount = ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM maintenance_work_orders WHERE equipment_id = :keep")
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
+
+        if (telemetryCount > 0 || incidentCount > 0 || statusAuditLogCount > 0 || auditCount > 0
+                || disposalCount > 0 || lifecycleCount > 0 || workOrderCount > 0) {
             org.slf4j.LoggerFactory.getLogger(DuplicateDetectionService.class)
-                    .info("Merged equipment child records for keepId={}, mergeId={}: telemetryLogs={}, securityIncidents={}",
-                            keepId, mergeId, telemetryCount, incidentCount);
+                    .info("Merged equipment child records for keepId={}, mergeId={}: telemetryLogs={}, "
+                                    + "securityIncidents={}, statusAuditLogs={}, equipmentAudits={}, "
+                                    + "disposals={}, lifecycleActions={}, workOrders={}",
+                            keepId, mergeId, telemetryCount, incidentCount, statusAuditLogCount, auditCount,
+                            disposalCount, lifecycleCount, workOrderCount);
         }
+    }
+
+    /**
+     * Queries and aggregates counts of all reassigned child records belonging to the surviving equipment record.
+     * Useful for post-merge audit verification and metrics reporting.
+     *
+     * @param keepId the ID of the surviving equipment record
+     * @return map of child table names to their reassigned record count
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> getMergedChildRecordCounts(Long keepId) {
+        if (keepId == null) {
+            return Map.of();
+        }
+        Map<String, Long> counts = new LinkedHashMap<>();
+
+        counts.put("software_telemetry_logs", countChildRecords("software_telemetry_logs", "equipment_id", keepId));
+        counts.put("security_incidents", countChildRecords("security_incidents", "equipment_id", keepId));
+        counts.put("equipment_audit_log", countChildRecords("equipment_audit_log", "equipment_id", keepId));
+        counts.put("equipment_audit", countChildRecords("equipment_audit", "equipment_id", keepId));
+        counts.put("equipment_disposals", countChildRecords("equipment_disposals", "equipment_id", keepId));
+        counts.put("equipment_lifecycle_actions", countChildRecords("equipment_lifecycle_actions", "equipment_id", keepId));
+        counts.put("maintenance_work_orders", countChildRecords("maintenance_work_orders", "equipment_id", keepId));
+        counts.put("maintenance_policy_rules", countChildRecords("maintenance_policy_rules", "equipment_record_id", keepId));
+
+        return counts;
+    }
+
+    private long countChildRecords(String table, String column, Long keepId) {
+        String sql = "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = :keep";
+        return ((Number) entityManager.createNativeQuery(sql)
+                .setParameter("keep", keepId)
+                .getSingleResult()).longValue();
     }
 
     private boolean isBlank(String value) {

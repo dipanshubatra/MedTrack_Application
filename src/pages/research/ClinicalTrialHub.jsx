@@ -43,6 +43,16 @@ const RELEVANCE_META = {
   exploratory: { label: "Exploratory", tone: "amber", note: "Hypothesis-generating, research use only" },
 };
 
+// Relevance badges use emerald/sky/amber tones (see RELEVANCE_META.tone), which are not keys of
+// SEVERITY_META (critical/high/medium/low). Indexing SEVERITY_META with one of them returned
+// undefined and crashed the biomarker cards with "Cannot read properties of undefined (reading
+// 'border')" the moment the hub rendered.
+const RELEVANCE_CLS = {
+  emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+  sky: "text-sky-400 bg-sky-500/10 border-sky-500/30",
+  amber: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+};
+
 const ASSAY_META = {
   "RNA-seq": { icon: Dna, cls: "text-violet-400 bg-violet-500/10 border-violet-500/30" },
   Proteomics: { icon: Beaker, cls: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30" },
@@ -360,7 +370,7 @@ function BiomarkerTab({ biomarkers, search, assayFilter, setAssayFilter, relevan
                       <p className="text-[11px] text-slate-500">{b.name}</p>
                     </div>
                   </div>
-                  <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${SEVERITY_META[rel.tone].border} ${SEVERITY_META[rel.tone].bg} ${SEVERITY_META[rel.tone].text}`}>
+                  <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${RELEVANCE_CLS[rel.tone] || "text-slate-400 bg-slate-500/10 border-slate-500/30"}`}>
                     {rel.label}
                   </span>
                 </div>

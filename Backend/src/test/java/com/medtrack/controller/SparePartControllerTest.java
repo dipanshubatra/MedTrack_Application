@@ -294,6 +294,76 @@ class SparePartControllerTest {
         verify(sparePartService).getSparePart(99L, "hospitalUser");
     }
 
+    @Test
+    @DisplayName("Should return list of spare parts for authenticated technician")
+    void shouldReturnAllSparePartsForTechnician() throws Exception {
+        Authentication techAuth = new UsernamePasswordAuthenticationToken(
+                "techUser",
+                "password",
+                List.of(new SimpleGrantedAuthority("ROLE_TECHNICIAN"))
+        );
+        SparePartResponse part = response(1L, "SP-100", 10);
+
+        when(sparePartService.getAllSpareParts("techUser")).thenReturn(List.of(part));
+
+        mockMvc.perform(get("/api/spare-parts")
+                        .principal(techAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].partNumber").value("SP-100"));
+
+        verify(sparePartService).getAllSpareParts("techUser");
+    }
+
+    @Test
+    @DisplayName("Should return single spare part by ID for authenticated technician")
+    void shouldReturnSparePartByIdForTechnician() throws Exception {
+        Authentication techAuth = new UsernamePasswordAuthenticationToken(
+                "techUser",
+                "password",
+                List.of(new SimpleGrantedAuthority("ROLE_TECHNICIAN"))
+        );
+        SparePartResponse part = response(1L, "SP-100", 10);
+
+        when(sparePartService.getSparePart(1L, "techUser")).thenReturn(part);
+
+        mockMvc.perform(get("/api/spare-parts/1")
+                        .principal(techAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.partNumber").value("SP-100"));
+
+        verify(sparePartService).getSparePart(1L, "techUser");
+    }
+
+    @Test
+    @DisplayName("Should deduct stock successfully for authenticated technician")
+    void shouldDeductStockSuccessfullyForTechnician() throws Exception {
+        Authentication techAuth = new UsernamePasswordAuthenticationToken(
+                "techUser",
+                "password",
+                List.of(new SimpleGrantedAuthority("ROLE_TECHNICIAN"))
+        );
+        SparePartStockRequest request = SparePartStockRequest.builder()
+                .partNumber("SP-100")
+                .quantity(2)
+                .build();
+
+        when(sparePartService.deductStock(
+                any(SparePartStockRequest.class), eq("techUser")))
+                .thenReturn(response(1L, "SP-100", 8));
+
+        mockMvc.perform(post("/api/spare-parts/deduct")
+                        .principal(techAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stockLevel").value(8));
+
+        verify(sparePartService).deductStock(
+                any(SparePartStockRequest.class), eq("techUser"));
+    }
+
     private SparePartResponse response(Long id, String partNumber, int stockLevel) {
         return SparePartResponse.builder()
                 .id(id)

@@ -297,6 +297,8 @@ class UserResolutionServiceTest {
                     hospitalRepository,
                     userRepository,
                     null,
+                    null,
+                    null,
                     null
             );
 

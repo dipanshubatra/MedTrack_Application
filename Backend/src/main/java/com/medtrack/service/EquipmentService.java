@@ -31,6 +31,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
@@ -105,6 +108,7 @@ public class EquipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
     }
 
+    @Cacheable(value = "equipmentDashboard", key = "#username")
     public EquipmentDashboardResponse getDashboardOverview(String username) {
 
         Hospital hospital = getHospitalForUser(username);
@@ -251,6 +255,7 @@ public class EquipmentService {
      * @throws IllegalArgumentException  if the delta is zero, or would drive quantity negative
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment adjustStock(Long id, StockAdjustmentRequest request, String username) {
         if (request == null || request.getDelta() == null) {
             throw new IllegalArgumentException("Stock delta is required");
@@ -800,6 +805,7 @@ public class EquipmentService {
      * If no equipmentCode is provided by the caller, auto-generates one
      * using a unique UUID.
      */
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment addEquipment(Equipment equipment , String username) {
         Hospital hospital = getHospitalForUser(username);
         equipment.setHospital(hospital);
@@ -874,6 +880,7 @@ public class EquipmentService {
     /**
      * Deletes an equipment record by ID.
      */
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public void deleteEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
@@ -900,6 +907,7 @@ public class EquipmentService {
     /**
      * Updates an existing equipment record's fields.
      */
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment updateEquipment(Long id, Equipment equipmentDetails , String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
@@ -1013,6 +1021,7 @@ public class EquipmentService {
      * actor and contents.</p>
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public EquipmentImportSummary importEquipmentFromCsv(MultipartFile file, String username) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("CSV file is empty or missing");
@@ -1692,6 +1701,7 @@ public class EquipmentService {
      * Sets deleted = true, deletedAt, and deletedBy instead of hard deleting.
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment archiveEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
@@ -1718,6 +1728,7 @@ public class EquipmentService {
      * Sets deleted = false, clears deletedAt and deletedBy.
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment restoreEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());
@@ -1751,6 +1762,7 @@ public class EquipmentService {
      * Only callable after 90 days from archival.
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public void permanentlyDeleteEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());
