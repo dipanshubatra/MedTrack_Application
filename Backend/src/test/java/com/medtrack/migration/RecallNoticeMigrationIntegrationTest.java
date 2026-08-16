@@ -212,6 +212,7 @@ class RecallNoticeMigrationIntegrationTest {
                 .locations("classpath:db/migration/h2")
                 .baselineOnMigrate(true)
                 .baselineVersion("19")
+                .target("20")
                 .load()
                 .migrate()
                 .migrationsExecuted;

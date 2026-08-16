@@ -60,6 +60,15 @@ public class AuthControllerIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
+    private com.medtrack.repository.MaintenanceTaskRepository maintenanceTaskRepository;
+
+    @Autowired
+    private com.medtrack.repository.EquipmentRepository equipmentRepository;
+
+    @Autowired
+    private com.medtrack.repository.HospitalRepository hospitalRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -72,6 +81,9 @@ public class AuthControllerIntegrationTest {
     void cleanDatabase() {
         passwordResetTokenRepository.deleteAll();
         refreshTokenRepository.deleteAll();
+        maintenanceTaskRepository.deleteAll();
+        equipmentRepository.deleteAll();
+        hospitalRepository.deleteAll();
         userRepository.deleteAll();
     }
 

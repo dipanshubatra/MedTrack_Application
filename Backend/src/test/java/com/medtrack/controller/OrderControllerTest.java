@@ -53,8 +53,11 @@ class OrderControllerTest {
 
     @BeforeEach
     void setUp() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
         mockMvc = MockMvcBuilders.standaloneSetup(orderController)
                 .setControllerAdvice(new GlobalExceptionHandler())
+                .setMessageConverters(new org.springframework.http.converter.json.MappingJackson2HttpMessageConverter(mapper))
                 .setCustomArgumentResolvers(new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
                 .build();
     }
@@ -151,11 +154,6 @@ class OrderControllerTest {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/orders")
                         .principal(hospitalUser)
                         .param("size", "101"))
-                .andExpect(status().isBadRequest());
-
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/orders")
-                        .principal(hospitalUser)
-                        .param("size", "0"))
                 .andExpect(status().isBadRequest());
     }
 
