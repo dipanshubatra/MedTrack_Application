@@ -7,6 +7,11 @@ import {
   Siren, Snowflake, Syringe, Thermometer, Timer, Truck, User, Users, Warehouse,
   Wind, Wrench, X, Zap
 } from "lucide-react";
+import { clamp, round1, fmtNumber, seededSeries as series } from "../../utils/series";
+import PlaybackControls from "../../components/common/PlaybackControls";
+import { ExportButton } from "../../components/common/ExportButton";
+import LiveStatus from "../../components/common/LiveStatus";
+import ToastStack, { useToasts } from "../../components/common/ToastStack";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Pharmacy & Med-Supply Chain Hub
@@ -30,12 +35,7 @@ import {
  *  Constants & seed data
  * ------------------------------------------------------------------ */
 
-const SEVERITY_META = {
-  critical: { label: "Critical", text: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30", dot: "bg-rose-500" },
-  high: { label: "High", text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", dot: "bg-amber-500" },
-  medium: { label: "Medium", text: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30", dot: "bg-sky-500" },
-  low: { label: "Low", text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", dot: "bg-emerald-500" },
-};
+
 
 const STORAGE_META = {
   Fridge: { icon: Thermometer, tone: "text-sky-400 bg-sky-500/10 border-sky-500/30", label: "Refrigerated 2–8°C" },
@@ -109,26 +109,14 @@ const SEED_POINTS = 22;
  *  Pure helpers
  * ------------------------------------------------------------------ */
 
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const round1 = (v) => Math.round(v * 10) / 10;
 
-const seededSeries = (seed, n = SEED_POINTS, base = 5, amp = 1.6, lo = -40, hi = 40) => {
-  const pts = [];
-  let v = base;
-  let s = seed * 110351;
-  for (let i = 0; i < n; i += 1) {
-    s = (s * 1103515245 + 12345) % 2147483648;
-    const r = (s / 2147483648) - 0.5;
-    v = clamp(v + r * amp + (base - v) * 0.1, lo, hi);
-    pts.push(round1(v));
-  }
-  return pts;
-};
+const seededSeries = (seed, n = SEED_POINTS, base = 5, amp = 1.6, lo = -40, hi = 40) =>
+  series(seed, n, base, amp, { lo, hi, pull: 0.1 });
 
 const jitter = (v, amount, lo, hi) => clamp(v + (Math.random() * 2 - 1) * amount, lo, hi);
 
 const fmtMoney = (n) => `$${n.toLocaleString("en-US")}`;
-const fmtNumber = (n) => n.toLocaleString("en-US");
+
 
 const unitType = (item) => {
   if (item.form.startsWith("Vial") || item.form.startsWith("Ampule")) return "vials";
@@ -163,137 +151,15 @@ const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
  *  Small presentational components
  * ------------------------------------------------------------------ */
 
-function Badge({ tone = "medium", children, className = "" }) {
-  const meta = SEVERITY_META[tone] || SEVERITY_META.medium;
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${meta.bg} ${meta.border} ${meta.text} ${className}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-      {children}
-    </span>
-  );
-}
 
-function StatusPill({ status, map }) {
-  const meta = (map || STATUS_META)[status] || { label: status, cls: "text-slate-400 bg-slate-500/10 border-slate-500/30" };
-  return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>;
-}
 
-function MiniSparkline({ points, tone = "sky", width = 130, height = 38, min = null, max = null }) {
-  const lo = min ?? Math.min(...points);
-  const hi = max ?? Math.max(...points);
-  const range = hi - lo || 1;
-  const coords = points.map((p, i) => {
-    const x = (i / (points.length - 1)) * width;
-    const y = height - 3 - ((p - lo) / range) * (height - 6);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const stroke = { sky: "#38bdf8", rose: "#fb7185", amber: "#fbbf24", emerald: "#34d399", violet: "#a78bfa", cyan: "#22d3ee" }[tone] || "#38bdf8";
-  const lastY = coords[coords.length - 1].split(",")[1];
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible" aria-label="sensor sparkline">
-      <polygon points={`0,${height} ${coords.join(" ")} ${width},${height}`} fill={stroke} opacity="0.08" />
-      <polyline points={coords.join(" ")} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" opacity="0.95" />
-      <circle cx={width - 1} cy={lastY} r="2.4" fill={stroke} />
-    </svg>
-  );
-}
 
-function StatCard({ icon: Icon, label, value, sub, tone = "sky" }) {
-  const iconCls = { sky: "text-sky-400 bg-sky-500/10 border-sky-500/20", rose: "text-rose-400 bg-rose-500/10 border-rose-500/20", amber: "text-amber-400 bg-amber-500/10 border-amber-500/20", emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", violet: "text-violet-400 bg-violet-500/10 border-violet-500/20" }[tone];
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/20">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-black text-white tabular-nums">{value}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{sub}</p>
-        </div>
-        <div className={`rounded-xl border p-2.5 ${iconCls}`}>
-          <Icon size={18} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function SearchBox({ value, onChange, placeholder }) {
-  return (
-    <div className="relative w-full sm:w-72">
-      <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-sky-500/50 focus:ring-2 focus:ring-sky-500/20"
-      />
-    </div>
-  );
-}
 
-function SeverityChips({ value, onChange }) {
-  const opts = ["all", "critical", "high", "medium", "low"];
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {opts.map((o) => {
-        const active = value === o;
-        const meta = o === "all" ? SEVERITY_META.medium : SEVERITY_META[o];
-        return (
-          <button
-            key={o}
-            onClick={() => onChange(o)}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold capitalize transition ${
-              active ? `${meta.bg} ${meta.border} ${meta.text}` : "border-slate-800 bg-slate-900/50 text-slate-500 hover:border-slate-700 hover:text-slate-300"
-            }`}
-          >
-            {o === "all" ? "All severities" : meta.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
-function Modal({ open, onClose, title, subtitle, icon: Icon, children, wide = false }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
 
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${wide ? "max-w-3xl" : "max-w-xl"} max-h-[86vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60 animate-scale-up`}>
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/95 px-5 py-4 backdrop-blur">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-sky-400">
-              <Icon size={18} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">{title}</h3>
-              {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
-            </div>
-          </div>
-          <button onClick={onClose} className="rounded-lg border border-slate-700 p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label="Close inspection panel">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
-  );
-}
 
-function InfoRow({ label, value, mono = false }) {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-800/60 py-2 last:border-0">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className={`text-xs font-semibold text-slate-200 ${mono ? "font-mono tabular-nums" : ""}`}>{value}</span>
-    </div>
-  );
-}
+
 
 function ProgressBar({ pct, tone = "sky" }) {
   const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
@@ -623,18 +489,14 @@ export default function PharmacySupplyHub({ onNavigate }) {
   const [units, setUnits] = useState(COLD_STORAGE);
   const [items, setItems] = useState(INVENTORY);
   const [orders, setOrders] = useState(ORDERS);
-  const [toasts, setToasts] = useState([]);
+  const { toasts, pushToast, dismissToast } = useToasts();
   const [inspect, setInspect] = useState(null);
   const [exporting, setExporting] = useState(false);
   const seqRef = useRef(9000);
   const itemsRef = useRef(items);
   useEffect(() => { itemsRef.current = items; }, [items]);
 
-  const pushToast = useCallback((title, body, tone = "medium") => {
-    const id = `T-${seqRef.current++}`;
-    setToasts((prev) => [...prev.slice(-3), { id, title, body, tone }]);
-    window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 6500);
-  }, []);
+
 
   /* Live supply-chain simulation loop. */
   useEffect(() => {
@@ -815,13 +677,7 @@ export default function PharmacySupplyHub({ onNavigate }) {
               <div>
                 <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Pharmacy &amp; Med-Supply Chain</h1>
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                  <span className="flex items-center gap-1.5">
-                    <span className="relative flex h-2 w-2">
-                      <span className={`absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 ${playing ? "animate-ping" : ""}`} />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                    </span>
-                    {playing ? `Simulating · tick #${tick}` : "Simulation paused"}
-                  </span>
+                  <LiveStatus playing={playing} tick={tick} livePrefix="Simulating · tick #" />
                   <span className="text-slate-600">·</span>
                   <span>Cold Chain · Inventory Lifecycle · Orders</span>
                 </p>
@@ -830,39 +686,14 @@ export default function PharmacySupplyHub({ onNavigate }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-xl border border-slate-800 bg-slate-900/70">
-              <button
-                onClick={() => setPlaying((p) => !p)}
-                className="flex items-center gap-2 rounded-l-xl border-r border-slate-800 px-3.5 py-2.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                aria-label={playing ? "Pause simulation" : "Resume simulation"}
-              >
-                {playing ? <Pause size={14} /> : <Play size={14} />}
-                {playing ? "Pause" : "Resume"}
-              </button>
-              <select
-                value={speed}
-                onChange={(e) => setSpeed(Number(e.target.value))}
-                className="rounded-r-xl bg-transparent px-2 py-2.5 text-xs font-semibold text-slate-300 outline-none"
-                aria-label="Simulation speed"
-              >
-                <option value={1} className="bg-slate-900">1× realtime</option>
-                <option value={2} className="bg-slate-900">2× fast</option>
-                <option value={4} className="bg-slate-900">4× turbo</option>
-              </select>
-            </div>
-            <button
-              onClick={resetSimulation}
-              className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3.5 py-2.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
-            >
-              <RefreshCw size={14} /> Reset
-            </button>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3.5 py-2.5 text-xs font-bold text-sky-400 transition hover:bg-sky-500/20 disabled:opacity-60"
-            >
-              <Download size={14} /> {exporting ? "Writing…" : "Export CSV"}
-            </button>
+            <PlaybackControls
+              playing={playing}
+              onToggle={() => setPlaying((p) => !p)}
+              speed={speed}
+              onSpeedChange={setSpeed}
+              onReset={resetSimulation}
+            />
+            <ExportButton onClick={handleExport} exporting={exporting} />
           </div>
         </div>
 
@@ -876,32 +707,13 @@ export default function PharmacySupplyHub({ onNavigate }) {
 
         {/* ---------- Tabs ---------- */}
         <div className="mt-8">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = activeTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setActiveTab(t.key)}
-                  className={`flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition ${
-                    active
-                      ? "border-sky-500/50 bg-sky-500/10 text-sky-400 shadow-lg shadow-sky-500/10"
-                      : "border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-200"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
+          <TabsBar tabs={TABS} active={activeTab} onChange={setActiveTab} accent="sky" />
 
           {/* ---------- Toolbar ---------- */}
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/50 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <SearchBox value={search} onChange={setSearch} placeholder={`Search ${activeMeta.label.toLowerCase()}…`} />
-              <SeverityChips value={severity} onChange={setSeverity} />
+              <SeverityChips value={severity} onChange={setSeverity} meta={SEVERITY_META} />
             </div>
             <p className="text-[11px] text-slate-500">{activeMeta.blurb}</p>
           </div>
@@ -922,23 +734,7 @@ export default function PharmacySupplyHub({ onNavigate }) {
       </div>
 
       {/* ---------- Toast stack ---------- */}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => {
-          const meta = SEVERITY_META[t.tone] || SEVERITY_META.medium;
-          return (
-            <div key={t.id} className={`pointer-events-auto flex items-start gap-3 rounded-xl border bg-slate-900 p-3 shadow-2xl shadow-black/50 animate-fadeSlideIn ${meta.border}`}>
-              <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${meta.dot}`} />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-white">{t.title}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-slate-400">{t.body}</p>
-              </div>
-              <button onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))} className="text-slate-600 transition hover:text-white" aria-label="Dismiss notification">
-                <X size={14} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} severityMeta={SEVERITY_META} />
 
       {/* ---------- Inspection modal ---------- */}
       {inspect && (
