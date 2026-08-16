@@ -82,8 +82,11 @@ const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/Conf
 const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
 const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
 const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
+const SterileProcessingHub = lazy(() => import("../pages/sterile/SterileProcessingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
+const DialysisRenalHub = lazy(() => import("../pages/renal/DialysisRenalHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const OncologyInfusionHub = lazy(() => import("../pages/oncology/OncologyInfusionHub"));
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
@@ -96,7 +99,7 @@ const MedicationSupplyColdChainHubPage = lazy(() => import("../pages/supply/Medi
 const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRoboticsHub"));
 const TelehealthRemoteMonitoringHubPage = lazy(() => import("../pages/telehealth/TelehealthRemoteMonitoringHubPage"));
 const GenomicClinicalTrialsHubPage = lazy(() => import("../pages/trials/GenomicClinicalTrialsHubPage"));
-const OncologyInfusionHub = lazy(() => import("../pages/oncology/OncologyInfusionHub"));
+const NeonatalNicuHub = lazy(() => import("../pages/neonatal/NeonatalNicuHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -229,6 +232,13 @@ export const ROUTES = [
   { page: "telehealth", slugs: ["telehealth", "remote-care"], component: TelehealthHub, access: AUTHENTICATED },
 
   // --- enterprise security & compliance consoles -------------------------------
+  //
+  // One entry per console. Each of these three used to be declared three times over - once here,
+  // once in the clinical block below and once in the "any authenticated role" block at the bottom -
+  // with a different secondary slug each time. Only the first entry was ever reachable, so
+  // /enclaves, /ctem-hub and /kms-vault all 404ed while looking registered. The alternative slugs
+  // are folded into the single surviving entry instead of being dropped, because the sidebars and
+  // the security hub already link to them.
   { page: "security-compliance", slugs: ["security-compliance", "security-hub"], component: SecurityComplianceHub, access: AUTHENTICATED },
   { page: "confidential-compute", slugs: ["confidential-compute", "confidential-compute-enclave", "enclaves", "secure-enclave"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
   { page: "ctem", slugs: ["ctem", "ctem-attack-surface", "ctem-hub", "attack-surface"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
@@ -243,11 +253,12 @@ export const ROUTES = [
   // --- radiology imaging & PACS console ----------------------------------------
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "oncology-infusion", slugs: ["oncology-infusion", "chemotherapy-safety"], component: OncologyInfusionHub, access: AUTHENTICATED },
   { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
   // --- medtech & specialty consoles --------------------------------------------
-  { page: "oncology-infusion", slugs: ["oncology-infusion", "chemo-infusion", "infusion-center"], component: OncologyInfusionHub, access: AUTHENTICATED },
+  { page: "neonatal-nicu", slugs: ["neonatal-nicu", "nicu", "neonatology"], component: NeonatalNicuHub, access: AUTHENTICATED },
   { page: "regulatory-audit", slugs: ["regulatory-audit", "audit-hub", "provenance"], component: RegulatoryAuditHub, access: AUTHENTICATED },
   { page: "pharmacovigilance", slugs: ["pharmacovigilance", "drug-safety", "pv-hub"], component: PharmacovigilanceHub, access: AUTHENTICATED },
   { page: "surgical-robotics", slugs: ["surgical-robotics", "or-orchestration", "robotics"], component: SurgicalRoboticsHub, access: AUTHENTICATED },

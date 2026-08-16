@@ -64,4 +64,16 @@ public class SoftwareTelemetryLog {
     // Stored as JSON string
     @Column(columnDefinition = "text")
     private String metadata;
+
+    // ---------------------------------------------------------------------
+    // Geolocation fields (issue #1228)
+    //
+    // GPS coordinates reported by equipment for geofence validation.
+    // ---------------------------------------------------------------------
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
 }
