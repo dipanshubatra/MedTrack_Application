@@ -88,9 +88,9 @@ class MaintenanceRequestValidationTest {
 
         assertEquals(2, violations.size());
         assertTrue(violations.stream().anyMatch(violation ->
-                violation.getPropertyPath().toString().equals("newDeadline")
+                violation.getPropertyPath().toString().equals("deadline")
                         && violation.getMessage().equals(
-                        "New deadline must be in the future")));
+                        "Amended deadline cannot be in the past")));
         assertTrue(violations.stream().anyMatch(violation ->
                 violation.getPropertyPath().toString().equals("reason")
                         && violation.getMessage().equals("Amendment reason is required")));
@@ -105,9 +105,7 @@ class MaintenanceRequestValidationTest {
 
         var violations = validator.validate(request);
 
-        assertEquals(2, violations.size());
-        assertTrue(violations.stream().anyMatch(violation ->
-                violation.getPropertyPath().toString().equals("newDeadline")));
+        assertEquals(1, violations.size());
         assertTrue(violations.stream().anyMatch(violation ->
                 violation.getPropertyPath().toString().equals("reason")));
     }

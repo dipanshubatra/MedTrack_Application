@@ -27,6 +27,10 @@ import java.util.stream.Collectors;
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private JwtUtil jwtUtil;
+
     @Value("${security.rate-limit.auth.capacity:10}")
     private int authCapacity;
 
@@ -53,6 +57,18 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     @Value("${security.rate-limit.write.refill-duration:1m}")
     private String writeRefillDurationStr;
+
+    @Value("${security.rate-limit.ai.technician.capacity:10}")
+    private int aiTechnicianCapacity;
+
+    @Value("${security.rate-limit.ai.technician.refill-duration:1h}")
+    private String aiTechnicianRefillDurationStr;
+
+    @Value("${security.rate-limit.ai.admin.capacity:50}")
+    private int aiAdminCapacity;
+
+    @Value("${security.rate-limit.ai.admin.refill-duration:1h}")
+    private String aiAdminRefillDurationStr;
 
     /**
      * Peer addresses whose {@code X-Forwarded-For} header is trusted.
@@ -92,12 +108,16 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private Bandwidth authBandwidth;
     private Bandwidth getBandwidth;
     private Bandwidth writeBandwidth;
+    private Bandwidth aiTechnicianBandwidth;
+    private Bandwidth aiAdminBandwidth;
 
     @PostConstruct
     public void init() {
         this.authBandwidth = Bandwidth.classic(authCapacity, Refill.intervally(authRefillTokens, parseDuration(authRefillDurationStr)));
         this.getBandwidth = Bandwidth.classic(getCapacity, Refill.intervally(getRefillTokens, parseDuration(getRefillDurationStr)));
         this.writeBandwidth = Bandwidth.classic(writeCapacity, Refill.intervally(writeRefillTokens, parseDuration(writeRefillDurationStr)));
+        this.aiTechnicianBandwidth = Bandwidth.classic(aiTechnicianCapacity, Refill.intervally(aiTechnicianCapacity, parseDuration(aiTechnicianRefillDurationStr)));
+        this.aiAdminBandwidth = Bandwidth.classic(aiAdminCapacity, Refill.intervally(aiAdminCapacity, parseDuration(aiAdminRefillDurationStr)));
         this.clientTtl = parseDuration(clientTtlStr);
         this.trustedProxies = parseTrustedProxies(trustedProxiesRaw);
     }
@@ -119,7 +139,36 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         String path = request.getRequestURI().substring(request.getContextPath().length());
         String method = request.getMethod();
 
-        if (path.startsWith("/api/")) {
+        if (path.startsWith("/api/ai-assistant")) {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                try {
+                    String role = jwtUtil.extractRole(token);
+                    String userId = jwtUtil.extractEmail(token);
+                    
+                    String group = "";
+                    if (role != null) {
+                        if (role.equalsIgnoreCase("TECHNICIAN")) {
+                            group = "ai_technician";
+                        } else if (role.equalsIgnoreCase("HOSPITAL") || role.equalsIgnoreCase("ADMIN")) {
+                            group = "ai_admin";
+                        }
+                    }
+                    
+                    if (!group.isEmpty() && userId != null) {
+                        String key = group + ":" + userId;
+                        Bucket bucket = resolveBucket(key, group);
+                        if (!bucket.tryConsume(1)) {
+                            sendTooManyRequestsAiResponse(request, response);
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore, let JwtAuthFilter handle invalid tokens
+                }
+            }
+        } else if (path.startsWith("/api/")) {
             String group = resolveGroup(path, method);
             String ip = resolveClientKey(request);
             String key = group + ":" + ip;
@@ -156,6 +205,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         switch (group) {
             case "auth": return authBandwidth;
             case "get":  return getBandwidth;
+            case "ai_technician": return aiTechnicianBandwidth;
+            case "ai_admin": return aiAdminBandwidth;
             default:     return writeBandwidth;
         }
     }
@@ -294,6 +345,22 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         errorDetails.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
         errorDetails.put("error", HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
         errorDetails.put("message", "Too many requests. Please try again later.");
+        errorDetails.put("path", request.getRequestURI());
+
+        objectMapper.writeValue(response.getWriter(), errorDetails);
+        response.getWriter().flush();
+    }
+
+    private void sendTooManyRequestsAiResponse(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
+        Map<String, Object> errorDetails = new LinkedHashMap<>();
+        errorDetails.put("timestamp", Instant.now().toString());
+        errorDetails.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
+        errorDetails.put("error", HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
+        errorDetails.put("message", "AI Assistant request rate limit exceeded. Please try again later.");
         errorDetails.put("path", request.getRequestURI());
 
         objectMapper.writeValue(response.getWriter(), errorDetails);

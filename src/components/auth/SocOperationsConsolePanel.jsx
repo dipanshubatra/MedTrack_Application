@@ -27,20 +27,31 @@ import {
   X,
   FileCode,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Network
 } from "lucide-react";
+import {
+  getAllPolicies,
+  getAllTunnels,
+  evaluateTrafficAccess,
+  quarantineSourceSegment,
+  getViolationLogs,
+  getEbpfMatrix,
+  getAuditMetrics
+} from "../../services/MicrosegmentationService";
 import "../../pages/auth/auth.css";
 
 /**
  * SocOperationsConsolePanel Component
  *
  * High-Assurance Next-Gen Security Operations Center (SOC) Unified Command Console.
- * Integrates SIEM Log Correlation, CSPM Multi-Cloud Posture, CTI Threat Feeds, and SOAR Containment Playbooks.
- * Enforces NIST SP 800-61 Rev. 2, ISO/IEC 27035:2023, and CIS Benchmarks.
+ * Integrates SIEM Log Correlation, CSPM Multi-Cloud Posture, CTI Threat Feeds, SOAR Containment Playbooks,
+ * and Zero-Trust Microsegmentation & eBPF SDP Subsystem.
+ * Enforces NIST SP 800-207, NIST SP 800-61 Rev. 2, ISO/IEC 27035:2023, and CIS Benchmarks.
  */
 export default function SocOperationsConsolePanel() {
   // State
-  const [activeTab, setActiveTab] = useState("OVERVIEW"); // "OVERVIEW" | "SIEM" | "CSPM" | "CTI" | "SOAR"
+  const [activeTab, setActiveTab] = useState("OVERVIEW"); // "OVERVIEW" | "SIEM" | "CSPM" | "CTI" | "SOAR" | "ZTA"
   const [liveStreaming, setLiveStreaming] = useState(true);
   const [selectedSeverity, setSelectedSeverity] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
@@ -48,6 +59,60 @@ export default function SocOperationsConsolePanel() {
   const [notification, setNotification] = useState({ type: "", message: "" });
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupResult, setLookupResult] = useState(null);
+
+  // Microsegmentation & Zero Trust State
+  const [ztaPolicies, setZtaPolicies] = useState([]);
+  const [ztaTunnels, setZtaTunnels] = useState([]);
+  const [ztaViolations, setZtaViolations] = useState([]);
+  const [ebpfMatrix, setEbpfMatrix] = useState(null);
+  const [ztaMetrics, setZtaMetrics] = useState(null);
+  const [ztaLoading, setZtaLoading] = useState(false);
+
+  // ZTA Evaluation Form State
+  const [evalForm, setEvalForm] = useState({
+    sourceSegment: "PATIENT_PORTAL_DMZ",
+    destinationSegment: "PROD_HEALTH_DB",
+    protocol: "TCP",
+    port: "5432",
+    sourceIpAddress: "192.168.10.45"
+  });
+  const [evalResult, setEvalResult] = useState(null);
+
+  // ZTA Quarantine Form State
+  const [quarantineForm, setQuarantineForm] = useState({
+    sourceSegment: "GUEST_WIFI_VLAN",
+    quarantineReason: "Detected malicious port scanning anomaly",
+    emergencyOperator: "SOC_ANALYST_OP_01",
+    terminateActiveTunnels: true
+  });
+  const [quarantineResult, setQuarantineResult] = useState(null);
+
+  // Fetch ZTA Subsystem Data
+  const loadZtaData = useCallback(async () => {
+    setZtaLoading(true);
+    try {
+      const [policies, tunnels, violations, matrix, metrics] = await Promise.all([
+        getAllPolicies().catch(() => []),
+        getAllTunnels().catch(() => []),
+        getViolationLogs().catch(() => []),
+        getEbpfMatrix().catch(() => null),
+        getAuditMetrics().catch(() => null)
+      ]);
+      setZtaPolicies(policies);
+      setZtaTunnels(tunnels);
+      setZtaViolations(violations);
+      setEbpfMatrix(matrix);
+      setZtaMetrics(metrics);
+    } catch (err) {
+      // Fallback
+    } finally {
+      setZtaLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadZtaData();
+  }, [loadZtaData]);
 
   // SIEM Alerts Stream State
   const [alerts, setAlerts] = useState([
@@ -209,6 +274,38 @@ export default function SocOperationsConsolePanel() {
     }
   };
 
+  // ZTA Evaluation Handler
+  const handleEvaluateTraffic = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await evaluateTrafficAccess(evalForm);
+      setEvalResult(res);
+      setNotification({
+        type: "success",
+        message: `Traffic evaluation completed: Access ${res.accessGranted ? "GRANTED" : "DENIED"}.`
+      });
+      loadZtaData();
+    } catch (err) {
+      setNotification({ type: "error", message: "Failed to evaluate traffic access." });
+    }
+  };
+
+  // ZTA Quarantine Handler
+  const handleQuarantineSegment = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await quarantineSourceSegment(quarantineForm);
+      setQuarantineResult(res);
+      setNotification({
+        type: "success",
+        message: `Segment ${res.quarantinedSegment} isolated under rule ${res.quarantineRuleId}.`
+      });
+      loadZtaData();
+    } catch (err) {
+      setNotification({ type: "error", message: "Emergency quarantine trigger failed." });
+    }
+  };
+
   // Filtered SIEM Alerts
   const filteredAlerts = useMemo(() => {
     return alerts.filter((a) => {
@@ -235,7 +332,7 @@ export default function SocOperationsConsolePanel() {
                 <Radio size={12} className="animate-pulse" /> SOC UNIFIED HUB
               </span>
               <span className="px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center gap-1">
-                <ShieldCheck size={12} /> NIST SP 800-61 / ISO 27035
+                <ShieldCheck size={12} /> NIST SP 800-207 / NIST SP 800-61
               </span>
             </div>
 
@@ -243,7 +340,7 @@ export default function SocOperationsConsolePanel() {
               Security Operations Center (SOC) Command Console
             </h2>
             <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
-              Unified cross-subsystem security telemetry dashboard orchestrating real-time SIEM log correlation, CSPM continuous posture assessment, CTI threat intelligence feeds, and SOAR containment playbooks.
+              Unified cross-subsystem security telemetry dashboard orchestrating real-time SIEM log correlation, CSPM continuous posture assessment, CTI threat intelligence feeds, SOAR containment playbooks, and eBPF Zero-Trust microsegmentation.
             </p>
           </div>
 
@@ -258,7 +355,7 @@ export default function SocOperationsConsolePanel() {
             <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-700/80 text-[11px]">
               <div>Open Alerts: <strong className="text-amber-400">{alerts.filter(a => a.status === 'OPEN').length}</strong></div>
               <div>CSPM Posture: <strong className="text-sky-400">92.5%</strong></div>
-              <div>CTI IOCs: <strong className="text-purple-300">{ctiIndicators.length} Active</strong></div>
+              <div>ZTA Rules: <strong className="text-purple-300">{ztaPolicies.length} Active</strong></div>
               <div>SOAR Playbooks: <strong className="text-emerald-400">{playbooks.length} Ready</strong></div>
             </div>
           </div>
@@ -288,6 +385,7 @@ export default function SocOperationsConsolePanel() {
           {[
             { id: "OVERVIEW", label: "Executive Overview", icon: Activity },
             { id: "SIEM", label: "SIEM Log Correlation", icon: ShieldAlert },
+            { id: "ZTA", label: "Zero-Trust Microsegmentation", icon: Network },
             { id: "CSPM", label: "CSPM Cloud Posture", icon: Cloud },
             { id: "CTI", label: "Threat Intelligence", icon: Globe },
             { id: "SOAR", label: "SOAR Playbooks", icon: Zap }
@@ -342,20 +440,20 @@ export default function SocOperationsConsolePanel() {
 
             <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-bold uppercase tracking-wider">Zero Trust Segments</span>
+                <Network size={16} className="text-purple-400" />
+              </div>
+              <div className="text-2xl font-black text-white font-mono">{ztaPolicies.length} Rules</div>
+              <p className="text-[11px] text-purple-300 font-medium">NIST SP 800-207 eBPF Enforced</p>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="font-bold uppercase tracking-wider">Cloud Health Posture</span>
                 <Cloud size={16} className="text-emerald-400" />
               </div>
               <div className="text-2xl font-black text-white font-mono">92.5%</div>
               <p className="text-[11px] text-sky-400 font-medium">CIS AWS & Azure Compliant</p>
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span className="font-bold uppercase tracking-wider">Active Threat IOCs</span>
-                <Globe size={16} className="text-purple-400" />
-              </div>
-              <div className="text-2xl font-black text-white font-mono">4 Active</div>
-              <p className="text-[11px] text-purple-300 font-medium">STIX 2.1 Feed Connected</p>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
@@ -421,53 +519,42 @@ export default function SocOperationsConsolePanel() {
               </div>
             </div>
 
-            {/* CSPM Open Misconfigurations */}
+            {/* ZTA Zero Trust Microsegmentation Quick View */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Cloud size={18} className="text-emerald-400" /> CSPM Cloud Misconfigurations
+                  <Network size={18} className="text-purple-400" /> Zero-Trust Network Microsegmentation
                 </h3>
                 <button
                   type="button"
-                  onClick={() => setActiveTab("CSPM")}
-                  className="text-xs font-bold text-emerald-400 hover:underline flex items-center gap-1"
+                  onClick={() => setActiveTab("ZTA")}
+                  className="text-xs font-bold text-purple-400 hover:underline flex items-center gap-1"
                 >
-                  View All ({cspmFindings.length}) <ChevronRight size={14} />
+                  Manage ZTA Engine <ChevronRight size={14} />
                 </button>
               </div>
 
               <div className="space-y-3">
-                {cspmFindings.map((finding) => (
+                {ztaPolicies.slice(0, 3).map((policy) => (
                   <div
-                    key={finding.findingId}
-                    className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl flex items-start justify-between gap-3 text-xs"
+                    key={policy.ruleId}
+                    className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between gap-3 text-xs font-mono"
                   >
-                    <div className="space-y-1">
+                    <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white font-mono">{finding.findingId}</span>
-                        <span
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                            finding.status === "REMEDIATED"
-                              ? "bg-emerald-500/20 text-emerald-400"
-                              : "bg-red-500/20 text-red-400"
-                          }`}
-                        >
-                          {finding.status}
+                        <span className="font-bold text-purple-400">{policy.ruleId}</span>
+                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${policy.action === 'STRICT_ALLOW' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {policy.action}
                         </span>
                       </div>
-                      <p className="text-slate-300 font-sans">{finding.description}</p>
-                      <span className="text-slate-500 text-[11px] font-mono">Account: {finding.accountNumber}</span>
+                      <p className="text-slate-300 font-sans text-[11px] mt-1">
+                        {policy.sourceSegment} → {policy.destinationSegment} ({policy.allowedProtocol}:{policy.portRange})
+                      </p>
                     </div>
 
-                    {finding.status === "OPEN" && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemediateCspm(finding.findingId)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs whitespace-nowrap"
-                      >
-                        Fix Now
-                      </button>
-                    )}
+                    <span className="text-[10px] text-slate-400 font-sans font-bold px-2.5 py-1 bg-slate-800 rounded-lg">
+                      {policy.status}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -477,7 +564,208 @@ export default function SocOperationsConsolePanel() {
         </div>
       )}
 
-      {/* 4. TAB CONTENT: SIEM */}
+      {/* 4. TAB CONTENT: ZERO TRUST MICROSEGMENTATION (ZTA) */}
+      {activeTab === "ZTA" && (
+        <div className="space-y-6">
+          {/* ZTA Traffic Evaluator & Emergency Quarantine Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Real-time Access Evaluator Form */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Sliders size={18} className="text-sky-400" /> Real-time ZTA Traffic Evaluator
+              </h3>
+
+              <form onSubmit={handleEvaluateTraffic} className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 font-bold block mb-1">Source Segment</label>
+                    <input
+                      type="text"
+                      value={evalForm.sourceSegment}
+                      onChange={(e) => setEvalForm({ ...evalForm, sourceSegment: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 font-bold block mb-1">Destination Segment</label>
+                    <input
+                      type="text"
+                      value={evalForm.destinationSegment}
+                      onChange={(e) => setEvalForm({ ...evalForm, destinationSegment: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-slate-400 font-bold block mb-1">Protocol</label>
+                    <select
+                      value={evalForm.protocol}
+                      onChange={(e) => setEvalForm({ ...evalForm, protocol: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    >
+                      <option value="TCP">TCP</option>
+                      <option value="UDP">UDP</option>
+                      <option value="ICMP">ICMP</option>
+                      <option value="ALL">ALL</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-slate-400 font-bold block mb-1">Port</label>
+                    <input
+                      type="text"
+                      value={evalForm.port}
+                      onChange={(e) => setEvalForm({ ...evalForm, port: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 font-bold block mb-1">Source IP</label>
+                    <input
+                      type="text"
+                      value={evalForm.sourceIpAddress}
+                      onChange={(e) => setEvalForm({ ...evalForm, sourceIpAddress: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold transition shadow-lg shadow-sky-600/20"
+                >
+                  Evaluate Traffic Access (NIST SP 800-207)
+                </button>
+              </form>
+
+              {evalResult && (
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl text-xs space-y-2 font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Access Decision:</span>
+                    <span className={`font-bold px-2 py-0.5 rounded ${evalResult.accessGranted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {evalResult.accessGranted ? "GRANTED (ALLOW)" : "DENIED (BLOCK)"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Matched Rule:</span>
+                    <strong className="text-purple-300">{evalResult.matchedRuleId}</strong>
+                  </div>
+                  <p className="text-slate-300 font-sans text-[11px] pt-1 border-t border-slate-800/80">
+                    Reason: {evalResult.evalReason}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Emergency Segment Quarantine Form */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                <AlertTriangle size={18} className="text-red-400" /> Emergency Segment Quarantine Trigger
+              </h3>
+
+              <form onSubmit={handleQuarantineSegment} className="space-y-3 text-xs">
+                <div>
+                  <label className="text-slate-400 font-bold block mb-1">Target Segment to Isolate</label>
+                  <input
+                    type="text"
+                    value={quarantineForm.sourceSegment}
+                    onChange={(e) => setQuarantineForm({ ...quarantineForm, sourceSegment: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-400 font-bold block mb-1">Quarantine Reason</label>
+                  <input
+                    type="text"
+                    value={quarantineForm.quarantineReason}
+                    onChange={(e) => setQuarantineForm({ ...quarantineForm, quarantineReason: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <input
+                    type="checkbox"
+                    id="termTunnels"
+                    checked={quarantineForm.terminateActiveTunnels}
+                    onChange={(e) => setQuarantineForm({ ...quarantineForm, terminateActiveTunnels: e.target.checked })}
+                    className="rounded border-slate-700 bg-slate-950 text-red-500 focus:ring-red-500"
+                  />
+                  <label htmlFor="termTunnels" className="text-slate-300 font-medium cursor-pointer">
+                    Terminate active SDP tunnel sessions targeting this segment
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition shadow-lg shadow-red-600/20"
+                >
+                  Isolate & Quarantine Segment Immediately
+                </button>
+              </form>
+
+              {quarantineResult && (
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl text-xs space-y-2 font-mono">
+                  <div className="flex items-center justify-between text-emerald-400 font-bold">
+                    <span>Quarantine Status:</span>
+                    <span>{quarantineResult.quarantineStatus}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span>Rule Created:</span>
+                    <strong className="text-red-400">{quarantineResult.quarantineRuleId}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span>Terminated Tunnels:</span>
+                    <strong>{quarantineResult.terminatedTunnelsCount} Sessions</strong>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* eBPF Bytecode Matrix Viewer & Violation Audit Logs */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Cpu size={18} className="text-purple-400" /> Kernel eBPF Bytecode Compiled Rule Matrix
+              </h3>
+              <button
+                type="button"
+                onClick={loadZtaData}
+                className="text-xs font-bold text-purple-400 hover:underline flex items-center gap-1"
+              >
+                <RefreshCw size={12} /> Refresh eBPF Map
+              </button>
+            </div>
+
+            {ebpfMatrix ? (
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl text-xs space-y-3 font-mono">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Engine: <strong className="text-sky-400">{ebpfMatrix.ebpfEngine}</strong></span>
+                  <span>Active Rules Compiled: <strong className="text-emerald-400">{ebpfMatrix.activeRulesCompiled}</strong></span>
+                </div>
+                
+                <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                  {ebpfMatrix.ebpfBytecodeMap?.map((entry, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[11px] bg-slate-900 p-2 rounded-lg">
+                      <span className="text-purple-300">{entry.ebpfKey}</span>
+                      <span className="text-amber-400 font-bold">{entry.ebpfValue}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Loading eBPF matrix simulation...</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 5. TAB CONTENT: SIEM */}
       {activeTab === "SIEM" && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl text-xs">
@@ -583,7 +871,7 @@ export default function SocOperationsConsolePanel() {
         </div>
       )}
 
-      {/* 5. TAB CONTENT: CTI */}
+      {/* 6. TAB CONTENT: CTI */}
       {activeTab === "CTI" && (
         <div className="space-y-6">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
@@ -630,7 +918,7 @@ export default function SocOperationsConsolePanel() {
         </div>
       )}
 
-      {/* 6. TAB CONTENT: SOAR */}
+      {/* 7. TAB CONTENT: SOAR */}
       {activeTab === "SOAR" && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
