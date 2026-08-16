@@ -7,6 +7,10 @@ import {
   SlidersHorizontal, Sparkles, Stethoscope, Syringe, TestTube, TrendingDown,
   TrendingUp, User, Users, Workflow, X, Zap
 } from "lucide-react";
+import { SeverityBadge as Badge, SEVERITY_META } from "../../components/common/SeverityBadge";
+import { StatusPill } from "../../components/common/StatusPill";
+import { MiniSparkline } from "../../components/common/Sparkline";
+import { StatCard } from "../../components/common/StatCard";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Biomedical & Clinical AI Hub
@@ -31,12 +35,7 @@ import {
  *  Constants & seed data
  * ------------------------------------------------------------------ */
 
-const SEVERITY_META = {
-  critical: { label: "Critical", text: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30", dot: "bg-rose-500", ring: "shadow-rose-500/20" },
-  high: { label: "High", text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", dot: "bg-amber-500", ring: "shadow-amber-500/20" },
-  medium: { label: "Medium", text: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30", dot: "bg-sky-500", ring: "shadow-sky-500/20" },
-  low: { label: "Low", text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", dot: "bg-emerald-500", ring: "shadow-emerald-500/20" },
-};
+
 
 const STATUS_META = {
   RUNNING: { label: "Inference", cls: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
@@ -167,56 +166,13 @@ const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
  *  Small presentational components
  * ------------------------------------------------------------------ */
 
-function Badge({ tone = "medium", children, className = "" }) {
-  const meta = SEVERITY_META[tone] || SEVERITY_META.medium;
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${meta.bg} ${meta.border} ${meta.text} ${className}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-      {children}
-    </span>
-  );
-}
 
-function StatusPill({ status }) {
-  const meta = STATUS_META[status] || STATUS_META.RUNNING;
-  return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>;
-}
 
-function MiniSparkline({ points, tone = "sky", width = 120, height = 34 }) {
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const coords = points.map((p, i) => {
-    const x = (i / (points.length - 1)) * width;
-    const y = height - 3 - ((p - min) / range) * (height - 6);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const stroke = { sky: "#38bdf8", rose: "#fb7185", amber: "#fbbf24", emerald: "#34d399" }[tone] || "#38bdf8";
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible" aria-label="trend sparkline">
-      <polyline points={coords.join(" ")} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" opacity="0.95" />
-      <circle cx={width - 1} cy={coords[coords.length - 1].split(",")[1]} r="2.4" fill={stroke} />
-    </svg>
-  );
-}
 
-function StatCard({ icon: Icon, label, value, sub, tone = "sky" }) {
-  const iconCls = { sky: "text-sky-400 bg-sky-500/10 border-sky-500/20", rose: "text-rose-400 bg-rose-500/10 border-rose-500/20", amber: "text-amber-400 bg-amber-500/10 border-amber-500/20", emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" }[tone];
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/20">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-black text-white tabular-nums">{value}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{sub}</p>
-        </div>
-        <div className={`rounded-xl border p-2.5 ${iconCls}`}>
-          <Icon size={18} />
-        </div>
-      </div>
-    </div>
-  );
-}
+
+
+
+
 
 function SearchBox({ value, onChange, placeholder }) {
   return (
@@ -370,7 +326,7 @@ function DiagnosticOverwatchTab({ cases, search, severity, onInspect }) {
                   <p className="text-[11px] text-slate-500">{c.study} · {c.mrn}</p>
                 </div>
               </div>
-              <StatusPill status={c.status} />
+              <StatusPill status={c.status} map={STATUS_META} fallback={STATUS_META.RUNNING} />
             </div>
 
             <div className="mt-3 space-y-1.5">
@@ -472,7 +428,7 @@ function PatientRiskTab({ patients, search, severity, onInspect, overrides, onTo
                 {activeFactors.length} active risk factor{activeFactors.length === 1 ? "" : "s"}
               </p>
               <div className="flex items-center gap-2">
-                <MiniSparkline points={trend} tone={level === "critical" ? "rose" : level === "high" ? "amber" : "sky"} width={92} height={28} />
+                <MiniSparkline points={trend} tone={level === "critical" ? "rose" : level === "high" ? "amber" : "sky"} width={92} height={28} filled={false} />
                 <button onClick={() => onResetFactors(p.id)} className="text-[11px] font-semibold text-slate-500 transition hover:text-sky-400">
                   Reset
                 </button>
@@ -1053,7 +1009,7 @@ export default function ClinicalAIHub({ onNavigate }) {
               <Modal open onClose={() => setInspect(null)} title={c.study} subtitle={`${c.patientName} · ${c.mrn} · routed ${c.elapsed} min ago`} icon={ScanLine} wide>
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusPill status={c.status} />
+                    <StatusPill status={c.status} map={STATUS_META} fallback={STATUS_META.RUNNING} />
                     <Badge tone={c.priority}>Priority: {c.priority}</Badge>
                     <span className="text-[11px] text-slate-500">Modality {c.modality} · Requested by {c.requestedBy}</span>
                   </div>
@@ -1130,7 +1086,7 @@ export default function ClinicalAIHub({ onNavigate }) {
                   <div>
                     <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Score trajectory</p>
                     <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                      <MiniSparkline points={seededSeries(p.id.length + p.baseRisk, 24, Math.max(20, p.baseRisk - 12), 16)} tone={level === "critical" ? "rose" : level === "high" ? "amber" : "sky"} width={220} height={48} />
+                      <MiniSparkline points={seededSeries(p.id.length + p.baseRisk, 24, Math.max(20, p.baseRisk - 12), 16)} tone={level === "critical" ? "rose" : level === "high" ? "amber" : "sky"} width={220} height={48} filled={false} />
                       <span className={`text-xl font-black tabular-nums ${sev.text}`}>{score}</span>
                     </div>
                   </div>

@@ -6,6 +6,9 @@ import {
   Pause, Play, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Stethoscope, TestTube, Timer, TrendingDown, TrendingUp, User, Users, X, Zap
 } from "lucide-react";
+import { SeverityBadge as Badge, SEVERITY_META } from "../../components/common/SeverityBadge";
+import { MiniSparkline } from "../../components/common/Sparkline";
+import { StatCard } from "../../components/common/StatCard";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Clinical Trial & Genomic Research Hub
@@ -30,12 +33,7 @@ import {
  *  Constants & seed data
  * ------------------------------------------------------------------ */
 
-const SEVERITY_META = {
-  critical: { label: "Critical", text: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30", dot: "bg-rose-500" },
-  high: { label: "High", text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", dot: "bg-amber-500" },
-  medium: { label: "Medium", text: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30", dot: "bg-sky-500" },
-  low: { label: "Low", text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", dot: "bg-emerald-500" },
-};
+
 
 const RELEVANCE_META = {
   approved: { label: "Approved companion", tone: "emerald", note: "FDA-approved companion diagnostic" },
@@ -162,53 +160,11 @@ const DEFAULT_CRITERIA = { ageMin: 18, ageMax: 85, stages: [], ecogMax: 2, genot
  *  Small presentational components
  * ------------------------------------------------------------------ */
 
-function Badge({ tone = "medium", children, className = "" }) {
-  const meta = SEVERITY_META[tone] || SEVERITY_META.medium;
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${meta.bg} ${meta.border} ${meta.text} ${className}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-      {children}
-    </span>
-  );
-}
 
-function MiniSparkline({ points, tone = "sky", width = 130, height = 38, min = null, max = null }) {
-  const lo = min ?? Math.min(...points);
-  const hi = max ?? Math.max(...points);
-  const range = hi - lo || 1;
-  const coords = points.map((p, i) => {
-    const x = (i / (points.length - 1)) * width;
-    const y = height - 3 - ((p - lo) / range) * (height - 6);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const stroke = { sky: "#38bdf8", rose: "#fb7185", amber: "#fbbf24", emerald: "#34d399", violet: "#a78bfa", cyan: "#22d3ee" }[tone] || "#38bdf8";
-  const lastY = coords[coords.length - 1].split(",")[1];
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible" aria-label="distribution sparkline">
-      <polygon points={`0,${height} ${coords.join(" ")} ${width},${height}`} fill={stroke} opacity="0.08" />
-      <polyline points={coords.join(" ")} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" opacity="0.95" />
-      <circle cx={width - 1} cy={lastY} r="2.4" fill={stroke} />
-    </svg>
-  );
-}
 
-function StatCard({ icon: Icon, label, value, sub, tone = "sky" }) {
-  const iconCls = { sky: "text-sky-400 bg-sky-500/10 border-sky-500/20", rose: "text-rose-400 bg-rose-500/10 border-rose-500/20", amber: "text-amber-400 bg-amber-500/10 border-amber-500/20", emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", violet: "text-violet-400 bg-violet-500/10 border-violet-500/20" }[tone];
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/20">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-black text-white tabular-nums">{value}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{sub}</p>
-        </div>
-        <div className={`rounded-xl border p-2.5 ${iconCls}`}>
-          <Icon size={18} />
-        </div>
-      </div>
-    </div>
-  );
-}
+
+
+
 
 function SearchBox({ value, onChange, placeholder }) {
   return (
