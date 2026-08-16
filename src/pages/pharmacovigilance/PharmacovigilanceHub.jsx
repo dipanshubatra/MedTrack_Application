@@ -338,59 +338,15 @@ export default function PharmacovigilanceHub() {
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search cases, signals, submissions…"
-              className="w-64 rounded-xl border border-slate-800 bg-slate-900 py-2 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
-            />
-          </div>
+          <CompactSearch value={query} onChange={setQuery} placeholder="Search cases, signals, submissions…" />
           {tab === "cases" && (
-            <div className="flex gap-1.5">
-              {["All", "Serious", "Non-serious"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setSevFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    sevFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "Serious", "Non-serious"]} value={sevFilter} onChange={setSevFilter} />
           )}
           {tab === "signals" && (
-            <div className="flex gap-1.5">
-              {["All", "Tier 1", "Tier 2", "Tier 3"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setTierFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    tierFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "Tier 1", "Tier 2", "Tier 3"]} value={tierFilter} onChange={setTierFilter} />
           )}
           {tab === "submissions" && (
-            <div className="flex gap-1.5">
-              {["All", "In Progress", "Drafting", "Review", "Scheduled"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    statusFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "In Progress", "Drafting", "Review", "Scheduled"]} value={statusFilter} onChange={setStatusFilter} />
           )}
           <span className="ml-auto text-[11px] text-slate-500">
             {sim.tick} ticks · <span className={sim.running ? "text-emerald-400" : "text-amber-400"}>{sim.running ? "LIVE" : "PAUSED"}</span>

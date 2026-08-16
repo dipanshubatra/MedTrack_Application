@@ -228,19 +228,6 @@ const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 
 
-function SearchBox({ value, onChange, placeholder }) {
-  return (
-    <div className="relative w-full sm:w-72">
-      <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20"
-      />
-    </div>
-  );
-}
 
 function FilterChips({ value, onChange, options, allLabel = "All" }) {
   return (
@@ -1066,7 +1053,7 @@ export default function ColdChainCommandHub({ onNavigate }) {
           {/* ---------- Toolbar ---------- */}
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/50 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-              <SearchBox value={search} onChange={setSearch} placeholder={`Search ${activeMeta.label.toLowerCase()}…`} />
+              <SearchBox value={search} onChange={setSearch} placeholder={`Search ${activeMeta.label.toLowerCase()}…`} accent="cyan" />
               <FilterChips
                 value={filter}
                 onChange={setFilter}
