@@ -6,6 +6,11 @@ import {
   Pause, Play, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Stethoscope, TestTube, Timer, TrendingDown, TrendingUp, User, Users, X, Zap
 } from "lucide-react";
+import { clamp, round1, fmtNumber, seededSeries as series } from "../../utils/series";
+import PlaybackControls from "../../components/common/PlaybackControls";
+import { ExportButton } from "../../components/common/ExportButton";
+import LiveStatus from "../../components/common/LiveStatus";
+import ToastStack, { useToasts } from "../../components/common/ToastStack";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Clinical Trial & Genomic Research Hub
@@ -119,25 +124,13 @@ const SEED_POINTS = 22;
  *  Pure helpers
  * ------------------------------------------------------------------ */
 
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const round1 = (v) => Math.round(v * 10) / 10;
 
-const seededSeries = (seed, n = SEED_POINTS, base = 50, amp = 12, lo = 0, hi = 100) => {
-  const pts = [];
-  let v = base;
-  let s = seed * 7919;
-  for (let i = 0; i < n; i += 1) {
-    s = (s * 1103515245 + 12345) % 2147483648;
-    const r = (s / 2147483648) - 0.5;
-    v = clamp(v + r * amp + (base - v) * 0.08, lo, hi);
-    pts.push(round1(v));
-  }
-  return pts;
-};
+const seededSeries = (seed, n = SEED_POINTS, base = 50, amp = 12, lo = 0, hi = 100) =>
+  series(seed, n, base, amp, { lo, hi, seedMult: 7919, pull: 0.08 });
 
 const jitter = (v, amount, lo, hi) => clamp(v + (Math.random() * 2 - 1) * amount, lo, hi);
 
-const fmtNumber = (n) => n.toLocaleString("en-US");
+
 const fmtP = (v) => v.toExponential(2).replace("e", " × 10^");
 
 const enrollmentPct = (t) => Math.round((t.enrolled / t.target) * 100);
@@ -739,18 +732,14 @@ export default function ClinicalTrialHub({ onNavigate }) {
   const [trials, setTrials] = useState(TRIALS);
   const [criteria, setCriteria] = useState(DEFAULT_CRITERIA);
   const [selected, setSelected] = useState(() => new Set());
-  const [toasts, setToasts] = useState([]);
+  const { toasts, pushToast, dismissToast } = useToasts();
   const [inspect, setInspect] = useState(null);
   const [exporting, setExporting] = useState(false);
   const seqRef = useRef(9000);
   const trialsRef = useRef(trials);
   useEffect(() => { trialsRef.current = trials; }, [trials]);
 
-  const pushToast = useCallback((title, body, tone = "medium") => {
-    const id = `T-${seqRef.current++}`;
-    setToasts((prev) => [...prev.slice(-3), { id, title, body, tone }]);
-    window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 6500);
-  }, []);
+
 
   const toggleSelect = useCallback((patientId) => {
     setSelected((prev) => {
@@ -884,13 +873,7 @@ export default function ClinicalTrialHub({ onNavigate }) {
               <div>
                 <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Clinical Trial &amp; Genomic Research</h1>
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                  <span className="flex items-center gap-1.5">
-                    <span className="relative flex h-2 w-2">
-                      <span className={`absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 ${playing ? "animate-ping" : ""}`} />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                    </span>
-                    {playing ? `Simulating · tick #${tick}` : "Simulation paused"}
-                  </span>
+                  <LiveStatus playing={playing} tick={tick} livePrefix="Simulating · tick #" />
                   <span className="text-slate-600">·</span>
                   <span>Biomarker Explorer · Cohort Sandbox · Trial Portfolio</span>
                 </p>
@@ -899,39 +882,14 @@ export default function ClinicalTrialHub({ onNavigate }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-xl border border-slate-800 bg-slate-900/70">
-              <button
-                onClick={() => setPlaying((p) => !p)}
-                className="flex items-center gap-2 rounded-l-xl border-r border-slate-800 px-3.5 py-2.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                aria-label={playing ? "Pause simulation" : "Resume simulation"}
-              >
-                {playing ? <Pause size={14} /> : <Play size={14} />}
-                {playing ? "Pause" : "Resume"}
-              </button>
-              <select
-                value={speed}
-                onChange={(e) => setSpeed(Number(e.target.value))}
-                className="rounded-r-xl bg-transparent px-2 py-2.5 text-xs font-semibold text-slate-300 outline-none"
-                aria-label="Simulation speed"
-              >
-                <option value={1} className="bg-slate-900">1× realtime</option>
-                <option value={2} className="bg-slate-900">2× fast</option>
-                <option value={4} className="bg-slate-900">4× turbo</option>
-              </select>
-            </div>
-            <button
-              onClick={resetSimulation}
-              className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3.5 py-2.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
-            >
-              <RefreshCw size={14} /> Reset
-            </button>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3.5 py-2.5 text-xs font-bold text-sky-400 transition hover:bg-sky-500/20 disabled:opacity-60"
-            >
-              <Download size={14} /> {exporting ? "Writing…" : "Export CSV"}
-            </button>
+            <PlaybackControls
+              playing={playing}
+              onToggle={() => setPlaying((p) => !p)}
+              speed={speed}
+              onSpeedChange={setSpeed}
+              onReset={resetSimulation}
+            />
+            <ExportButton onClick={handleExport} exporting={exporting} />
           </div>
         </div>
 
@@ -1015,23 +973,7 @@ export default function ClinicalTrialHub({ onNavigate }) {
       </div>
 
       {/* ---------- Toast stack ---------- */}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => {
-          const meta = SEVERITY_META[t.tone] || SEVERITY_META.medium;
-          return (
-            <div key={t.id} className={`pointer-events-auto flex items-start gap-3 rounded-xl border bg-slate-900 p-3 shadow-2xl shadow-black/50 animate-fadeSlideIn ${meta.border}`}>
-              <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${meta.dot}`} />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-white">{t.title}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-slate-400">{t.body}</p>
-              </div>
-              <button onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))} className="text-slate-600 transition hover:text-white" aria-label="Dismiss notification">
-                <X size={14} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} severityMeta={SEVERITY_META} />
 
       {/* ---------- Inspection modal ---------- */}
       {inspect && (
