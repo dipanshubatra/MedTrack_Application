@@ -6,6 +6,9 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
+import { TabsBar } from "../../components/common/TabsBar";
+import { SimControls } from "../../components/common/SimControls";
+import { EmptyState } from "../../components/common/EmptyState";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -133,13 +136,6 @@ const StatCard = ({ icon: Icon, label, value, sub, accent = "text-emerald-400" }
     </div>
     <div className="mt-2 text-2xl font-bold text-slate-100">{value}</div>
     {sub && <div className="mt-1 text-[11px] text-slate-500">{sub}</div>}
-  </div>
-);
-
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <ScanIcon size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
   </div>
 );
 
@@ -378,31 +374,7 @@ export default function RadiologyImagingHub() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
-              <button
-                onClick={() => sim.setRunning(!sim.running)}
-                className="rounded-lg p-1.5 text-slate-300 hover:bg-slate-800"
-                title={sim.running ? "Pause simulation" : "Resume simulation"}
-              >
-                {sim.running ? <Pause size={15} /> : <Play size={15} />}
-              </button>
-              {[1, 2, 4].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => sim.setSpeed(s)}
-                  className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${sim.speed === s ? "bg-emerald-500/20 text-emerald-300" : "text-slate-400 hover:bg-slate-800"}`}
-                >
-                  {s}×
-                </button>
-              ))}
-              <button
-                onClick={sim.reset}
-                className="ml-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                title="Reset simulation"
-              >
-                <RefreshCw size={15} />
-              </button>
-            </div>
+            <SimControls sim={sim} />
             <button
               onClick={exportCsv}
               className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300"
@@ -420,25 +392,7 @@ export default function RadiologyImagingHub() {
           <StatCard icon={Radar} label="AI Jobs Completed" value={stats.aiDone} sub="CAD findings available" accent="text-sky-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -530,7 +484,7 @@ export default function RadiologyImagingHub() {
                 <span className="text-[11px] text-slate-500">DICOM MWL · TAT in minutes</span>
               </div>
               {filteredStudies.length === 0 ? (
-                <EmptyState message="No studies match the current filters." />
+                <EmptyState icon={ScanIcon} message="No studies match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -651,7 +605,7 @@ export default function RadiologyImagingHub() {
               ))}
               {filteredModalities.length === 0 && (
                 <div className="sm:col-span-2 lg:col-span-3 xl:col-span-5">
-                  <EmptyState message="No modalities match the current filters." />
+                  <EmptyState icon={ScanIcon} message="No modalities match the current filters." />
                 </div>
               )}
             </section>
@@ -724,7 +678,7 @@ export default function RadiologyImagingHub() {
                 <span className="text-[11px] text-slate-500">DICOM SR structured findings</span>
               </div>
               {filteredAi.length === 0 ? (
-                <EmptyState message="No AI jobs match the current filters." />
+                <EmptyState icon={ScanIcon} message="No AI jobs match the current filters." />
               ) : (
                 <div className="divide-y divide-slate-800/60">
                   {filteredAi.map((a) => (

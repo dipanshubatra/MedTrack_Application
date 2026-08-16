@@ -87,9 +87,15 @@ const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
-const BiomedicalAiGovernancePage = lazy(() => import("../pages/ai/BiomedicalAiGovernancePage"));
-const ClinicalAIHub = lazy(() => import("../pages/clinical/ClinicalAIHub"));
-const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
+const RegulatoryAuditHub = lazy(() => import("../pages/audit/RegulatoryAuditHub"));
+const HospitalCommandOrchestrationSuitePage = lazy(() => import("../pages/command/HospitalCommandOrchestrationSuitePage"));
+const LabAutomationHub = lazy(() => import("../pages/lab/LabAutomationHub"));
+const PediatricNeonatalIcuHubPage = lazy(() => import("../pages/pediatric/PediatricNeonatalIcuHubPage"));
+const PharmacovigilanceHub = lazy(() => import("../pages/pharmacovigilance/PharmacovigilanceHub"));
+const MedicationSupplyColdChainHubPage = lazy(() => import("../pages/supply/MedicationSupplyColdChainHubPage"));
+const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRoboticsHub"));
+const TelehealthRemoteMonitoringHubPage = lazy(() => import("../pages/telehealth/TelehealthRemoteMonitoringHubPage"));
+const GenomicClinicalTrialsHubPage = lazy(() => import("../pages/trials/GenomicClinicalTrialsHubPage"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -125,9 +131,6 @@ const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentRe
 const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
 const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
 const SocOperationsConsolePage = lazy(() => import("../pages/auth/SocOperationsConsolePage"));
-const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/ConfidentialComputeEnclavePage"));
-const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
-const QuantumCryptoKmsVaultPage = lazy(() => import("../pages/security/QuantumCryptoKmsVaultPage"));
 
 
 /**
@@ -235,20 +238,21 @@ export const ROUTES = [
   { page: "icu-vitals-telemetry", slugs: ["icu-vitals-telemetry", "bedside-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
   { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
   { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
-  { page: "quantum-kms", slugs: ["quantum-kms", "kms-vault"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
-  { page: "confidential-compute", slugs: ["confidential-compute", "enclaves"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
-  { page: "ctem", slugs: ["ctem", "ctem-hub"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
-
   // --- radiology imaging & PACS console ----------------------------------------
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
   { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
-  { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
-  { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
-  { page: "icu-vitals", slugs: ["icu-vitals", "vitals-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
-
+  { page: "regulatory-audit", slugs: ["regulatory-audit", "provenance-ledger"], component: RegulatoryAuditHub, access: AUTHENTICATED },
+  { page: "hospital-command", slugs: ["hospital-command", "multi-subsystem"], component: HospitalCommandOrchestrationSuitePage, access: AUTHENTICATED },
+  { page: "lab-automation", slugs: ["lab-automation", "lab-fleet"], component: LabAutomationHub, access: AUTHENTICATED },
+  { page: "pediatric-neonatal-icu", slugs: ["pediatric-neonatal-icu", "neonatal-icu"], component: PediatricNeonatalIcuHubPage, access: AUTHENTICATED },
+  { page: "pharmacovigilance", slugs: ["pharmacovigilance", "drug-safety"], component: PharmacovigilanceHub, access: AUTHENTICATED },
+  { page: "medication-supply", slugs: ["medication-supply", "pharma-cold-chain"], component: MedicationSupplyColdChainHubPage, access: AUTHENTICATED },
+  { page: "surgical-robotics", slugs: ["surgical-robotics", "or-orchestration"], component: SurgicalRoboticsHub, access: AUTHENTICATED },
+  { page: "telehealth-rpm", slugs: ["telehealth-rpm", "remote-monitoring"], component: TelehealthRemoteMonitoringHubPage, access: AUTHENTICATED },
+  { page: "genomic-trials", slugs: ["genomic-trials", "cohort-analytics"], component: GenomicClinicalTrialsHubPage, access: AUTHENTICATED },
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
   { page: "update-task", slugs: ["update-task", "updatetask"], component: UpdateTask, access: AUTHENTICATED, param: "task", permission: "UPDATE_MAINTENANCE" },
@@ -295,9 +299,6 @@ export const ROUTES = [
   { page: "compliance-evidence", slugs: ["evidence", "compliance-evidence"], component: ComplianceEvidencePage, access: AUTHENTICATED },
   { page: "compliance-reporting", slugs: ["compliance-reporting", "reporting"], component: ComplianceReportingPage, access: AUTHENTICATED },
   { page: "soc-console", slugs: ["soc-console", "soc-command-center"], component: SocOperationsConsolePage, access: AUTHENTICATED },
-  { page: "confidential-compute", slugs: ["confidential-compute", "secure-enclave"], component: ConfidentialComputeEnclavePage, access: AUTHENTICATED },
-  { page: "ctem", slugs: ["ctem", "attack-surface"], component: CtemAttackSurfaceHubPage, access: AUTHENTICATED },
-  { page: "quantum-crypto", slugs: ["quantum-crypto", "quantum-kms"], component: QuantumCryptoKmsVaultPage, access: AUTHENTICATED },
 ];
 
 

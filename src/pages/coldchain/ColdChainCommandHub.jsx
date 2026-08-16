@@ -7,6 +7,7 @@ import {
   Search, Server, ShieldAlert, ShieldCheck, Snowflake, Syringe, Thermometer,
   Timer, Truck, Users, Warehouse, Wind, Wrench, X, Zap
 } from "lucide-react";
+import { TabsBar } from "../../components/common/TabsBar";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Pharmaceutical Cold-Chain & Med-Supply Chain Command Station
@@ -1190,26 +1191,7 @@ export default function ColdChainCommandHub({ onNavigate }) {
 
         {/* ---------- Tabs ---------- */}
         <div className="mt-8">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = activeTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setActiveTab(t.key)}
-                  className={`flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition ${
-                    active
-                      ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-400 shadow-lg shadow-cyan-500/10"
-                      : "border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-200"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
+          <TabsBar tabs={TABS} active={activeTab} onChange={setActiveTab} accent="cyan" />
 
           {/* ---------- Toolbar ---------- */}
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/50 p-3 sm:flex-row sm:items-center sm:justify-between">
