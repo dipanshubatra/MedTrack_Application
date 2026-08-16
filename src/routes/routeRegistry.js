@@ -98,6 +98,7 @@ const GenomicClinicalTrialsHubPage = lazy(() => import("../pages/trials/GenomicC
 const HospitalCommandOrchestrationSuitePage = lazy(() =>
   import("../pages/command/HospitalCommandOrchestrationSuitePage")
 );
+const BloodBankTransfusionHub = lazy(() => import("../pages/bloodbank/BloodBankTransfusionHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -265,6 +266,7 @@ export const ROUTES = [
   { page: "telehealth-monitoring", slugs: ["telehealth-monitoring", "remote-patient-monitoring"], component: TelehealthRemoteMonitoringHubPage, access: AUTHENTICATED },
   { page: "genomic-trials", slugs: ["genomic-trials", "genomic-research"], component: GenomicClinicalTrialsHubPage, access: AUTHENTICATED },
   { page: "command-orchestration", slugs: ["command-orchestration", "hospital-command"], component: HospitalCommandOrchestrationSuitePage, access: AUTHENTICATED },
+  { page: "blood-bank", slugs: ["blood-bank", "transfusion-medicine"], component: BloodBankTransfusionHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
