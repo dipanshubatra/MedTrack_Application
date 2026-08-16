@@ -16,7 +16,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -234,29 +237,41 @@ public class SparePartService {
             return;
         }
 
+        Map<String, Integer> aggregatedQuantities = new LinkedHashMap<>();
+        Map<String, String> displayPartNumbers = new LinkedHashMap<>();
+
         for (com.medtrack.dto.SparePartDeductionItem item : items) {
-            if (item.getPartNumber() == null || item.getPartNumber().isBlank()) {
+            if (item == null || item.getPartNumber() == null || item.getPartNumber().isBlank()) {
                 continue;
             }
-            String partNumber = item.getPartNumber().trim();
+            String trimmed = item.getPartNumber().trim();
+            String normalizedKey = trimmed.toUpperCase(Locale.ROOT);
             int quantity = item.getQuantity() != null && item.getQuantity() > 0 ? item.getQuantity() : 1;
 
-            SparePart part = sparePartRepository
-                    .findActiveByHospitalIdAndPartNumberForUpdate(hospitalId, partNumber)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Spare part with part number '" + partNumber + "' not found in hospital inventory"));
+            aggregatedQuantities.put(normalizedKey, aggregatedQuantities.getOrDefault(normalizedKey, 0) + quantity);
+            displayPartNumbers.putIfAbsent(normalizedKey, trimmed);
+        }
 
-            if (part.getStockLevel() < quantity) {
-                throw new IllegalArgumentException("Insufficient stock for spare part: " + partNumber
-                        + ". Available: " + part.getStockLevel() + ", Required: " + quantity);
+        for (Map.Entry<String, Integer> entry : aggregatedQuantities.entrySet()) {
+            String normalizedKey = entry.getKey();
+            String displayPartNumber = displayPartNumbers.get(normalizedKey);
+            int requiredQuantity = entry.getValue();
+
+            SparePart part = sparePartRepository
+                    .findActiveByHospitalIdAndPartNumberForUpdate(hospitalId, displayPartNumber)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Spare part with part number '" + displayPartNumber + "' not found in hospital inventory"));
+
+            if (part.getStockLevel() < requiredQuantity) {
+                throw new IllegalArgumentException("Insufficient stock for spare part: " + displayPartNumber
+                        + ". Available: " + part.getStockLevel() + ", Required: " + requiredQuantity);
             }
 
-            part.setStockLevel(part.getStockLevel() - quantity);
+            part.setStockLevel(part.getStockLevel() - requiredQuantity);
             sparePartRepository.save(part);
         }
     }
 
-    
     @Transactional
     public com.medtrack.dto.SparePartImportSummary bulkImport(org.springframework.web.multipart.MultipartFile file, String username) {
         Hospital hospital = getHospitalForUser(username);
@@ -287,7 +302,7 @@ public class SparePartService {
         
         int startIndex = 0;
         java.util.List<String> firstRow = com.medtrack.util.CsvSupport.parseLine(records.get(0));
-        if (!firstRow.isEmpty() && firstRow.get(0).toLowerCase().contains("part")) {
+        if (!firstRow.isEmpty() && firstRow.get(0).toLowerCase(Locale.ROOT).contains("part")) {
             startIndex = 1;
         }
         
@@ -330,6 +345,18 @@ public class SparePartService {
                 }
                 
                 Double unitCost = 0.0;
+                if (fields.size() >= 5 && trimToNull(fields.get(4)) != null) {
+                    try {
+                        unitCost = Double.parseDouble(trimToNull(fields.get(4)));
+                        if (unitCost < 0.0 || !Double.isFinite(unitCost)) {
+                            summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Unit cost must be a non-negative finite number"));
+                            continue;
+                        }
+                    } catch (NumberFormatException e) {
+                        summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Unit cost must be numeric"));
+                        continue;
+                    }
+                }
                 
                 final String pNum = partNumber;
                 if (validParts.stream().anyMatch(p -> p.getPartNumber().equalsIgnoreCase(pNum))) {
