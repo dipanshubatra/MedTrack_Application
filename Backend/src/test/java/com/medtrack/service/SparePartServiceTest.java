@@ -2,12 +2,15 @@ package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.dto.SparePartDeductionItem;
+import com.medtrack.dto.SparePartImportSummary;
 import com.medtrack.dto.SparePartResponse;
 import com.medtrack.dto.SparePartStockRequest;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.SparePart;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.SparePartRepository;
+import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -499,6 +502,259 @@ class SparePartServiceTest {
         assertThatThrownBy(() -> sparePartService.deductStock(request, "techUser"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Insufficient stock for part: FILTER-001");
+        verify(sparePartRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - aggregates duplicate deduction items and deducts cumulative quantity")
+    void deductSparePartsForWorkOrder_AggregatesDuplicateItemsAndDeductsCorrectly() {
+        SparePartDeductionItem item1 = new SparePartDeductionItem();
+        item1.setPartNumber("filter-001");
+        item1.setQuantity(3);
+
+        SparePartDeductionItem item2 = new SparePartDeductionItem();
+        item2.setPartNumber("FILTER-001 ");
+        item2.setQuantity(2);
+
+        testSparePart.setStockLevel(10);
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "filter-001"))
+                .thenReturn(Optional.of(testSparePart));
+
+        sparePartService.deductSparePartsForWorkOrder(List.of(item1, item2), 1L, "hospitalAdmin");
+
+        assertThat(testSparePart.getStockLevel()).isEqualTo(5);
+        verify(sparePartRepository, times(1)).save(testSparePart);
+    }
+
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - throws IllegalArgumentException when aggregated quantity exceeds stock")
+    void deductSparePartsForWorkOrder_ThrowsExceptionWhenAggregatedQuantityExceedsStock() {
+        SparePartDeductionItem item1 = new SparePartDeductionItem();
+        item1.setPartNumber("FILTER-001");
+        item1.setQuantity(8);
+
+        SparePartDeductionItem item2 = new SparePartDeductionItem();
+        item2.setPartNumber("FILTER-001");
+        item2.setQuantity(5);
+
+        testSparePart.setStockLevel(10);
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "FILTER-001"))
+                .thenReturn(Optional.of(testSparePart));
+
+        assertThatThrownBy(() -> sparePartService.deductSparePartsForWorkOrder(List.of(item1, item2), 1L, "hospitalAdmin"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Insufficient stock for spare part: FILTER-001");
+
+        verify(sparePartRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - does nothing when items list is null or empty")
+    void deductSparePartsForWorkOrder_NullOrEmptyItems_NoOps() {
+        sparePartService.deductSparePartsForWorkOrder(null, 1L, "hospitalAdmin");
+        sparePartService.deductSparePartsForWorkOrder(List.of(), 1L, "hospitalAdmin");
+        verifyNoInteractions(sparePartRepository);
+    }
+
+    @Test
+    @DisplayName("bulkImport - parses unit cost from 5th column and imports valid rows")
+    void bulkImport_ParsesUnitCostAndEnforcesCaseInsensitiveUniqueness() {
+        String csv = "Part Number,Description,Quantity,Min Stock,Unit Cost\n"
+                + "SP-101,Gasket Seal,50,10,12.75\n"
+                + "SP-102,O-Ring Set,100,20,5.50\n";
+        MockMultipartFile file = new MockMultipartFile("file", "parts.csv", "text/csv", csv.getBytes());
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(eq(1L), anyString())).thenReturn(false);
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(2);
+        assertThat(summary.getFailureCount()).isEqualTo(0);
+
+        ArgumentCaptor<List<SparePart>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sparePartRepository).saveAll(captor.capture());
+        List<SparePart> savedParts = captor.getValue();
+        assertThat(savedParts).hasSize(2);
+        assertThat(savedParts.get(0).getUnitCost()).isEqualTo(12.75);
+        assertThat(savedParts.get(1).getUnitCost()).isEqualTo(5.50);
+    }
+
+    @Test
+    @DisplayName("bulkImport - fails when file contains duplicate part numbers differing only by case")
+    void bulkImport_FailsOnDuplicatePartNumberInSameFileDifferentCase() {
+        String csv = "Part Number,Description,Quantity,Min Stock,Unit Cost\n"
+                + "SP-200,Valve A,10,2,15.00\n"
+                + "sp-200,Valve B,5,1,15.00\n";
+        MockMultipartFile file = new MockMultipartFile("file", "parts.csv", "text/csv", csv.getBytes());
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(eq(1L), anyString())).thenReturn(false);
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(1);
+        assertThat(summary.getFailureCount()).isEqualTo(1);
+        assertThat(summary.getFailures().get(0).getReason()).contains("Duplicate part number in import file");
+    }
+
+    @Test
+    @DisplayName("bulkImport - fails when unit cost column is non-numeric or negative")
+    void bulkImport_FailsOnInvalidUnitCost() {
+        String csv = "Part Number,Description,Quantity,Min Stock,Unit Cost\n"
+                + "SP-300,Pump Rotor,10,2,-5.00\n";
+        MockMultipartFile file = new MockMultipartFile("file", "parts.csv", "text/csv", csv.getBytes());
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(0);
+        assertThat(summary.getFailureCount()).isEqualTo(1);
+        assertThat(summary.getFailures().get(0).getReason()).contains("Unit cost must be a non-negative finite number");
+    }
+
+    @Test
+    @DisplayName("bulkImport - fails when unit cost column contains non-numeric text")
+    void bulkImport_FailsOnNonNumericUnitCost() {
+        String csv = "Part Number,Description,Quantity,Min Stock,Unit Cost\n"
+                + "SP-301,Pump Rotor,10,2,INVALID_COST\n";
+        MockMultipartFile file = new MockMultipartFile("file", "parts.csv", "text/csv", csv.getBytes());
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(0);
+        assertThat(summary.getFailureCount()).isEqualTo(1);
+        assertThat(summary.getFailures().get(0).getReason()).contains("Unit cost must be numeric");
+    }
+
+    @Test
+    @DisplayName("bulkImport - defaults unit cost to 0.0 when 4 columns are provided without 5th column")
+    void bulkImport_FourColumns_DefaultsUnitCostToZero() {
+        String csv = "Part Number,Description,Quantity,Min Stock\n"
+                + "SP-400,Basic Cable,20,5\n";
+        MockMultipartFile file = new MockMultipartFile("file", "parts.csv", "text/csv", csv.getBytes());
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(eq(1L), anyString())).thenReturn(false);
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(1);
+
+        ArgumentCaptor<List<SparePart>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sparePartRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getUnitCost()).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - ignores null or blank deduction items in list")
+    void deductSparePartsForWorkOrder_IgnoresNullOrBlankDeductionItems() {
+        SparePartDeductionItem blankItem = new SparePartDeductionItem();
+        blankItem.setPartNumber("   ");
+
+        SparePartDeductionItem validItem = new SparePartDeductionItem();
+        validItem.setPartNumber("FILTER-001");
+        validItem.setQuantity(2);
+
+        testSparePart.setStockLevel(10);
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "FILTER-001"))
+                .thenReturn(Optional.of(testSparePart));
+
+        sparePartService.deductSparePartsForWorkOrder(List.of(blankItem, validItem), 1L, "hospitalAdmin");
+
+        assertThat(testSparePart.getStockLevel()).isEqualTo(8);
+        verify(sparePartRepository, times(1)).save(testSparePart);
+    }
+
+    @Test
+    @DisplayName("deductSparePartsForWorkOrder - handles multiple distinct spare part numbers in one work order")
+    void deductSparePartsForWorkOrder_MultipleDistinctParts_DeductsAll() {
+        SparePartDeductionItem item1 = new SparePartDeductionItem();
+        item1.setPartNumber("FILTER-001");
+        item1.setQuantity(2);
+
+        SparePartDeductionItem item2 = new SparePartDeductionItem();
+        item2.setPartNumber("VALVE-002");
+        item2.setQuantity(4);
+
+        SparePart secondPart = SparePart.builder()
+                .id(51L).hospitalId(1L).partNumber("VALVE-002")
+                .description("Control Valve").stockLevel(15).reorderPoint(5).unitCost(120.0).deleted(false).build();
+
+        testSparePart.setStockLevel(10);
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "FILTER-001"))
+                .thenReturn(Optional.of(testSparePart));
+        when(sparePartRepository.findActiveByHospitalIdAndPartNumberForUpdate(1L, "VALVE-002"))
+                .thenReturn(Optional.of(secondPart));
+
+        sparePartService.deductSparePartsForWorkOrder(List.of(item1, item2), 1L, "hospitalAdmin");
+
+        assertThat(testSparePart.getStockLevel()).isEqualTo(8);
+        assertThat(secondPart.getStockLevel()).isEqualTo(11);
+        verify(sparePartRepository).save(testSparePart);
+        verify(sparePartRepository).save(secondPart);
+    }
+
+    @Test
+    @DisplayName("bulkImport - fails when stock level or reorder point are non-numeric")
+    void bulkImport_FailsOnNonNumericStockOrReorderPoint() {
+        String csv = "Part Number,Description,Quantity,Min Stock\n"
+                + "SP-500,Sensor Module,TEN,FIVE\n";
+        MockMultipartFile file = new MockMultipartFile("file", "parts.csv", "text/csv", csv.getBytes());
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(0);
+        assertThat(summary.getFailureCount()).isEqualTo(1);
+        assertThat(summary.getFailures().get(0).getReason()).contains("Quantity and minimum stock must be numeric");
+    }
+
+    @Test
+    @DisplayName("bulkImport - fails when stock level or reorder point are negative")
+    void bulkImport_FailsOnNegativeStockOrReorderPoint() {
+        String csv = "Part Number,Description,Quantity,Min Stock\n"
+                + "SP-501,Sensor Module,-10,5\n";
+        MockMultipartFile file = new MockMultipartFile("file", "parts.csv", "text/csv", csv.getBytes());
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(0);
+        assertThat(summary.getFailureCount()).isEqualTo(1);
+        assertThat(summary.getFailures().get(0).getReason()).contains("Quantity and minimum stock cannot be negative");
+    }
+
+    @Test
+    @DisplayName("createSparePart - enforces case-insensitive uniqueness check")
+    void createSparePart_EnforcesCaseInsensitiveUniquenessCheck() {
+        SparePart newPart = SparePart.builder()
+                .partNumber("filter-001")
+                .description("HEPA Filter Variant")
+                .stockLevel(10)
+                .reorderPoint(2)
+                .unitCost(40.0)
+                .build();
+
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(1L, "filter-001")).thenReturn(true);
+
+        assertThatThrownBy(() -> sparePartService.createSparePart(newPart, "hospitalAdmin"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Spare part with part number already exists: filter-001");
         verify(sparePartRepository, never()).save(any());
     }
 }

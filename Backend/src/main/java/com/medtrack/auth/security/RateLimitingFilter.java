@@ -31,6 +31,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @org.springframework.context.annotation.Lazy
     private JwtUtil jwtUtil;
 
+    @Value("${security.rate-limit.enabled:true}")
+    private boolean enabled;
+
     @Value("${security.rate-limit.auth.capacity:10}")
     private int authCapacity = 10;
 
@@ -195,51 +198,64 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        if (!enabled) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String path = request.getRequestURI().substring(request.getContextPath().length());
         String method = request.getMethod();
 
-        if (path.startsWith("/api/ai-assistant")) {
+        if (path.startsWith("/api/")) {
+            String group = resolveGroup(path, method);
+            String key = resolveClientKey(request); // default to IP
+
+            // Try to extract user info from JWT for all API requests
             String authHeader = request.getHeader("Authorization");
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7);
                 try {
-                    String role = jwtUtil.extractRole(token);
                     String userId = jwtUtil.extractEmail(token);
-                    
-                    String group = "";
-                    if (role != null) {
-                        if (role.equalsIgnoreCase("TECHNICIAN")) {
-                            group = "ai_technician";
-                        } else if (role.equalsIgnoreCase("HOSPITAL") || role.equalsIgnoreCase("ADMIN")) {
-                            group = "ai_admin";
-                        }
-                    }
-                    
-                    if (!group.isEmpty() && userId != null) {
-                        String key = group + ":" + userId;
-                        metricsTracker.incrementEvaluated();
-                        Bucket bucket = resolveBucket(key, group);
-                        if (!bucket.tryConsume(1)) {
-                            metricsTracker.incrementThrottled();
-                            sendTooManyRequestsAiResponse(request, response);
-                            return;
+                    if (userId != null) {
+                        key = userId; // Override IP with authenticated user ID
+                        
+                        // Special handling for AI paths which have role-based limits
+                        if (path.startsWith("/api/ai-assistant")) {
+                            String role = jwtUtil.extractRole(token);
+                            if (role != null) {
+                                if (role.equalsIgnoreCase("TECHNICIAN")) {
+                                    group = "ai_technician";
+                                } else if (role.equalsIgnoreCase("HOSPITAL") || role.equalsIgnoreCase("ADMIN")) {
+                                    group = "ai_admin";
+                                }
+                            }
                         }
                     }
                 } catch (Exception e) {
-                    // Ignore, let JwtAuthFilter handle invalid tokens
+                    // Ignore, let JwtAuthFilter handle invalid tokens later
                 }
             }
-        } else if (path.startsWith("/api/")) {
-            String group = resolveGroup(path, method);
-            String ip = resolveClientKey(request);
-            String key = group + ":" + ip;
+            
+            // Format key with group namespace
+            String fullKey = group + ":" + key;
 
-            metricsTracker.incrementEvaluated();
-            Bucket bucket = resolveBucket(key, group);
+            Bucket bucket = resolveBucket(fullKey, group);
+            io.github.bucket4j.ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
-            if (!bucket.tryConsume(1)) {
-                metricsTracker.incrementThrottled();
-                sendTooManyRequestsResponse(request, response);
+            if (!probe.isConsumed()) {
+                long waitForRefillNanos = probe.getNanosToWaitForRefill();
+                long waitForRefillSeconds = java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(waitForRefillNanos);
+                // Ensure Retry-After is at least 1 second if greater than 0 nanos
+                if (waitForRefillSeconds == 0 && waitForRefillNanos > 0) {
+                    waitForRefillSeconds = 1;
+                }
+                response.setHeader("Retry-After", String.valueOf(waitForRefillSeconds));
+                
+                String message = path.startsWith("/api/ai-assistant") 
+                    ? "AI Assistant request rate limit exceeded. Please try again later." 
+                    : "API rate limit exceeded.";
+                
+                sendTooManyRequestsResponse(request, response, message);
                 return;
             }
         }
@@ -467,33 +483,18 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         }
     }
 
-    private void sendTooManyRequestsResponse(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    private void sendTooManyRequestsResponse(HttpServletRequest request, HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-        response.setContentType("application/json");
+        response.setContentType("application/problem+json");
         response.setCharacterEncoding("UTF-8");
 
         Map<String, Object> errorDetails = new LinkedHashMap<>();
-        errorDetails.put("timestamp", Instant.now().toString());
+        errorDetails.put("type", "about:blank");
+        errorDetails.put("title", "Too Many Requests");
         errorDetails.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
-        errorDetails.put("error", HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
-        errorDetails.put("message", "Too many requests. Please try again later.");
-        errorDetails.put("path", request.getRequestURI());
-
-        objectMapper.writeValue(response.getWriter(), errorDetails);
-        response.getWriter().flush();
-    }
-
-    private void sendTooManyRequestsAiResponse(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-
-        Map<String, Object> errorDetails = new LinkedHashMap<>();
+        errorDetails.put("detail", message);
+        errorDetails.put("instance", request.getRequestURI());
         errorDetails.put("timestamp", Instant.now().toString());
-        errorDetails.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
-        errorDetails.put("error", HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase());
-        errorDetails.put("message", "AI Assistant request rate limit exceeded. Please try again later.");
-        errorDetails.put("path", request.getRequestURI());
 
         objectMapper.writeValue(response.getWriter(), errorDetails);
         response.getWriter().flush();

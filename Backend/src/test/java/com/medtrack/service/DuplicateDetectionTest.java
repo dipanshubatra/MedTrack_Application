@@ -144,12 +144,11 @@ class DuplicateDetectionTest {
      * The hospital's owning account. {@code setUp} assigns it and the telemetry and security-incident
      * tests read it back through {@code hospital.getUser()}.
      */
-
     @BeforeEach
     void setUp() {
         username = "duplicates-owner-" + UUID.randomUUID();
 
-        testUser = userRepository.save(User.builder()
+        ownerUser = userRepository.save(User.builder()
                 .name("Duplicates Owner")
                 .username(username)
                 .email(UUID.randomUUID() + "@medtrack.test")
@@ -160,10 +159,12 @@ class DuplicateDetectionTest {
                 .accountStatus(AccountStatus.ACTIVE)
                 .build());
 
+        testUser = ownerUser;
+
         hospital = hospitalRepository.save(Hospital.builder()
                 .name("Duplicates Trust")
                 .location("Test City")
-                .user(testUser)
+                .user(ownerUser)
                 .build());
     }
 

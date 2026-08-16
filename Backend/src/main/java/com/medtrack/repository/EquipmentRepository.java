@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 @Repository
 public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
@@ -30,6 +31,8 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     // Tenant-specific queries
     List<Equipment> findByHospitalId(Long hospitalId);
+
+    Stream<Equipment> findStreamByHospitalId(Long hospitalId);
 
     Optional<Equipment> findByIdAndHospitalId(Long id, Long hospitalId);
 

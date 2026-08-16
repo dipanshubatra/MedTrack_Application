@@ -1659,43 +1659,41 @@ public class EquipmentService {
      * {@link #importEquipmentFromCsv}.</p>
      *
      * @param username authenticated user's username
-     * @return UTF-8 encoded CSV, prefixed with a byte order mark for Excel
+     * @param response the HTTP response to write the CSV to
      */
-    public byte[] exportEquipmentCsv(String username) {
+    @Transactional(readOnly = true)
+    public void exportEquipmentCsv(String username, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         Hospital hospital = getHospitalForUser(username);
-        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
 
-        StringBuilder csv = new StringBuilder(CsvSupport.UTF8_BOM);
-        csv.append(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=equipment.csv");
 
-        for (Equipment equipment : equipmentList) {
-            csv.append(CsvSupport.encodeRow(
-                    equipment.getEquipmentCode(),
-                    equipment.getName(),
-                    equipment.getModel(),
-                    equipment.getSerialNumber(),
-                    equipment.getDepartment(),
-                    // Enum constants, not display names. The import accepts both, so the round
-                    // trip works either way, but the constant is the stable identifier.
-                    equipment.getCategory(),
-                    equipment.getStatus(),
-                    equipment.getPurchaseDate(),
-                    equipment.getWarrantyExpiry(),
-                    // Depreciation & valuation columns, so an export can feed an accounting
-                    // package or round-trip through the import without losing the finance data.
-                    equipment.getPurchaseCost(),
-                    equipment.getUsefulLifeYears(),
-                    equipment.getDepreciationMethod(),
-                    // Warranty & service contract columns (issue #703), so the report export
-                    // carries the full coverage picture and round-trips through the import.
-                    equipment.getWarrantyProvider(),
-                    equipment.getWarrantyContractNumber(),
-                    equipment.getWarrantyStartDate(),
-                    equipment.getWarrantyCoverageType(),
-                    equipment.getWarrantyTerms()));
+        try (java.io.PrintWriter writer = response.getWriter();
+             java.util.stream.Stream<Equipment> equipmentStream = equipmentRepository.findStreamByHospitalId(hospital.getId())) {
+            writer.write(CsvSupport.UTF8_BOM);
+            writer.write(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
+
+            equipmentStream.forEach(equipment -> {
+                writer.write(CsvSupport.encodeRow(
+                        equipment.getEquipmentCode(),
+                        equipment.getName(),
+                        equipment.getModel(),
+                        equipment.getSerialNumber(),
+                        equipment.getDepartment(),
+                        equipment.getCategory(),
+                        equipment.getStatus(),
+                        equipment.getPurchaseDate(),
+                        equipment.getWarrantyExpiry(),
+                        equipment.getPurchaseCost(),
+                        equipment.getUsefulLifeYears(),
+                        equipment.getDepreciationMethod(),
+                        equipment.getWarrantyProvider(),
+                        equipment.getWarrantyContractNumber(),
+                        equipment.getWarrantyStartDate(),
+                        equipment.getWarrantyCoverageType(),
+                        equipment.getWarrantyTerms()));
+            });
         }
-
-        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**
