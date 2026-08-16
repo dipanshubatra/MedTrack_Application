@@ -6,9 +6,7 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
-import { TabsBar } from "../../components/common/TabsBar";
-import { SimControls } from "../../components/common/SimControls";
-import { EmptyState } from "../../components/common/EmptyState";
+import { ExportCsvButton } from "../../components/common/ExportButton";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -65,19 +63,9 @@ const toneOf = (v) => {
   return "slate";
 };
 
-const toneClass = {
-  red: "bg-red-500/10 text-red-400 border-red-500/30",
-  amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  green: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  sky: "bg-sky-500/10 text-sky-400 border-sky-500/30",
-  slate: "bg-slate-500/10 text-slate-400 border-slate-500/30",
-};
 
-const Badge = ({ children, tone }) => (
-  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClass[tone || toneOf(children)]}`}>
-    {children}
-  </span>
-);
+
+const Badge = ({ children, tone }) => <ToneBadge toneOf={toneOf} tone={tone}>{children}</ToneBadge>;
 
 const Meter = ({ value, color = "bg-emerald-400" }) => (
   <div className="h-1.5 w-24 rounded-full bg-slate-800">
@@ -85,43 +73,8 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
   </div>
 );
 
-const Modal = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-    <div
-      className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
-        </div>
-        <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
-          <XIcon size={16} />
-        </button>
-      </div>
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm text-slate-300">{children}</div>
-    </div>
-  </div>
-);
 
-const Row = ({ label, value, accent }) => (
-  <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0">
-    <span className="text-xs text-slate-400">{label}</span>
-    <span className={`text-xs font-medium ${accent || "text-slate-200"}`}>{value}</span>
-  </div>
-);
 
-const StatCard = ({ icon: Icon, label, value, sub, accent = "text-emerald-400" }) => (
-  <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-slate-400">{label}</span>
-      <Icon size={16} className={accent} />
-    </div>
-    <div className="mt-2 text-2xl font-bold text-slate-100">{value}</div>
-    {sub && <div className="mt-1 text-[11px] text-slate-500">{sub}</div>}
-  </div>
-);
 
 const XIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -347,13 +300,32 @@ export default function SurgicalRoboticsHub() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <SimControls sim={sim} />
-            <button
-              onClick={exportCsv}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300"
-            >
-              <Download size={14} /> Export CSV
-            </button>
+            <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
+              <button
+                onClick={() => sim.setRunning(!sim.running)}
+                className="rounded-lg p-1.5 text-slate-300 hover:bg-slate-800"
+                title={sim.running ? "Pause simulation" : "Resume simulation"}
+              >
+                {sim.running ? <Pause size={15} /> : <Play size={15} />}
+              </button>
+              {[1, 2, 4].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => sim.setSpeed(s)}
+                  className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${sim.speed === s ? "bg-emerald-500/20 text-emerald-300" : "text-slate-400 hover:bg-slate-800"}`}
+                >
+                  {s}×
+                </button>
+              ))}
+              <button
+                onClick={sim.reset}
+                className="ml-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                title="Reset simulation"
+              >
+                <RefreshCw size={15} />
+              </button>
+            </div>
+            <ExportCsvButton onClick={exportCsv} />
           </div>
         </div>
 

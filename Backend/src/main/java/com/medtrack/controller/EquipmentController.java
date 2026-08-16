@@ -407,15 +407,8 @@ public class EquipmentController {
 
     @GetMapping("/export")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<byte[]> exportEquipment(Principal principal) {
-
-        byte[] csv = equipmentService.exportEquipmentCsv(principal.getName());
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=equipment.csv")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csv);
+    public void exportEquipment(Principal principal, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        equipmentService.exportEquipmentCsv(principal.getName(), response);
     }
 
     /**
