@@ -64,16 +64,7 @@ public class EquipmentAuditController {
 
     @GetMapping("/audit-history/export")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<byte[]> exportHospitalAuditHistoryCsv(Principal principal) {
-        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
-            throw new IllegalArgumentException("Authenticated principal username is required");
-        }
-        String csvContent = equipmentAuditService.exportAuditHistoryCsv(principal.getName());
-        byte[] csvBytes = csvContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"equipment_audit_history.csv\"")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csvBytes);
+    public void exportHospitalAuditHistoryCsv(Principal principal, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        equipmentAuditService.exportAuditHistoryCsv(principal.getName(), response);
     }
 }

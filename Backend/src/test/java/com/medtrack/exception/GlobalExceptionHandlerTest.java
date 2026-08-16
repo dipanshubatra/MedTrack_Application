@@ -11,6 +11,7 @@ import org.springframework.core.MethodParameter;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,53 +72,60 @@ class GlobalExceptionHandlerTest {
         MethodParameter parameter = new MethodParameter(
                 GlobalExceptionHandlerTest.class.getMethod("dummyMethod", String.class), 0);
 
-        ResponseEntity<ValidationErrorResponse> response = handler.handleValidationExceptions(
-                new MethodArgumentNotValidException(parameter, bindingResult));
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleValidationExceptions(
+                new MethodArgumentNotValidException(parameter, bindingResult), request);
+        ProblemDetail response = responseEntity.getBody();
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals("Validation failed", response.getBody().getMessage());
-        assertEquals("Name is required", response.getBody().getErrors().get("name"));
-        assertEquals("Quantity must be positive", response.getBody().getErrors().get("quantity"));
+        assertEquals(HttpStatus.BAD_REQUEST.value(), response.getStatus());
+        assertEquals("Validation failed", response.getDetail());
+        assertNotNull(response.getProperties());
+        Map<String, String> errors = (Map<String, String>) response.getProperties().get("errors");
+        assertEquals("Name is required", errors.get("name"));
+        assertEquals("Quantity must be positive", errors.get("quantity"));
     }
 
     @Test
     void badCredentialsRemainUnauthorizedWithCompatibleMessage() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleBadCredentials(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleBadCredentials(
                 new BadCredentialsException("Invalid credentials"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.UNAUTHORIZED, "Invalid credentials");
     }
 
     @Test
     void resourceNotFoundRemainsNotFound() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleResourceNotFound(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleResourceNotFound(
                 new ResourceNotFoundException("Equipment not found"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.NOT_FOUND, "Equipment not found");
     }
 
     @Test
     void accessDeniedDoesNotExposeSecurityExceptionDetail() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleAccessDenied(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleAccessDenied(
                 new AccessDeniedException("Missing privileged authority ROLE_HOSPITAL"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.FORBIDDEN, "Access denied");
-        assertFalse(response.getBody().getMessage().contains("ROLE_HOSPITAL"));
+        assertFalse(response.getDetail().contains("ROLE_HOSPITAL"));
     }
 
     @Test
     void illegalArgumentsRemainBadRequests() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleIllegalArgument(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleIllegalArgument(
                 new IllegalArgumentException("Quantity must be positive"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.BAD_REQUEST, "Quantity must be positive");
     }
 
     @Test
     void businessStateRejectionsKeepExistingBadRequestContract() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleIllegalState(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleIllegalState(
                 new IllegalStateException("Completed work order cannot be reopened"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.BAD_REQUEST, "Completed work order cannot be reopened");
     }
@@ -126,16 +135,18 @@ class GlobalExceptionHandlerTest {
         HttpMessageNotReadableException exception = new HttpMessageNotReadableException(
                 "JSON parse error: Cannot deserialize internal.model.Secret", mock(HttpInputMessage.class));
 
-        ResponseEntity<ApiErrorResponse> response = handler.handleUnreadableMessage(exception, request);
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleUnreadableMessage(exception, request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.BAD_REQUEST, "Malformed JSON request");
-        assertFalse(response.getBody().getMessage().contains("internal.model.Secret"));
+        assertFalse(response.getDetail().contains("internal.model.Secret"));
     }
 
     @Test
     void missingRequestParameterNamesThePublicParameter() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleMissingParameter(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleMissingParameter(
                 new MissingServletRequestParameterException("keepId", "Long"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.BAD_REQUEST, "Missing required parameter 'keepId'");
     }
@@ -147,87 +158,92 @@ class GlobalExceptionHandlerTest {
         MethodArgumentTypeMismatchException exception = new MethodArgumentTypeMismatchException(
                 "not-a-number", Long.class, "equipmentId", parameter, new NumberFormatException("secret"));
 
-        ResponseEntity<ApiErrorResponse> response = handler.handleTypeMismatch(exception, request);
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleTypeMismatch(exception, request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.BAD_REQUEST, "Invalid value for parameter 'equipmentId'");
     }
 
     @Test
     void unsupportedMethodRetainsProtocolStatus() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleMethodNotSupported(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleMethodNotSupported(
                 new HttpRequestMethodNotSupportedException("TRACE"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.METHOD_NOT_ALLOWED, "Request method is not supported");
     }
 
     @Test
     void unsupportedMediaTypeRetainsProtocolStatus() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleMediaTypeNotSupported(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleMediaTypeNotSupported(
                 new HttpMediaTypeNotSupportedException("application/x-java-object"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Content type is not supported");
     }
 
     @Test
     void dataIntegrityFailuresReturnSanitizedConflict() {
-        ResponseEntity<ApiErrorResponse> response = handler.handlePersistenceConflict(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handlePersistenceConflict(
                 new DataIntegrityViolationException(
                         "Unique index violation on USERS(EMAIL) values ('patient@example.org')"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.CONFLICT,
                 "The request conflicts with the current resource state");
-        assertFalse(response.getBody().getMessage().contains("patient@example.org"));
+        assertFalse(response.getDetail().contains("patient@example.org"));
     }
 
     @Test
     void optimisticLockFailuresReturnSanitizedConflict() {
-        ResponseEntity<ApiErrorResponse> response = handler.handlePersistenceConflict(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handlePersistenceConflict(
                 new OptimisticLockException("Version 7 was stale for equipment 42"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.CONFLICT,
                 "The request conflicts with the current resource state");
-        assertFalse(response.getBody().getMessage().contains("Version 7"));
+        assertFalse(response.getDetail().contains("Version 7"));
     }
 
     @Test
     void unexpectedRuntimeFailureReturnsSanitizedInternalServerError() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleRuntimeException(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleRuntimeException(
                 new NullPointerException("Cannot invoke repository.save because connectionPool is null"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
-        assertFalse(response.getBody().getMessage().contains("connectionPool"));
+        assertFalse(response.getDetail().contains("connectionPool"));
     }
 
     @Test
     void checkedFailureReturnsSameSanitizedInternalServerError() {
-        ResponseEntity<ApiErrorResponse> response = handler.handleGeneralException(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleGeneralException(
                 new Exception("Filesystem path /private/medtrack/export.csv is unavailable"), request);
+        ProblemDetail response = responseEntity.getBody();
 
         assertError(response, HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
-        assertFalse(response.getBody().getMessage().contains("/private/medtrack"));
+        assertFalse(response.getDetail().contains("/private/medtrack"));
     }
 
     @Test
     void correlationIdIsOptionalOutsideAFilteredRequest() {
         MDC.clear();
 
-        ResponseEntity<ApiErrorResponse> response = handler.handleRuntimeException(
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleRuntimeException(
                 new RuntimeException("internal detail"), request);
+        ProblemDetail response = responseEntity.getBody();
 
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertNull(response.getBody().getCorrelationId());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), response.getStatus());
+        assertNull(response.getProperties().get("correlationId"));
     }
 
     private void assertError(
-            ResponseEntity<ApiErrorResponse> response, HttpStatus expectedStatus, String expectedMessage) {
-        assertEquals(expectedStatus, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertNotNull(response.getBody().getTimestamp());
-        assertEquals(expectedStatus.value(), response.getBody().getStatus());
-        assertEquals(expectedStatus.getReasonPhrase(), response.getBody().getError());
-        assertEquals(expectedMessage, response.getBody().getMessage());
-        assertEquals("/api/equipment/42", response.getBody().getPath());
-        assertEquals(CORRELATION_ID, response.getBody().getCorrelationId());
+            ProblemDetail response, HttpStatus expectedStatus, String expectedMessage) {
+        assertEquals(expectedStatus.value(), response.getStatus());
+        assertEquals(expectedStatus.getReasonPhrase(), response.getTitle());
+        assertEquals(expectedMessage, response.getDetail());
+        assertEquals("/api/equipment/42", response.getProperties().get("path"));
+        assertEquals(CORRELATION_ID, response.getProperties().get("correlationId"));
+        assertNotNull(response.getProperties().get("timestamp"));
     }
 }
