@@ -84,6 +84,7 @@ const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVital
 const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
+const OncologyInfusionHub = lazy(() => import("../pages/oncology/OncologyInfusionHub"));
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
@@ -249,6 +250,7 @@ export const ROUTES = [
   { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "oncology-infusion", slugs: ["oncology-infusion", "chemotherapy-safety"], component: OncologyInfusionHub, access: AUTHENTICATED },
   { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
