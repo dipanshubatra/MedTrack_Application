@@ -5,6 +5,8 @@ import {
   Lock, Pause, Phone, Play, Power, RefreshCw, Search, ShieldCheck, Signal,
   Siren, Syringe, Timer, User, Users, Wifi, Wind, Workflow, Wrench, X, Zap
 } from "lucide-react";
+import { SearchBox } from "../../components/common/SearchBox";
+import { SeverityChips } from "../../components/common/SeverityChips";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Real-Time Telemetry & ICU Monitoring Hub
@@ -211,42 +213,6 @@ function StatCard({ icon: Icon, label, value, sub, tone = "sky" }) {
   );
 }
 
-function SearchBox({ value, onChange, placeholder }) {
-  return (
-    <div className="relative w-full sm:w-72">
-      <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-800 bg-slate-950/80 py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-sky-500/50 focus:ring-2 focus:ring-sky-500/20"
-      />
-    </div>
-  );
-}
-
-function SeverityChips({ value, onChange }) {
-  const opts = ["all", "critical", "high", "medium", "low"];
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {opts.map((o) => {
-        const active = value === o;
-        const meta = o === "all" ? SEVERITY_META.medium : SEVERITY_META[o];
-        return (
-          <button
-            key={o}
-            onClick={() => onChange(o)}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold capitalize transition ${
-              active ? `${meta.bg} ${meta.border} ${meta.text}` : "border-slate-800 bg-slate-900/50 text-slate-500 hover:border-slate-700 hover:text-slate-300"
-            }`}
-          >
-            {o === "all" ? "All severities" : meta.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function Modal({ open, onClose, title, subtitle, icon: Icon, children, wide = false }) {
   useEffect(() => {
@@ -983,7 +949,7 @@ export default function IcuTelemetryHub({ onNavigate }) {
                   ))}
                 </div>
               ) : (
-                <SeverityChips value={severity} onChange={setSeverity} />
+                <SeverityChips value={severity} onChange={setSeverity} meta={SEVERITY_META} />
               )}
             </div>
             <p className="text-[11px] text-slate-500">{activeMeta.blurb}</p>

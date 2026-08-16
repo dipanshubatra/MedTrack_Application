@@ -6,6 +6,8 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
+import { CompactSearch } from "../../components/common/SearchBox";
+import { FilterChips } from "../../components/common/FilterChips";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -408,59 +410,15 @@ export default function RegulatoryAuditHub() {
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search artifacts, events, evidence…"
-              className="w-64 rounded-xl border border-slate-800 bg-slate-900 py-2 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
-            />
-          </div>
+          <CompactSearch value={query} onChange={setQuery} placeholder="Search artifacts, events, evidence…" />
           {tab === "provenance" && (
-            <div className="flex gap-1.5">
-              {["All", "Valid", "Suspicious"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    statusFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "Valid", "Suspicious"]} value={statusFilter} onChange={setStatusFilter} />
           )}
           {tab === "audit" && (
-            <div className="flex gap-1.5">
-              {["All", "Normal", "Flagged", "Critical"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setRiskFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    riskFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "Normal", "Flagged", "Critical"]} value={riskFilter} onChange={setRiskFilter} />
           )}
           {tab === "evidence" && (
-            <div className="flex gap-1.5">
-              {["All", "HIPAA", "SOC 2", "ISO 27001", "C2PA", "GDPR", "HITRUST"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFrameworkFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    frameworkFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "HIPAA", "SOC 2", "ISO 27001", "C2PA", "GDPR", "HITRUST"]} value={frameworkFilter} onChange={setFrameworkFilter} />
           )}
           <span className="ml-auto text-[11px] text-slate-500">
             {sim.tick} ticks · <span className={sim.running ? "text-emerald-400" : "text-amber-400"}>{sim.running ? "LIVE" : "PAUSED"}</span>

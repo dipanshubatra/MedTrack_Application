@@ -6,6 +6,8 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
+import { CompactSearch } from "../../components/common/SearchBox";
+import { FilterChips } from "../../components/common/FilterChips";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -415,59 +417,15 @@ export default function SurgicalRoboticsHub() {
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search robots, ORs, instruments…"
-              className="w-64 rounded-xl border border-slate-800 bg-slate-900 py-2 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
-            />
-          </div>
+          <CompactSearch value={query} onChange={setQuery} placeholder="Search robots, ORs, instruments…" />
           {tab === "fleet" && (
-            <div className="flex gap-1.5">
-              {["All", "In Surgery", "Ready", "Maintenance", "Offline"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    statusFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "In Surgery", "Ready", "Maintenance", "Offline"]} value={statusFilter} onChange={setStatusFilter} />
           )}
           {tab === "schedule" && (
-            <div className="flex gap-1.5">
-              {["All", "Elective", "Urgent", "Emergent"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setPriorityFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    priorityFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "Elective", "Urgent", "Emergent"]} value={priorityFilter} onChange={setPriorityFilter} />
           )}
           {tab === "telemetry" && (
-            <div className="flex gap-1.5">
-              {["All", "In Use", "Sterile Ready", "In Sterilizer", "Expired — Re-sterilize"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setInstFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    instFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "In Use", "Sterile Ready", "In Sterilizer", "Expired — Re-sterilize"]} value={instFilter} onChange={setInstFilter} />
           )}
           <span className="ml-auto text-[11px] text-slate-500">
             {sim.tick} ticks · <span className={sim.running ? "text-emerald-400" : "text-amber-400"}>{sim.running ? "LIVE" : "PAUSED"}</span>
