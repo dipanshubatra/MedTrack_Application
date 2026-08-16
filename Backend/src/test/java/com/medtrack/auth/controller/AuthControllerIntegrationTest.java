@@ -179,7 +179,7 @@ public class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(
+                .andExpect(jsonPath("$.detail").value(
                         "HOSPITAL accounts cannot be created through public registration"));
 
         assertFalse(userRepository.existsByEmail("untrusted@medtrack.com"));
@@ -203,7 +203,7 @@ public class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(
+                .andExpect(jsonPath("$.detail").value(
                         "HOSPITAL accounts cannot be created through public registration"));
 
         assertEquals(0L, userRepository.count());
