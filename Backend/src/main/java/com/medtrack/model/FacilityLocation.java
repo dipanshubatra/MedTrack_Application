@@ -62,6 +62,23 @@ public class FacilityLocation {
     @Column(name = "created_by", length = 255)
     private String createdBy;
 
+    // ---------------------------------------------------------------------
+    // Geolocation boundary fields (issue #1228)
+    //
+    // Latitude/longitude define the center point of the facility location.
+    // GeofenceRadiusMeters defines the allowed circular boundary around the center.
+    // Equipment telemetry coordinates are validated against this boundary.
+    // ---------------------------------------------------------------------
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
+    @Column(name = "geofence_radius_meters")
+    private Integer geofenceRadiusMeters;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {

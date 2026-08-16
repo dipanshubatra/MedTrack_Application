@@ -22,7 +22,7 @@ public class RiskEvaluationEvent {
     private UUID eventId;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "telemetry_log_id", nullable = false)
+    @JoinColumn(name = "telemetry_log_id")
     private SoftwareTelemetryLog telemetryLog;
 
     @Column(name = "time_deviation_score")
