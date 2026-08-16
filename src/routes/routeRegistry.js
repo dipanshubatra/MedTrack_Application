@@ -89,16 +89,15 @@ const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainComma
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
 const RegulatoryAuditHub = lazy(() => import("../pages/audit/RegulatoryAuditHub"));
-const PharmacovigilanceHub = lazy(() => import("../pages/pharmacovigilance/PharmacovigilanceHub"));
-const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRoboticsHub"));
+const HospitalCommandOrchestrationSuitePage = lazy(() => import("../pages/command/HospitalCommandOrchestrationSuitePage"));
 const LabAutomationHub = lazy(() => import("../pages/lab/LabAutomationHub"));
 const PediatricNeonatalIcuHubPage = lazy(() => import("../pages/pediatric/PediatricNeonatalIcuHubPage"));
+const PharmacovigilanceHub = lazy(() => import("../pages/pharmacovigilance/PharmacovigilanceHub"));
 const MedicationSupplyColdChainHubPage = lazy(() => import("../pages/supply/MedicationSupplyColdChainHubPage"));
+const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRoboticsHub"));
 const TelehealthRemoteMonitoringHubPage = lazy(() => import("../pages/telehealth/TelehealthRemoteMonitoringHubPage"));
 const GenomicClinicalTrialsHubPage = lazy(() => import("../pages/trials/GenomicClinicalTrialsHubPage"));
-const HospitalCommandOrchestrationSuitePage = lazy(() =>
-  import("../pages/command/HospitalCommandOrchestrationSuitePage")
-);
+const NeonatalNicuHub = lazy(() => import("../pages/neonatal/NeonatalNicuHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -245,28 +244,27 @@ export const ROUTES = [
 
   // --- clinical / operational hub consoles --------------------------------------
   { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
-  { page: "icu-vitals-telemetry", slugs: ["icu-vitals-telemetry", "icu-vitals", "bedside-telemetry", "vitals-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
+  { page: "icu-vitals-telemetry", slugs: ["icu-vitals-telemetry", "bedside-telemetry", "icu-vitals", "vitals-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
   { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
   { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
+
+  // --- radiology imaging & PACS console ----------------------------------------
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
   { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
-  { page: "sterile-processing", slugs: ["sterile-processing", "cssd"], component: SterileProcessingHub, access: AUTHENTICATED },
-
-  // Nine hub consoles that shipped as page components with no registry entry at all: every one of
-  // them was a complete, linked-to console that resolved to the 404 page. They are grouped here
-  // rather than scattered so the next batch has an obvious place to land.
-  { page: "regulatory-audit", slugs: ["regulatory-audit", "provenance-ledger"], component: RegulatoryAuditHub, access: AUTHENTICATED },
-  { page: "pharmacovigilance", slugs: ["pharmacovigilance", "drug-safety"], component: PharmacovigilanceHub, access: AUTHENTICATED },
-  { page: "surgical-robotics", slugs: ["surgical-robotics", "or-orchestration"], component: SurgicalRoboticsHub, access: AUTHENTICATED },
-  { page: "lab-automation", slugs: ["lab-automation", "diagnostics-fleet"], component: LabAutomationHub, access: AUTHENTICATED },
-  { page: "pediatric-nicu", slugs: ["pediatric-nicu", "neonatal-icu"], component: PediatricNeonatalIcuHubPage, access: AUTHENTICATED },
-  { page: "medication-supply", slugs: ["medication-supply", "med-supply-chain"], component: MedicationSupplyColdChainHubPage, access: AUTHENTICATED },
-  { page: "telehealth-monitoring", slugs: ["telehealth-monitoring", "remote-patient-monitoring"], component: TelehealthRemoteMonitoringHubPage, access: AUTHENTICATED },
-  { page: "genomic-trials", slugs: ["genomic-trials", "genomic-research"], component: GenomicClinicalTrialsHubPage, access: AUTHENTICATED },
-  { page: "command-orchestration", slugs: ["command-orchestration", "hospital-command"], component: HospitalCommandOrchestrationSuitePage, access: AUTHENTICATED },
+  // --- medtech & specialty consoles --------------------------------------------
+  { page: "neonatal-nicu", slugs: ["neonatal-nicu", "nicu", "neonatology"], component: NeonatalNicuHub, access: AUTHENTICATED },
+  { page: "regulatory-audit", slugs: ["regulatory-audit", "audit-hub", "provenance"], component: RegulatoryAuditHub, access: AUTHENTICATED },
+  { page: "pharmacovigilance", slugs: ["pharmacovigilance", "drug-safety", "pv-hub"], component: PharmacovigilanceHub, access: AUTHENTICATED },
+  { page: "surgical-robotics", slugs: ["surgical-robotics", "or-orchestration", "robotics"], component: SurgicalRoboticsHub, access: AUTHENTICATED },
+  { page: "lab-automation", slugs: ["lab-automation", "lab-hub", "diagnostics"], component: LabAutomationHub, access: AUTHENTICATED },
+  { page: "hospital-command", slugs: ["hospital-command", "command-orchestration"], component: HospitalCommandOrchestrationSuitePage, access: AUTHENTICATED },
+  { page: "pediatric-neonatal-icu", slugs: ["pediatric-neonatal-icu", "pediatric-icu", "neonatal-icu"], component: PediatricNeonatalIcuHubPage, access: AUTHENTICATED },
+  { page: "medication-cold-chain", slugs: ["medication-cold-chain", "med-supply-chain"], component: MedicationSupplyColdChainHubPage, access: AUTHENTICATED },
+  { page: "telehealth-remote-monitoring", slugs: ["telehealth-remote-monitoring", "remote-monitoring"], component: TelehealthRemoteMonitoringHubPage, access: AUTHENTICATED },
+  { page: "genomic-clinical-trials", slugs: ["genomic-clinical-trials", "genomics"], component: GenomicClinicalTrialsHubPage, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
