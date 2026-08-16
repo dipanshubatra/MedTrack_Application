@@ -473,4 +473,36 @@ public class UserService {
 
         return token;
     }
+
+    /**
+     * Soft deletes (archives) a user by setting the deleted flag.
+     * Only users with the ADMIN or HOSPITAL role should be able to trigger this.
+     *
+     * @param id the user id to archive
+     * @param requestedBy the username of the user requesting the archive
+     * @return the archived user
+     */
+    @Transactional
+    public User archiveUser(Long id, String requestedBy) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setDeleted(true);
+        user.setDeletedAt(LocalDateTime.now());
+        user.setDeletedBy(requestedBy);
+
+        User archived = userRepository.save(user);
+
+        log.info("User archived | Requested By: {} | User ID: {} | Username: {}",
+                requestedBy, archived.getId(), archived.getUsername());
+
+        return archived;
+    }
+
+    /**
+     * Retrieves all archived (soft-deleted) users.
+     */
+    public List<User> getArchivedUsers() {
+        return userRepository.findAllDeleted();
+    }
 }
