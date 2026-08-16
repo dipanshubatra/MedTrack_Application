@@ -82,6 +82,7 @@ const ConfidentialComputeEnclavePage = lazy(() => import("../pages/security/Conf
 const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttackSurfaceHubPage"));
 const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
 const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
+const SterileProcessingHub = lazy(() => import("../pages/sterile/SterileProcessingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const DialysisRenalHub = lazy(() => import("../pages/renal/DialysisRenalHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
