@@ -116,13 +116,18 @@ class EquipmentAuditControllerTest {
     @DisplayName("GET /api/equipment/audit-history/export returns CSV file attachment")
     void exportHospitalAuditHistoryCsv_Success() throws Exception {
         String csvContent = "ID,Equipment ID,Username,Action,Changed Fields,Previous Value,New Value,Timestamp\n1,100,hospital_admin,UPDATE,status,UNDER_MAINTENANCE,ACTIVE,2026-08-12 12:00:00\n";
-        when(equipmentAuditService.exportAuditHistoryCsv("hospital_admin"))
-                .thenReturn(csvContent);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            jakarta.servlet.http.HttpServletResponse response = invocation.getArgument(1);
+            response.setContentType("text/csv");
+            response.setHeader("Content-Disposition", "attachment; filename=audit-history.csv");
+            response.getWriter().write(csvContent);
+            return null;
+        }).when(equipmentAuditService).exportAuditHistoryCsv(org.mockito.ArgumentMatchers.eq("hospital_admin"), org.mockito.ArgumentMatchers.any());
 
-        mockMvc.perform(get("/api/equipment/audit-history/export").principal(hospitalPrincipal))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Content-Disposition", "attachment; filename=\"equipment_audit_history.csv\""))
-                .andExpect(content().contentType(MediaType.parseMediaType("text/csv")))
-                .andExpect(content().string(csvContent));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/equipment/audit-history/export").principal(hospitalPrincipal))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Disposition", "attachment; filename=audit-history.csv"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(org.springframework.http.MediaType.parseMediaType("text/csv")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(csvContent));
     }
 }

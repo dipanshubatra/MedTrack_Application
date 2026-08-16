@@ -6,11 +6,7 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, X, Zap,
 } from "lucide-react";
-import { SimpleModal } from "../../components/common/Modal";
-import { Row } from "../../components/common/InfoRow";
-
-const Modal = (props) => <SimpleModal {...props} closeIcon={X} />;
-
+import { ExportCsvButton } from "../../components/common/ExportButton";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -81,35 +77,11 @@ const toneOf = (v) => {
   return "slate";
 };
 
-const toneClass = {
-  red: "bg-red-500/10 text-red-400 border-red-500/30",
-  amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  green: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  slate: "bg-slate-500/10 text-slate-400 border-slate-500/30",
-};
 
-const Badge = ({ children, tone }) => (
-  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClass[tone || toneOf(children)]}`}>
-    {children}
-  </span>
-);
 
-const Sparkline = ({ points, color = "#34d399", w = 88, h = 26 }) => {
-  if (!points || points.length < 2) return <div className="h-6" />;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const step = w / (points.length - 1);
-  const d = points
-    .map((p, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${(h - ((p - min) / range) * (h - 4) - 2).toFixed(1)}`)
-    .join(" ");
-  return (
-    <svg width={w} height={h} className="overflow-visible">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={w - 1} cy={Number(d.split(" ").pop().split(",")[1]) || h / 2} r="2.2" fill={color} />
-    </svg>
-  );
-};
+const Badge = ({ children, tone }) => <ToneBadge toneOf={toneOf} tone={tone}>{children}</ToneBadge>;
+
+
 
 const Meter = ({ value, color = "bg-emerald-400" }) => (
   <div className="h-1.5 w-24 rounded-full bg-slate-800">
@@ -118,16 +90,7 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
 );
 
 
-const StatCard = ({ icon: Icon, label, value, sub, accent = "text-emerald-400" }) => (
-  <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-slate-400">{label}</span>
-      <Icon size={16} className={accent} />
-    </div>
-    <div className="mt-2 text-2xl font-bold text-slate-100">{value}</div>
-    {sub && <div className="mt-1 text-[11px] text-slate-500">{sub}</div>}
-  </div>
-);
+
 
 const EmptyState = ({ message }) => (
   <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
@@ -405,12 +368,7 @@ export default function SecurityComplianceHub() {
                 <RefreshCw size={15} />
               </button>
             </div>
-            <button
-              onClick={exportCsv}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300"
-            >
-              <Download size={14} /> Export CSV
-            </button>
+            <ExportCsvButton onClick={exportCsv} />
           </div>
         </div>
 

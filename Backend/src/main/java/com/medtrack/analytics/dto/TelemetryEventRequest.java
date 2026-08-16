@@ -39,4 +39,15 @@ public class TelemetryEventRequest {
     private String deviceFingerprint;
 
     private String metadata;
+
+    // ---------------------------------------------------------------------
+    // Geolocation fields (issue #1228)
+    //
+    // Equipment telemetry may include GPS coordinates for geofence validation.
+    // These are optional - not all equipment reports location data.
+    // ---------------------------------------------------------------------
+
+    private Double latitude;
+
+    private Double longitude;
 }
