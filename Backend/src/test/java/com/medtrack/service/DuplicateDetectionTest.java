@@ -145,12 +145,11 @@ class DuplicateDetectionTest {
      * tests read it back through {@code hospital.getUser()}; the declaration went missing when those
      * tests were merged, leaving the file assigning to an undeclared name.
      */
-
     @BeforeEach
     void setUp() {
         username = "duplicates-owner-" + UUID.randomUUID();
 
-        testUser = userRepository.save(User.builder()
+        ownerUser = userRepository.save(User.builder()
                 .name("Duplicates Owner")
                 .username(username)
                 .email(UUID.randomUUID() + "@medtrack.test")
@@ -161,10 +160,12 @@ class DuplicateDetectionTest {
                 .accountStatus(AccountStatus.ACTIVE)
                 .build());
 
+        testUser = ownerUser;
+
         hospital = hospitalRepository.save(Hospital.builder()
                 .name("Duplicates Trust")
                 .location("Test City")
-                .user(testUser)
+                .user(ownerUser)
                 .build());
     }
 
