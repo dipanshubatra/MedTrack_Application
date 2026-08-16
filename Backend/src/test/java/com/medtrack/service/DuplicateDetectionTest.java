@@ -140,13 +140,6 @@ class DuplicateDetectionTest {
     private Hospital hospital;
     private User testUser;
 
-    /**
-     * The hospital's owning account. {@code setUp} assigns it and the telemetry and security-incident
-     * tests read it back through {@code hospital.getUser()}; the declaration went missing when those
-     * tests were merged, leaving the file assigning to an undeclared name.
-     */
-    private User ownerUser;
-
     @BeforeEach
     void setUp() {
         username = "duplicates-owner-" + UUID.randomUUID();
