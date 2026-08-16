@@ -6,6 +6,7 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
+import { ExportCsvButton } from "../../components/common/ExportButton";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -385,12 +386,7 @@ export default function LabAutomationHub() {
                 <RefreshCw size={15} />
               </button>
             </div>
-            <button
-              onClick={exportCsv}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300"
-            >
-              <Download size={14} /> Export CSV
-            </button>
+            <ExportCsvButton onClick={exportCsv} />
           </div>
         </div>
 
