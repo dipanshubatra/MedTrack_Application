@@ -838,13 +838,13 @@ public class EquipmentService {
             throw new IllegalArgumentException("Purchase cost cannot be negative");
         }
 
-        if (equipment.getEquipmentCode() != null &&
-                equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
+        if (equipment.getEquipmentCode() != null && !equipment.getEquipmentCode().isBlank() &&
+                equipmentRepository.findByHospitalIdAndEquipmentCode(hospital.getId(), equipment.getEquipmentCode().trim()).isPresent()) {
             throw new IllegalArgumentException("Equipment Code already exists.");
         }
 
-        if (equipment.getSerialNumber() != null &&
-                equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
+        if (equipment.getSerialNumber() != null && !equipment.getSerialNumber().isBlank() &&
+                equipmentRepository.findByHospitalIdAndSerialNumber(hospital.getId(), equipment.getSerialNumber().trim()).isPresent()) {
             throw new IllegalArgumentException("Serial Number already exists.");
         }
 
@@ -913,8 +913,9 @@ public class EquipmentService {
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
 
-        if (equipmentDetails.getEquipmentCode() != null) {
-            equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
+        if (equipmentDetails.getEquipmentCode() != null && !equipmentDetails.getEquipmentCode().isBlank()) {
+            String trimmedCode = equipmentDetails.getEquipmentCode().trim();
+            equipmentRepository.findByHospitalIdAndEquipmentCode(hospital.getId(), trimmedCode)
                     .ifPresent(existing -> {
                         if (!existing.getId().equals(id)) {
                             throw new IllegalArgumentException("Equipment Code already exists.");
@@ -922,8 +923,9 @@ public class EquipmentService {
                     });
         }
 
-        if (equipmentDetails.getSerialNumber() != null) {
-            equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
+        if (equipmentDetails.getSerialNumber() != null && !equipmentDetails.getSerialNumber().isBlank()) {
+            String trimmedSerial = equipmentDetails.getSerialNumber().trim();
+            equipmentRepository.findByHospitalIdAndSerialNumber(hospital.getId(), trimmedSerial)
                     .ifPresent(existing -> {
                         if (!existing.getId().equals(id)) {
                             throw new IllegalArgumentException("Serial Number already exists.");
