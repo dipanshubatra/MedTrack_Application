@@ -26,6 +26,8 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     Optional<Equipment> findByEquipmentCode(String equipmentCode);
     Optional<Equipment> findBySerialNumber(String serialNumber);
+    Optional<Equipment> findByHospitalIdAndEquipmentCode(Long hospitalId, String equipmentCode);
+    Optional<Equipment> findByHospitalIdAndSerialNumber(Long hospitalId, String serialNumber);
 
     // Tenant-specific queries
     List<Equipment> findByHospitalId(Long hospitalId);
