@@ -83,6 +83,7 @@ const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttack
 const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
 const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
+const DialysisRenalHub = lazy(() => import("../pages/renal/DialysisRenalHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
@@ -244,6 +245,7 @@ export const ROUTES = [
 
   // --- clinical / operational hub consoles --------------------------------------
   { page: "icu-telemetry", slugs: ["icu-telemetry", "icu"], component: IcuTelemetryHub, access: AUTHENTICATED },
+  { page: "dialysis-renal", slugs: ["dialysis-renal", "renal-replacement"], component: DialysisRenalHub, access: AUTHENTICATED },
   { page: "icu-vitals-telemetry", slugs: ["icu-vitals-telemetry", "icu-vitals", "bedside-telemetry", "vitals-telemetry"], component: IcuVitalsTelemetryHubPage, access: AUTHENTICATED },
   { page: "clinical-ai", slugs: ["clinical-ai", "biomedical-ai"], component: ClinicalAIHub, access: AUTHENTICATED },
   { page: "biomedical-ai-governance", slugs: ["biomedical-ai-governance", "ai-governance"], component: BiomedicalAiGovernancePage, access: AUTHENTICATED },
