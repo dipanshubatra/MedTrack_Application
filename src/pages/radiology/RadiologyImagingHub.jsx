@@ -6,6 +6,8 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
+import { SimpleModal as Modal } from "../../components/common/Modal";
+import { Row } from "../../components/common/InfoRow";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -98,32 +100,6 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
   </div>
 );
 
-const Modal = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-    <div
-      className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
-        </div>
-        <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
-          <XIcon size={16} />
-        </button>
-      </div>
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm text-slate-300">{children}</div>
-    </div>
-  </div>
-);
-
-const Row = ({ label, value, accent }) => (
-  <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0">
-    <span className="text-xs text-slate-400">{label}</span>
-    <span className={`text-xs font-medium ${accent || "text-slate-200"}`}>{value}</span>
-  </div>
-);
 
 const StatCard = ({ icon: Icon, label, value, sub, accent = "text-emerald-400" }) => (
   <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">

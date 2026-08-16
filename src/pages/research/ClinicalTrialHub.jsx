@@ -6,6 +6,8 @@ import {
   Pause, Play, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Stethoscope, TestTube, Timer, TrendingDown, TrendingUp, User, Users, X, Zap
 } from "lucide-react";
+import { InspectionModal as Modal } from "../../components/common/Modal";
+import { InfoRow } from "../../components/common/InfoRow";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Clinical Trial & Genomic Research Hub
@@ -224,47 +226,6 @@ function SearchBox({ value, onChange, placeholder }) {
   );
 }
 
-function Modal({ open, onClose, title, subtitle, icon: Icon, children, wide = false }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${wide ? "max-w-3xl" : "max-w-xl"} max-h-[86vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60 animate-scale-up`}>
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/95 px-5 py-4 backdrop-blur">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-sky-400">
-              <Icon size={18} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">{title}</h3>
-              {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
-            </div>
-          </div>
-          <button onClick={onClose} className="rounded-lg border border-slate-700 p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label="Close inspection panel">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function InfoRow({ label, value, mono = false }) {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-800/60 py-2 last:border-0">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className={`text-xs font-semibold text-slate-200 ${mono ? "font-mono tabular-nums" : ""}`}>{value}</span>
-    </div>
-  );
-}
 
 function ProgressBar({ pct, tone = "sky" }) {
   const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
