@@ -42,4 +42,10 @@ public interface HospitalRepository extends JpaRepository<Hospital, Long> {
             + "WHERE LOWER(TRIM(hospital.name)) = LOWER(TRIM(:name)) "
             + "ORDER BY hospital.id ASC")
     List<Hospital> findByNameIgnoreCaseAndTrimmed(@Param("name") String name);
+
+    @Query(value = "SELECT * FROM hospital WHERE deleted = TRUE", nativeQuery = true)
+    List<Hospital> findAllDeleted();
+
+    @Query(value = "SELECT * FROM hospital WHERE id = :id AND deleted = TRUE", nativeQuery = true)
+    Optional<Hospital> findDeletedById(@Param("id") Long id);
 }

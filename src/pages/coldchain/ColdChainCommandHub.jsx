@@ -216,7 +216,10 @@ const arrheniusImpact = (e) => {
   return { rateRatio, equivMinutes, lossPct, impact };
 };
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/\"/g, "\"\"")}"`;
+// RFC 4180: a double quote inside a quoted field is escaped by doubling it. The quote needed no
+// backslash inside a regex literal, and `no-useless-escape` is an error under CI=true, so this one
+// character was the second thing standing between `main` and a production bundle.
+const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 /* ------------------------------------------------------------------ *
  *  Small presentational components

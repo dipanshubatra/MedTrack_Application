@@ -20,6 +20,7 @@ public class TelemetryCollectionService {
 
     private final SoftwareTelemetryLogRepository telemetryLogRepository;
     private final EntityManager entityManager;
+    private final GeofenceValidationService geofenceValidationService;
 
     @Transactional
     public void collectTelemetry(TelemetryEventRequest request) {
@@ -47,8 +48,19 @@ public class TelemetryCollectionService {
                 .sessionId(request.getSessionId())
                 .deviceFingerprint(request.getDeviceFingerprint())
                 .metadata(request.getMetadata())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
                 .build();
 
         telemetryLogRepository.save(logEntry);
+
+        // Validate equipment location against geofence (issue #1228)
+        if (equipment != null && request.getLatitude() != null && request.getLongitude() != null) {
+            geofenceValidationService.validateEquipmentLocation(
+                    equipment.getId(),
+                    request.getLatitude(),
+                    request.getLongitude()
+            );
+        }
     }
 }
