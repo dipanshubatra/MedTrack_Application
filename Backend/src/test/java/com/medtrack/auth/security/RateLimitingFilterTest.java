@@ -55,6 +55,8 @@ class RateLimitingFilterTest {
 
     /** Configures small capacities so limits are reachable within a test. */
     private void configure(int authCapacity, int getCapacity, int writeCapacity, String trustedProxies) {
+        ReflectionTestUtils.setField(filter, "enabled", true);
+        
         ReflectionTestUtils.setField(filter, "authCapacity", authCapacity);
         ReflectionTestUtils.setField(filter, "authRefillTokens", authCapacity);
         ReflectionTestUtils.setField(filter, "authRefillDurationStr", "1m");
@@ -67,10 +69,9 @@ class RateLimitingFilterTest {
         ReflectionTestUtils.setField(filter, "writeRefillTokens", writeCapacity);
         ReflectionTestUtils.setField(filter, "writeRefillDurationStr", "1m");
 
-        ReflectionTestUtils.setField(filter, "aiTechnicianCapacity", authCapacity);
+        ReflectionTestUtils.setField(filter, "aiTechnicianCapacity", 10);
         ReflectionTestUtils.setField(filter, "aiTechnicianRefillDurationStr", "1m");
-
-        ReflectionTestUtils.setField(filter, "aiAdminCapacity", authCapacity);
+        ReflectionTestUtils.setField(filter, "aiAdminCapacity", 10);
         ReflectionTestUtils.setField(filter, "aiAdminRefillDurationStr", "1m");
 
         ReflectionTestUtils.setField(filter, "trustedProxiesRaw", trustedProxies);
@@ -164,10 +165,11 @@ class RateLimitingFilterTest {
             filter.doFilter(request("POST", "/api/auth/login", "1.1.1.1", null), response, filterChain);
 
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus());
-            assertTrue(response.getContentType().startsWith("application/json"),
+            assertTrue(response.getContentType().startsWith("application/problem+json"),
                     response.getContentType());
             assertTrue(response.getContentAsString().contains("Too Many Requests"),
                     response.getContentAsString());
+            assertTrue(response.getHeader("Retry-After") != null, "Retry-After header should be present");
         }
     }
 
