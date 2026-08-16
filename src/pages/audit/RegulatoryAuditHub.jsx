@@ -73,13 +73,6 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
 
 
 
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <Scale size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
-
 /* ------------------------------------------------------------------ */
 /*  Live simulation hook                                               */
 /* ------------------------------------------------------------------ */
@@ -338,25 +331,7 @@ export default function RegulatoryAuditHub() {
           <StatCard icon={Timer} label="Evidence Expiring Soon" value={stats.expiring} sub="≤ 30 days or under review" accent="text-sky-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -459,7 +434,7 @@ export default function RegulatoryAuditHub() {
                 <span className="text-[11px] text-slate-500">C2PA 2.1 manifests · W3C credentials binding</span>
               </div>
               {filteredArtifacts.length === 0 ? (
-                <EmptyState message="No artifacts match the current filters." />
+                <EmptyState icon={Scale} message="No artifacts match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -549,7 +524,7 @@ export default function RegulatoryAuditHub() {
                 <span className="text-[11px] text-slate-500">HIPAA 164.312(b) · immutable, WORM-storage backed</span>
               </div>
               {filteredEvents.length === 0 ? (
-                <EmptyState message="No events match the current filters." />
+                <EmptyState icon={Scale} message="No events match the current filters." />
               ) : (
                 <div className="divide-y divide-slate-800/60">
                   {[...filteredEvents]
@@ -659,7 +634,7 @@ export default function RegulatoryAuditHub() {
               })}
               {filteredEvidence.length === 0 && (
                 <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4">
-                  <EmptyState message="No evidence items match the current filters." />
+                  <EmptyState icon={Scale} message="No evidence items match the current filters." />
                 </div>
               )}
             </section>

@@ -76,13 +76,6 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
 
 
 
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <ScanIcon size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
-
 const ScanIcon = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 7V5a2 2 0 0 1 2-2h2" />
@@ -355,25 +348,7 @@ export default function RadiologyImagingHub() {
           <StatCard icon={Radar} label="AI Jobs Completed" value={stats.aiDone} sub="CAD findings available" accent="text-sky-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -465,7 +440,7 @@ export default function RadiologyImagingHub() {
                 <span className="text-[11px] text-slate-500">DICOM MWL · TAT in minutes</span>
               </div>
               {filteredStudies.length === 0 ? (
-                <EmptyState message="No studies match the current filters." />
+                <EmptyState icon={ScanIcon} message="No studies match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -586,7 +561,7 @@ export default function RadiologyImagingHub() {
               ))}
               {filteredModalities.length === 0 && (
                 <div className="sm:col-span-2 lg:col-span-3 xl:col-span-5">
-                  <EmptyState message="No modalities match the current filters." />
+                  <EmptyState icon={ScanIcon} message="No modalities match the current filters." />
                 </div>
               )}
             </section>
@@ -659,7 +634,7 @@ export default function RadiologyImagingHub() {
                 <span className="text-[11px] text-slate-500">DICOM SR structured findings</span>
               </div>
               {filteredAi.length === 0 ? (
-                <EmptyState message="No AI jobs match the current filters." />
+                <EmptyState icon={ScanIcon} message="No AI jobs match the current filters." />
               ) : (
                 <div className="divide-y divide-slate-800/60">
                   {filteredAi.map((a) => (

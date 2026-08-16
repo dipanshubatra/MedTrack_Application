@@ -92,13 +92,6 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
 
 
 
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <Radar size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
-
 /* ------------------------------------------------------------------ */
 /*  Live simulation hook                                               */
 /* ------------------------------------------------------------------ */
@@ -380,25 +373,7 @@ export default function SecurityComplianceHub() {
           <StatCard icon={Server} label="Enclave Attestation" value={`${ENCLAVES.filter((e) => e.att === "Healthy").length}/${ENCLAVES.length}`} sub="TEE measurements valid" accent="text-sky-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -498,7 +473,7 @@ export default function SecurityComplianceHub() {
                 <span className="text-[11px] text-slate-500">Continuous verification · NIST SP 800-207</span>
               </div>
               {filteredIdentities.length === 0 ? (
-                <EmptyState message="No identities match the current filters." />
+                <EmptyState icon={Radar} message="No identities match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -623,7 +598,7 @@ export default function SecurityComplianceHub() {
                 <span className="text-[11px] text-slate-500">NIST FIPS 203 (ML-KEM) · FIPS 204 (ML-DSA) hybrid</span>
               </div>
               {filteredKeys.length === 0 ? (
-                <EmptyState message="No keys match the current filters." />
+                <EmptyState icon={Radar} message="No keys match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -732,7 +707,7 @@ export default function SecurityComplianceHub() {
                 <span className="text-[11px] text-slate-500">MITRE ATT&amp;CK mapped · kill-chain scoring</span>
               </div>
               {filteredDetections.length === 0 ? (
-                <EmptyState message="No detections match the current filters." />
+                <EmptyState icon={Radar} message="No detections match the current filters." />
               ) : (
                 <div className="divide-y divide-slate-800/60">
                   {[...filteredDetections]

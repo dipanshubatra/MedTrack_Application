@@ -74,13 +74,6 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
 
 
 
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <Database size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
-
 const XIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 6 6 18M6 6l12 12" />
@@ -337,25 +330,7 @@ export default function LabAutomationHub() {
           <StatCard icon={Activity} label="Tests Today" value={stats.totalTests.toLocaleString()} sub="across all analyzers" accent="text-sky-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -457,7 +432,7 @@ export default function LabAutomationHub() {
               ))}
               {filteredAnalyzers.length === 0 && (
                 <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4">
-                  <EmptyState message="No analyzers match the current filters." />
+                  <EmptyState icon={Database} message="No analyzers match the current filters." />
                 </div>
               )}
             </section>
@@ -526,7 +501,7 @@ export default function LabAutomationHub() {
                 <span className="text-[11px] text-slate-500">pre-analytical → analytical → post-analytical</span>
               </div>
               {filteredSamples.length === 0 ? (
-                <EmptyState message="No samples match the current filters." />
+                <EmptyState icon={Database} message="No samples match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -632,7 +607,7 @@ export default function LabAutomationHub() {
                 <span className="text-[11px] text-slate-500">Westgard multi-rule · CLIA 42 CFR 493.1256</span>
               </div>
               {filteredQc.length === 0 ? (
-                <EmptyState message="No QC runs match the current filters." />
+                <EmptyState icon={Database} message="No QC runs match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">

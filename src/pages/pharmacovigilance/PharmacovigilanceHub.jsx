@@ -69,13 +69,6 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
 
 
 
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <ShieldCheck size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
-
 const XIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 6 6 18M6 6l12 12" />
@@ -341,25 +334,7 @@ export default function PharmacovigilanceHub() {
           <StatCard icon={Activity} label="Cases This Week" value={events.filter((e) => e.ts.includes("h ago") || e.ts === "just now").length} sub="reported to safety DB" accent="text-emerald-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -456,7 +431,7 @@ export default function PharmacovigilanceHub() {
                 <span className="text-[11px] text-slate-500">ICSR triage · E2B(R3) formatted</span>
               </div>
               {filteredEvents.length === 0 ? (
-                <EmptyState message="No cases match the current filters." />
+                <EmptyState icon={ShieldCheck} message="No cases match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -568,7 +543,7 @@ export default function PharmacovigilanceHub() {
                 <span className="text-[11px] text-slate-500">EudraVigilance-style ROR · EBGM overlay</span>
               </div>
               {filteredSignals.length === 0 ? (
-                <EmptyState message="No signals match the current filters." />
+                <EmptyState icon={ShieldCheck} message="No signals match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -667,7 +642,7 @@ export default function PharmacovigilanceHub() {
                   })}
                 {filteredSubmissions.length === 0 && (
                   <div className="sm:col-span-2 lg:col-span-3">
-                    <EmptyState message="No submissions match the current filters." />
+                    <EmptyState icon={ShieldCheck} message="No submissions match the current filters." />
                   </div>
                 )}
               </div>
@@ -684,7 +659,7 @@ export default function PharmacovigilanceHub() {
                 <span className="text-[11px] text-slate-500">GVP VI · 21 CFR 314.80(c)</span>
               </div>
               {filteredSubmissions.length === 0 ? (
-                <EmptyState message="No submissions match the current filters." />
+                <EmptyState icon={ShieldCheck} message="No submissions match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
