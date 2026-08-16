@@ -6,8 +6,7 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
-import { CompactSearch } from "../../components/common/SearchBox";
-import { FilterChips } from "../../components/common/FilterChips";
+import { ExportCsvButton } from "../../components/common/ExportButton";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -60,37 +59,11 @@ const toneOf = (v) => {
   return "slate";
 };
 
-const toneClass = {
-  red: "bg-red-500/10 text-red-400 border-red-500/30",
-  amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  green: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  sky: "bg-sky-500/10 text-sky-400 border-sky-500/30",
-  slate: "bg-slate-500/10 text-slate-400 border-slate-500/30",
-};
 
-const Badge = ({ children, tone }) => (
-  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClass[tone || toneOf(children)]}`}>
-    {children}
-  </span>
-);
 
-const Sparkline = ({ points, color = "#34d399", w = 88, h = 24 }) => {
-  if (!points || points.length < 2) return <div className="h-6" />;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const step = w / (points.length - 1);
-  const d = points
-    .map((p, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${(h - ((p - min) / range) * (h - 4) - 2).toFixed(1)}`)
-    .join(" ");
-  const last = points[points.length - 1];
-  return (
-    <svg width={w} height={h} className="overflow-visible">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={w - 1} cy={h - ((last - min) / range) * (h - 4) - 2} r="2.2" fill={color} />
-    </svg>
-  );
-};
+const Badge = ({ children, tone }) => <ToneBadge toneOf={toneOf} tone={tone}>{children}</ToneBadge>;
+
+
 
 const Meter = ({ value, color = "bg-emerald-400" }) => (
   <div className="h-1.5 w-24 rounded-full bg-slate-800">
@@ -98,50 +71,8 @@ const Meter = ({ value, color = "bg-emerald-400" }) => (
   </div>
 );
 
-const Modal = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-    <div
-      className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
-        </div>
-        <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
-          <XIcon size={16} />
-        </button>
-      </div>
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm text-slate-300">{children}</div>
-    </div>
-  </div>
-);
 
-const Row = ({ label, value, accent }) => (
-  <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0">
-    <span className="text-xs text-slate-400">{label}</span>
-    <span className={`text-xs font-medium ${accent || "text-slate-200"}`}>{value}</span>
-  </div>
-);
 
-const StatCard = ({ icon: Icon, label, value, sub, accent = "text-emerald-400" }) => (
-  <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-slate-400">{label}</span>
-      <Icon size={16} className={accent} />
-    </div>
-    <div className="mt-2 text-2xl font-bold text-slate-100">{value}</div>
-    {sub && <div className="mt-1 text-[11px] text-slate-500">{sub}</div>}
-  </div>
-);
-
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <Database size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
 
 const XIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -387,12 +318,7 @@ export default function LabAutomationHub() {
                 <RefreshCw size={15} />
               </button>
             </div>
-            <button
-              onClick={exportCsv}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300"
-            >
-              <Download size={14} /> Export CSV
-            </button>
+            <ExportCsvButton onClick={exportCsv} />
           </div>
         </div>
 
@@ -404,25 +330,7 @@ export default function LabAutomationHub() {
           <StatCard icon={Activity} label="Tests Today" value={stats.totalTests.toLocaleString()} sub="across all analyzers" accent="text-sky-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -480,7 +388,7 @@ export default function LabAutomationHub() {
               ))}
               {filteredAnalyzers.length === 0 && (
                 <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4">
-                  <EmptyState message="No analyzers match the current filters." />
+                  <EmptyState icon={Database} message="No analyzers match the current filters." />
                 </div>
               )}
             </section>
@@ -549,7 +457,7 @@ export default function LabAutomationHub() {
                 <span className="text-[11px] text-slate-500">pre-analytical → analytical → post-analytical</span>
               </div>
               {filteredSamples.length === 0 ? (
-                <EmptyState message="No samples match the current filters." />
+                <EmptyState icon={Database} message="No samples match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -655,7 +563,7 @@ export default function LabAutomationHub() {
                 <span className="text-[11px] text-slate-500">Westgard multi-rule · CLIA 42 CFR 493.1256</span>
               </div>
               {filteredQc.length === 0 ? (
-                <EmptyState message="No QC runs match the current filters." />
+                <EmptyState icon={Database} message="No QC runs match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">

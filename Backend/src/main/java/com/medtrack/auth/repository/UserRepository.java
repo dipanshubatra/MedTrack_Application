@@ -88,4 +88,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + "AND LOWER(TRIM(user.organization)) = LOWER(TRIM(:organization)) "
             + "ORDER BY user.id ASC")
     List<User> findHospitalUsersByOrganization(@Param("organization") String organization);
+
+    @Query(value = "SELECT * FROM users WHERE deleted = TRUE", nativeQuery = true)
+    List<User> findAllDeleted();
+
+    @Query(value = "SELECT * FROM users WHERE id = :id AND deleted = TRUE", nativeQuery = true)
+    Optional<User> findDeletedById(@Param("id") Long id);
 }
