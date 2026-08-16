@@ -83,6 +83,7 @@ const CtemAttackSurfaceHubPage = lazy(() => import("../pages/security/CtemAttack
 const IcuVitalsTelemetryHubPage = lazy(() => import("../pages/telemetry/IcuVitalsTelemetryHubPage"));
 const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
+const DialysisRenalHub = lazy(() => import("../pages/renal/DialysisRenalHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
 const OncologyInfusionHub = lazy(() => import("../pages/oncology/OncologyInfusionHub"));
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
