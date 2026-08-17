@@ -6,6 +6,8 @@ import {
   Pause, Phone, Play, Plus, Radio, RefreshCw, Route, Search, ShieldCheck, Siren,
   Stethoscope, Timer, TrendingDown, TrendingUp, User, Users, X, Zap
 } from "lucide-react";
+import { csvEscape, downloadCsv } from "../../utils/export";
+import { ProgressBar } from "../../components/common/ProgressBar";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Hospital Operations & Emergency Triage Hub
@@ -141,8 +143,6 @@ const unitStatus = (u) => (occupancyPct(u) >= 100 ? "critical" : occupancyPct(u)
 
 const esiTone = (esi) => ESI_META[esi].tone;
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
-
 /* ------------------------------------------------------------------ *
  *  Small presentational components
  * ------------------------------------------------------------------ */
@@ -247,15 +247,6 @@ function InfoRow({ label, value, mono = false }) {
     <div className="flex items-center justify-between border-b border-slate-800/60 py-2 last:border-0">
       <span className="text-xs text-slate-500">{label}</span>
       <span className={`text-xs font-semibold text-slate-200 ${mono ? "font-mono tabular-nums" : ""}`}>{value}</span>
-    </div>
-  );
-}
-
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
     </div>
   );
 }
@@ -770,25 +761,17 @@ export default function EmergencyTriageHub({ onNavigate }) {
         ? ["id", "unit", "origin", "dest", "etaTicks", "acuity", "lightsSirens", "status", "route"]
         : ["id", "name", "mrn", "esi", "chiefComplaint", "zone", "disposition", "hr", "spo2"];
     const csv = [
-      header.map(CSV_ESCAPE).join(","),
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "beds"
           ? [r.id, r.name, r.type, r.total, r.occupied, r.boarding, r.predictedDemand]
           : activeTab === "routing"
             ? [r.id, r.unit, r.origin, r.dest, r.etaTicks, r.acuity, r.lightsSirens, r.status, r.route]
             : [r.id, r.name, r.mrn, r.esi, r.chiefComplaint, r.zone, r.disposition, r.vitals.hr, r.vitals.spo2]
-        ).map(CSV_ESCAPE).join(",")
+        ).map(csvEscape).join(",")
       ),
     ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-ems-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`medtrack-ems-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

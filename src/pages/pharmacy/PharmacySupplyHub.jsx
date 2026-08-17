@@ -7,6 +7,8 @@ import {
   Siren, Snowflake, Syringe, Thermometer, Timer, Truck, User, Users, Warehouse,
   Wind, Wrench, X, Zap
 } from "lucide-react";
+import { csvEscape, downloadCsv } from "../../utils/export";
+import { ProgressBar } from "../../components/common/ProgressBar";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Pharmacy & Med-Supply Chain Hub
@@ -157,8 +159,6 @@ const storageState = (s) => {
   return "nominal";
 };
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
-
 /* ------------------------------------------------------------------ *
  *  Small presentational components
  * ------------------------------------------------------------------ */
@@ -291,15 +291,6 @@ function InfoRow({ label, value, mono = false }) {
     <div className="flex items-center justify-between border-b border-slate-800/60 py-2 last:border-0">
       <span className="text-xs text-slate-500">{label}</span>
       <span className={`text-xs font-semibold text-slate-200 ${mono ? "font-mono tabular-nums" : ""}`}>{value}</span>
-    </div>
-  );
-}
-
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
     </div>
   );
 }
@@ -767,25 +758,17 @@ export default function PharmacySupplyHub({ onNavigate }) {
         ? ["id", "vendor", "status", "lines", "value", "urgent", "items"]
         : ["id", "name", "type", "location", "temp", "humidity", "rangeMin", "rangeMax", "status"];
     const csv = [
-      header.map(CSV_ESCAPE).join(","),
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "inventory"
           ? [r.id, r.ndc, r.name, r.category, r.form, r.controlled, r.storage, r.onHand, r.parLevel, r.reorderPoint, r.unitCost, r.abc]
           : activeTab === "orders"
             ? [r.id, r.vendor, r.status, r.lines, r.value, r.urgent, r.items.join(" | ")]
             : [r.id, r.name, r.type, r.location, r.temp, r.humidity, r.rangeMin, r.rangeMax, storageState(r)]
-        ).map(CSV_ESCAPE).join(",")
+        ).map(csvEscape).join(",")
       ),
     ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-pharmacy-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`medtrack-pharmacy-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

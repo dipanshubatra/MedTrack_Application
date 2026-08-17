@@ -6,6 +6,11 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/export";
+import { Meter } from "../../components/common/Meter";
+import { PageHeader, Footer } from "../../components/common/PageHeader";
+import ToastTray, { useToastTray } from "../../components/common/ToastTray";
+import { SectionHeader, PanelHeader } from "../../components/common/SectionHeader";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -89,12 +94,6 @@ const Sparkline = ({ points, color = "#34d399", w = 88, h = 24 }) => {
     </svg>
   );
 };
-
-const Meter = ({ value, color = "bg-emerald-400" }) => (
-  <div className="h-1.5 w-24 rounded-full bg-slate-800">
-    <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
-  </div>
-);
 
 const Modal = ({ title, subtitle, onClose, children }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -222,12 +221,7 @@ export default function LabAutomationHub() {
   const [priorityFilter, setPriorityFilter] = useState("All");
   const [qcFilter, setQcFilter] = useState("All");
 
-  const [toasts, setToasts] = useState([]);
-  const toast = useCallback((msg, sev = "Low") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-4), { id, msg, sev }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
-  }, []);
+  const { toasts, toast } = useToastTray();
 
   const [analyzers, setAnalyzers] = useState(() => ANALYZERS.map((a) => ({ ...a })));
   const [samples, setSamples] = useState(() => SAMPLES.map((s) => ({ ...s })));
@@ -309,13 +303,7 @@ export default function LabAutomationHub() {
         : tab === "samples"
         ? [["ID", "Patient", "Type", "Test", "Dept", "Priority", "Status", "Tube", "ETA"], ...filteredSamples.map((s) => [s.id, s.patient, s.type, s.test, s.dept, s.priority, s.status, s.tube, s.eta])]
         : [["ID", "Analyzer", "Level", "Analyte", "Target", "Measured", "Unit", "Status"], ...filteredQc.map((q) => [q.id, q.analyzer, q.level, q.analyte, q.target, q.measured, q.unit, q.status])];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `lab-automation-${tab}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`lab-automation-${tab}-${Date.now()}.csv`, rows);
     toast("CSV export downloaded", "Low");
   };
 
@@ -330,35 +318,16 @@ export default function LabAutomationHub() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* toast stack */}
-      <div className="fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
-            {t.sev === "High" || t.sev === "Critical" ? (
-              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
-            ) : t.sev === "Medium" ? (
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-            ) : (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-            )}
-            <p className="text-xs text-slate-300">{t.msg}</p>
-          </div>
-        ))}
-      </div>
+      <ToastTray toasts={toasts} />
 
       {/* header */}
       <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-              <Database size={24} className="text-emerald-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100">Lab Automation &amp; Diagnostics Fleet Hub</h1>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Analyzer fleet · sample workflow · QC &amp; calibration — CLIA / ISO 15189 aligned
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            icon={<Database size={24} className="text-emerald-400" />}
+            title="Lab Automation &amp; Diagnostics Fleet Hub"
+            subtitle="Analyzer fleet · sample workflow · QC &amp; calibration — CLIA / ISO 15189 aligned"
+          />
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
               <button
@@ -529,10 +498,7 @@ export default function LabAutomationHub() {
 
             {/* uptime strip */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Zap size={16} className="text-amber-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Fleet Availability</h2>
-              </div>
+              <PanelHeader icon={<Zap size={16} className="text-amber-400" />} title="Fleet Availability" />
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
                   <p className="text-xl font-bold text-emerald-400">{(analyzers.reduce((a, x) => a + x.uptime, 0) / Math.max(1, analyzers.length)).toFixed(1)}%</p>
@@ -582,14 +548,12 @@ export default function LabAutomationHub() {
 
             {/* sample table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Activity size={16} className="text-sky-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Sample Workflow Pipeline</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredSamples.length} samples</span>
-                </div>
-                <span className="text-[11px] text-slate-500">pre-analytical → analytical → post-analytical</span>
-              </div>
+              <SectionHeader
+                icon={<Activity size={16} className="text-sky-400" />}
+                title="Sample Workflow Pipeline"
+                badge={`${filteredSamples.length} samples`}
+                right="pre-analytical → analytical → post-analytical"
+              />
               {filteredSamples.length === 0 ? (
                 <EmptyState message="No samples match the current filters." />
               ) : (
@@ -688,14 +652,12 @@ export default function LabAutomationHub() {
 
             {/* qc table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Gauge size={16} className="text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Levey-Jennings Control Runs</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredQc.length} runs</span>
-                </div>
-                <span className="text-[11px] text-slate-500">Westgard multi-rule · CLIA 42 CFR 493.1256</span>
-              </div>
+              <SectionHeader
+                icon={<Gauge size={16} className="text-amber-400" />}
+                title="Levey-Jennings Control Runs"
+                badge={`${filteredQc.length} runs`}
+                right="Westgard multi-rule · CLIA 42 CFR 493.1256"
+              />
               {filteredQc.length === 0 ? (
                 <EmptyState message="No QC runs match the current filters." />
               ) : (
@@ -845,9 +807,9 @@ export default function LabAutomationHub() {
         </Modal>
       )}
 
-      <footer className="border-t border-slate-800 px-6 py-4 text-center text-[10px] text-slate-600">
+      <Footer>
         Lab Automation &amp; Diagnostics Fleet Hub — CLIA 42 CFR 493, ISO 15189, CLSI EP23 · simulation environment · not connected to live instruments
-      </footer>
+      </Footer>
     </div>
   );
 }

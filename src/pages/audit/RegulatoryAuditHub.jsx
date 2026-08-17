@@ -6,6 +6,11 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/export";
+import { Meter } from "../../components/common/Meter";
+import { PageHeader, Footer } from "../../components/common/PageHeader";
+import ToastTray, { useToastTray } from "../../components/common/ToastTray";
+import { SectionHeader, PanelHeader } from "../../components/common/SectionHeader";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -70,12 +75,6 @@ const Badge = ({ children, tone }) => (
   <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClass[tone || toneOf(children)]}`}>
     {children}
   </span>
-);
-
-const Meter = ({ value, color = "bg-emerald-400" }) => (
-  <div className="h-1.5 w-24 rounded-full bg-slate-800">
-    <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
-  </div>
 );
 
 const Modal = ({ title, subtitle, onClose, children }) => (
@@ -206,12 +205,7 @@ export default function RegulatoryAuditHub() {
   const [riskFilter, setRiskFilter] = useState("All");
   const [frameworkFilter, setFrameworkFilter] = useState("All");
 
-  const [toasts, setToasts] = useState([]);
-  const toast = useCallback((msg, sev = "Low") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-4), { id, msg, sev }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
-  }, []);
+  const { toasts, toast } = useToastTray();
 
   const [artifacts, setArtifacts] = useState(() => PROVENANCE.map((a) => ({ ...a })));
   const [events, setEvents] = useState(() => AUDIT_EVENTS.map((e) => ({ ...e })));
@@ -293,13 +287,7 @@ export default function RegulatoryAuditHub() {
         : tab === "audit"
         ? [["ID", "Actor", "Action", "Resource", "IP", "Risk", "Time", "Retention"], ...filteredEvents.map((e) => [e.id, e.actor, e.action, e.resource, e.ip, e.risk, e.ts, e.retention])]
         : [["ID", "Evidence", "Framework", "Status", "Reviewer", "Expires (d)", "Coverage"], ...filteredEvidence.map((e) => [e.id, e.name, e.framework, e.status, e.reviewer, e.expires, e.coverage])];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `regulatory-audit-${tab}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`regulatory-audit-${tab}-${Date.now()}.csv`, rows);
     toast("CSV export downloaded", "Low");
   };
 
@@ -314,35 +302,16 @@ export default function RegulatoryAuditHub() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* toast stack */}
-      <div className="fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
-            {t.sev === "Critical" || t.sev === "Flagged" ? (
-              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
-            ) : t.sev === "Medium" ? (
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-            ) : (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-            )}
-            <p className="text-xs text-slate-300">{t.msg}</p>
-          </div>
-        ))}
-      </div>
+      <ToastTray toasts={toasts} critical={["Critical", "Flagged"]} />
 
       {/* header */}
       <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-              <Scale size={24} className="text-emerald-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100">Regulatory Audit &amp; Provenance Ledger Hub</h1>
-              <p className="mt-0.5 text-xs text-slate-400">
-                C2PA provenance · HIPAA audit trails · Evidence &amp; attestation — immutable, queryable, export-ready
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            icon={<Scale size={24} className="text-emerald-400" />}
+            title="Regulatory Audit &amp; Provenance Ledger Hub"
+            subtitle="C2PA provenance · HIPAA audit trails · Evidence &amp; attestation — immutable, queryable, export-ready"
+          />
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
               <button
@@ -498,14 +467,12 @@ export default function RegulatoryAuditHub() {
 
             {/* artifact table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Fingerprint size={16} className="text-emerald-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Provenance Ledger</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredArtifacts.length} artifacts</span>
-                </div>
-                <span className="text-[11px] text-slate-500">C2PA 2.1 manifests · W3C credentials binding</span>
-              </div>
+              <SectionHeader
+                icon={<Fingerprint size={16} className="text-emerald-400" />}
+                title="Provenance Ledger"
+                badge={`${filteredArtifacts.length} artifacts`}
+                right="C2PA 2.1 manifests · W3C credentials binding"
+              />
               {filteredArtifacts.length === 0 ? (
                 <EmptyState message="No artifacts match the current filters." />
               ) : (
@@ -588,14 +555,12 @@ export default function RegulatoryAuditHub() {
           <div className="space-y-6">
             {/* audit stream */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Access &amp; Activity Audit Stream</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredEvents.length} events</span>
-                </div>
-                <span className="text-[11px] text-slate-500">HIPAA 164.312(b) · immutable, WORM-storage backed</span>
-              </div>
+              <SectionHeader
+                icon={<FileText size={16} className="text-amber-400" />}
+                title="Access &amp; Activity Audit Stream"
+                badge={`${filteredEvents.length} events`}
+                right="HIPAA 164.312(b) · immutable, WORM-storage backed"
+              />
               {filteredEvents.length === 0 ? (
                 <EmptyState message="No events match the current filters." />
               ) : (
@@ -644,10 +609,7 @@ export default function RegulatoryAuditHub() {
 
             {/* access pattern strip */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Network size={16} className="text-sky-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Action Mix — Last 24h</h2>
-              </div>
+              <PanelHeader icon={<Network size={16} className="text-sky-400" />} title="Action Mix — Last 24h" />
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {["VIEW", "CREATE", "MODIFY", "EXPORT", "SHARE", "PRINT"].map((act) => {
                   const count = events.filter((e) => e.action === act || (act === "EXPORT" && e.action === "DOWNLOAD")).length;
@@ -714,10 +676,7 @@ export default function RegulatoryAuditHub() {
 
             {/* readiness summary */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Gauge size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Enterprise Audit Readiness</h2>
-              </div>
+              <PanelHeader icon={<Gauge size={16} className="text-emerald-400" />} title="Enterprise Audit Readiness" />
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 {[
                   { label: "Compliant", value: evidence.filter((e) => e.status === "Compliant").length, color: "text-emerald-400", pct: Math.round((evidence.filter((e) => e.status === "Compliant").length / evidence.length) * 100) },
@@ -820,9 +779,9 @@ export default function RegulatoryAuditHub() {
         </Modal>
       )}
 
-      <footer className="border-t border-slate-800 px-6 py-4 text-center text-[10px] text-slate-600">
+      <Footer>
         Regulatory Audit &amp; Provenance Ledger Hub — C2PA 2.1, HIPAA 164.312(b), 21 CFR Part 11, SOC 2, ISO 27001 · immutable simulation environment
-      </footer>
+      </Footer>
     </div>
   );
 }

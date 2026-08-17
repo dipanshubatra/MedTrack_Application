@@ -7,6 +7,8 @@ import {
   Search, Server, ShieldAlert, ShieldCheck, Snowflake, Syringe, Thermometer,
   Timer, Truck, Users, Warehouse, Wind, Wrench, X, Zap
 } from "lucide-react";
+import { csvEscape, downloadCsv } from "../../utils/export";
+import { ProgressBar } from "../../components/common/ProgressBar";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Pharmaceutical Cold-Chain & Med-Supply Chain Command Station
@@ -223,8 +225,6 @@ const arrheniusImpact = (e) => {
   return { rateRatio, equivMinutes, lossPct, impact };
 };
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/\"/g, "\"\"")}"`;
-
 /* ------------------------------------------------------------------ *
  *  Small presentational components
  * ------------------------------------------------------------------ */
@@ -356,15 +356,6 @@ function InfoRow({ label, value, mono = false }) {
     <div className="flex items-center justify-between border-b border-slate-800/60 py-2 last:border-0">
       <span className="text-xs text-slate-500">{label}</span>
       <span className={`text-xs font-semibold text-slate-200 ${mono ? "font-mono tabular-nums" : ""}`}>{value}</span>
-    </div>
-  );
-}
-
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
     </div>
   );
 }
@@ -1042,7 +1033,7 @@ export default function ColdChainCommandHub({ onNavigate }) {
             ? ["id", "unit", "product", "startTick", "elapsed", "maxTemp", "ea", "lossPct", "impact"]
             : ["id", "name", "model", "location", "temp", "rangeMin", "rangeMax", "humidity", "co2", "battery", "status"];
     const csv = [
-      header.map(CSV_ESCAPE).join(","),
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "rfid"
           ? [r.id, r.product, r.serial, r.lot, r.zone, rfidState(r), r.strength.toFixed(1), r.lastRead, r.tampered]
@@ -1053,18 +1044,10 @@ export default function ColdChainCommandHub({ onNavigate }) {
               : activeTab === "arrhenius"
                 ? [r.id, r.unit, r.product, r.startTick, r.elapsed, r.maxTemp, r.ea, arrheniusImpact(r).lossPct.toFixed(1), arrheniusImpact(r).impact]
                 : [r.id, r.name, r.model, r.location, r.temp, r.rangeMin, r.rangeMax, r.humidity, r.co2, r.battery, cryoState(r)]
-        ).map(CSV_ESCAPE).join(",")
+        ).map(csvEscape).join(",")
       ),
     ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-cold-chain-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`medtrack-cold-chain-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

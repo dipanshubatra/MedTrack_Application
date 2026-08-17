@@ -6,6 +6,8 @@ import {
   Pause, Play, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Stethoscope, TestTube, Timer, TrendingDown, TrendingUp, User, Users, X, Zap
 } from "lucide-react";
+import { csvEscape, downloadCsv } from "../../utils/export";
+import { ProgressBar } from "../../components/common/ProgressBar";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Clinical Trial & Genomic Research Hub
@@ -142,8 +144,6 @@ const fmtP = (v) => v.toExponential(2).replace("e", " × 10^");
 
 const enrollmentPct = (t) => Math.round((t.enrolled / t.target) * 100);
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
-
 /* Cohort matcher: pure function of criteria so the sandbox recomputes instantly. */
 const matchCohort = (patients, criteria) => patients.filter((p) => {
   const { ageMin, ageMax, stages, ecogMax, genotypes, pdl1Min, priorLinesMax } = criteria;
@@ -262,15 +262,6 @@ function InfoRow({ label, value, mono = false }) {
     <div className="flex items-center justify-between border-b border-slate-800/60 py-2 last:border-0">
       <span className="text-xs text-slate-500">{label}</span>
       <span className={`text-xs font-semibold text-slate-200 ${mono ? "font-mono tabular-nums" : ""}`}>{value}</span>
-    </div>
-  );
-}
-
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
     </div>
   );
 }
@@ -812,18 +803,10 @@ export default function ClinicalTrialHub({ onNavigate }) {
     const matched = matchCohort(PATIENT_POOL, criteria);
     setExporting(true);
     const csv = [
-      ["id", "age", "sex", "stage", "ecog", "genotype", "pdl1", "ki67", "priorLines", "arm"].map(CSV_ESCAPE).join(","),
-      ...matched.map((p) => [p.id, p.age, p.sex, p.stage, p.ecog, p.genotype, p.pdl1, p.ki67, p.priorLines, p.arm].map(CSV_ESCAPE).join(",")),
+      ["id", "age", "sex", "stage", "ecog", "genotype", "pdl1", "ki67", "priorLines", "arm"].map(csvEscape).join(","),
+      ...matched.map((p) => [p.id, p.age, p.sex, p.stage, p.ecog, p.genotype, p.pdl1, p.ki67, p.priorLines, p.arm].map(csvEscape).join(",")),
     ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-cohort-${matched.length}-patients-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`medtrack-cohort-${matched.length}-patients-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Cohort exported", `${matched.length} patients matched current criteria and written to CSV`, "low");
@@ -837,23 +820,15 @@ export default function ClinicalTrialHub({ onNavigate }) {
       ? ["id", "title", "phase", "status", "sponsor", "sites", "target", "enrolled", "endpoint", "biomarkers"]
       : ["id", "gene", "name", "assay", "expression", "foldChange", "pValue", "qValue", "direction", "relevance"];
     const csv = [
-      header.map(CSV_ESCAPE).join(","),
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "trials"
           ? [r.id, r.title, r.phase, r.status, r.sponsor, r.sites, r.target, r.enrolled, r.endpoint, r.biomarkers.join(" | ")]
           : [r.id, r.gene, r.name, r.assay, r.expression, r.foldChange, r.pValue, r.qValue, r.direction, r.relevance]
-        ).map(CSV_ESCAPE).join(",")
+        ).map(csvEscape).join(",")
       ),
     ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-research-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`medtrack-research-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");
