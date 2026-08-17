@@ -12,6 +12,7 @@ import PlaybackControls from "../../components/common/PlaybackControls";
 import { ExportButton } from "../../components/common/ExportButton";
 import LiveStatus from "../../components/common/LiveStatus";
 import ToastStack, { useToasts } from "../../components/common/ToastStack";
+import { downloadCsv } from "../../utils/csv";
 // The shared primitives this console renders. They were page-local components until the
 // extraction into src/components/common; the local definitions were removed then, but these
 // imports were never added, so every identifier below was a ReferenceError at first render.
@@ -221,11 +222,6 @@ const arrheniusImpact = (e) => {
   const impact = lossPct < 1 ? "low" : lossPct < 5 ? "moderate" : lossPct < 15 ? "high" : "critical";
   return { rateRatio, equivMinutes, lossPct, impact };
 };
-
-// RFC 4180: a double quote inside a quoted field is escaped by doubling it. The quote needed no
-// backslash inside a regex literal, and `no-useless-escape` is an error under CI=true, so this one
-// character was the second thing standing between `main` and a production bundle.
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 /* ------------------------------------------------------------------ *
  *  Small presentational components
@@ -941,8 +937,8 @@ export default function ColdChainCommandHub({ onNavigate }) {
           : activeTab === "arrhenius"
             ? ["id", "unit", "product", "startTick", "elapsed", "maxTemp", "ea", "lossPct", "impact"]
             : ["id", "name", "model", "location", "temp", "rangeMin", "rangeMax", "humidity", "co2", "battery", "status"];
-    const csv = [
-      header.map(CSV_ESCAPE).join(","),
+    const table = [
+      header,
       ...rows.map((r) =>
         (activeTab === "rfid"
           ? [r.id, r.product, r.serial, r.lot, r.zone, rfidState(r), r.strength.toFixed(1), r.lastRead, r.tampered]
@@ -953,18 +949,10 @@ export default function ColdChainCommandHub({ onNavigate }) {
               : activeTab === "arrhenius"
                 ? [r.id, r.unit, r.product, r.startTick, r.elapsed, r.maxTemp, r.ea, arrheniusImpact(r).lossPct.toFixed(1), arrheniusImpact(r).impact]
                 : [r.id, r.name, r.model, r.location, r.temp, r.rangeMin, r.rangeMax, r.humidity, r.co2, r.battery, cryoState(r)]
-        ).map(CSV_ESCAPE).join(",")
+        )
       ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-cold-chain-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    ];
+    downloadCsv(`medtrack-cold-chain-${activeTab}-${Date.now()}.csv`, table);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

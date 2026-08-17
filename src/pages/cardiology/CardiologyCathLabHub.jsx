@@ -6,6 +6,7 @@ import {
   Plus, RefreshCw, Search, ShieldAlert, ShieldCheck, Siren, SlidersHorizontal,
   Stethoscope, Timer, TrendingDown, TrendingUp, User, Users, X, Zap,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -261,13 +262,7 @@ export default function CardiologyCathLabHub() {
         : [["Monitor", "Case", "Patient", "HR", "SYS", "DIA", "MAP", "SpO2", "LVEDP", "CO", "Phase"]].concat(
             filteredHemo.map((h) => [h.id, h.caseId, h.patient, h.hr, h.sys, h.dia, h.map, h.spo2, h.lvedp, h.co, h.phase])
           );
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `cardiology-${activeTab}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`cardiology-${activeTab}.csv`, rows);
     addToast("CSV exported", "success");
   }, [activeTab, filteredSchedule, filteredDevices, filteredHemo, addToast]);
 

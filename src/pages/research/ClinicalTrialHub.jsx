@@ -11,6 +11,7 @@ import PlaybackControls from "../../components/common/PlaybackControls";
 import { ExportButton } from "../../components/common/ExportButton";
 import LiveStatus from "../../components/common/LiveStatus";
 import ToastStack, { useToasts } from "../../components/common/ToastStack";
+import { downloadCsv } from "../../utils/csv";
 // The shared primitives this console renders. They were page-local components until the
 // extraction into src/components/common; the local definitions were removed then, but these
 // imports were never added, so every identifier below was a ReferenceError at first render.
@@ -140,7 +141,6 @@ const fmtP = (v) => v.toExponential(2).replace("e", " × 10^");
 
 const enrollmentPct = (t) => Math.round((t.enrolled / t.target) * 100);
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 /* Cohort matcher: pure function of criteria so the sandbox recomputes instantly. */
 const matchCohort = (patients, criteria) => patients.filter((p) => {
@@ -709,19 +709,11 @@ export default function ClinicalTrialHub({ onNavigate }) {
   const handleExportCohort = useCallback(() => {
     const matched = matchCohort(PATIENT_POOL, criteria);
     setExporting(true);
-    const csv = [
-      ["id", "age", "sex", "stage", "ecog", "genotype", "pdl1", "ki67", "priorLines", "arm"].map(CSV_ESCAPE).join(","),
-      ...matched.map((p) => [p.id, p.age, p.sex, p.stage, p.ecog, p.genotype, p.pdl1, p.ki67, p.priorLines, p.arm].map(CSV_ESCAPE).join(",")),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-cohort-${matched.length}-patients-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const table = [
+      ["id", "age", "sex", "stage", "ecog", "genotype", "pdl1", "ki67", "priorLines", "arm"],
+      ...matched.map((p) => [p.id, p.age, p.sex, p.stage, p.ecog, p.genotype, p.pdl1, p.ki67, p.priorLines, p.arm]),
+    ];
+    downloadCsv(`medtrack-cohort-${matched.length}-patients-${Date.now()}.csv`, table);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Cohort exported", `${matched.length} patients matched current criteria and written to CSV`, "low");
@@ -734,24 +726,16 @@ export default function ClinicalTrialHub({ onNavigate }) {
     const header = activeTab === "trials"
       ? ["id", "title", "phase", "status", "sponsor", "sites", "target", "enrolled", "endpoint", "biomarkers"]
       : ["id", "gene", "name", "assay", "expression", "foldChange", "pValue", "qValue", "direction", "relevance"];
-    const csv = [
-      header.map(CSV_ESCAPE).join(","),
+    const table = [
+      header,
       ...rows.map((r) =>
         (activeTab === "trials"
           ? [r.id, r.title, r.phase, r.status, r.sponsor, r.sites, r.target, r.enrolled, r.endpoint, r.biomarkers.join(" | ")]
           : [r.id, r.gene, r.name, r.assay, r.expression, r.foldChange, r.pValue, r.qValue, r.direction, r.relevance]
-        ).map(CSV_ESCAPE).join(",")
+        )
       ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-research-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    ];
+    downloadCsv(`medtrack-research-${activeTab}-${Date.now()}.csv`, table);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

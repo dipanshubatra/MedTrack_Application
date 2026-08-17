@@ -5,6 +5,7 @@ import {
   Recycle, RefreshCw, Search, ShieldAlert, ShieldCheck, Siren, Thermometer, Timer,
   TrendingDown, TrendingUp, Waves, Wrench, X,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ *
  *  Dialysis & Renal Replacement Therapy Fleet Hub
@@ -589,13 +590,7 @@ export default function DialysisRenalHub() {
             ]),
           ];
 
-    const csv = table.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = `dialysis-${tab}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+    downloadCsv(`dialysis-${tab}.csv`, table);
     toast("CSV export downloaded", "Low");
   };
 

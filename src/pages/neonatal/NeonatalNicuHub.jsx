@@ -7,6 +7,7 @@ import {
   Stethoscope, Sun, Syringe, Thermometer, Timer, TrendingDown, TrendingUp,
   User, Users, X, Zap,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -247,13 +248,7 @@ export default function NeonatalNicuHub() {
         : [["KC", "Infant", "Parent", "Session", "Scheduled", "Status", "Benefit"]].concat(
             filteredKangaroo.map((k) => [k.id, k.infant, k.parent, k.session, k.scheduled, k.status, k.benefit])
           );
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `nicu-${activeTab}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`nicu-${activeTab}.csv`, rows);
     addToast("CSV exported", "success");
   }, [activeTab, filteredIncubators, filteredFeeding, filteredKangaroo, addToast]);
 

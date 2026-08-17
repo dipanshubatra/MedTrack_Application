@@ -11,6 +11,7 @@ import PlaybackControls from "../../components/common/PlaybackControls";
 import { ExportButton } from "../../components/common/ExportButton";
 import LiveStatus from "../../components/common/LiveStatus";
 import ToastStack, { useToasts } from "../../components/common/ToastStack";
+import { downloadCsv } from "../../utils/csv";
 // The shared primitives this console renders. They were page-local components until the
 // extraction into src/components/common; the local definitions were removed then, but these
 // imports were never added, so every identifier below was a ReferenceError at first render.
@@ -138,7 +139,6 @@ const unitStatus = (u) => (occupancyPct(u) >= 100 ? "critical" : occupancyPct(u)
 
 const esiTone = (esi) => ESI_META[esi].tone;
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 /* ------------------------------------------------------------------ *
  *  Small presentational components
@@ -666,26 +666,18 @@ export default function EmergencyTriageHub({ onNavigate }) {
       : activeTab === "routing"
         ? ["id", "unit", "origin", "dest", "etaTicks", "acuity", "lightsSirens", "status", "route"]
         : ["id", "name", "mrn", "esi", "chiefComplaint", "zone", "disposition", "hr", "spo2"];
-    const csv = [
-      header.map(CSV_ESCAPE).join(","),
+    const table = [
+      header,
       ...rows.map((r) =>
         (activeTab === "beds"
           ? [r.id, r.name, r.type, r.total, r.occupied, r.boarding, r.predictedDemand]
           : activeTab === "routing"
             ? [r.id, r.unit, r.origin, r.dest, r.etaTicks, r.acuity, r.lightsSirens, r.status, r.route]
             : [r.id, r.name, r.mrn, r.esi, r.chiefComplaint, r.zone, r.disposition, r.vitals.hr, r.vitals.spo2]
-        ).map(CSV_ESCAPE).join(",")
+        )
       ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-ems-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    ];
+    downloadCsv(`medtrack-ems-${activeTab}-${Date.now()}.csv`, table);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

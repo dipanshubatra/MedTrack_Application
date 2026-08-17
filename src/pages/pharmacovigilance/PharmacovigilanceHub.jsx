@@ -7,6 +7,7 @@ import {
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
 import { ExportCsvButton } from "../../components/common/ExportButton";
+import { downloadCsv } from "../../utils/csv";
 // The shared primitives this console renders. They were page-local components until the
 // extraction into src/components/common; the local definitions were removed then, but these
 // imports were never added, so every identifier below was a ReferenceError at first render.
@@ -257,13 +258,7 @@ export default function PharmacovigilanceHub() {
         : tab === "signals"
         ? [["ID", "Drug", "Event", "DPR", "Cases", "Chi-sq", "Tier", "Status"], ...filteredSignals.map((s) => [s.id, s.drug, s.event, s.dispro, s.cases, s.chi, s.tier, s.status])]
         : [["ID", "Type", "Agency", "Drug", "Case", "Due", "Status", "Owner"], ...filteredSubmissions.map((s) => [s.id, s.type, s.agency, s.drug, s.case, s.due, s.status, s.owner])];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `pharmacovigilance-${tab}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`pharmacovigilance-${tab}-${Date.now()}.csv`, rows);
     toast("CSV export downloaded", "Low");
   };
 

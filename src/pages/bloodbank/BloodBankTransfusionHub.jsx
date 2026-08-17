@@ -5,6 +5,7 @@ import {
   RefreshCw, Search, ShieldAlert, ShieldCheck, Siren, Snowflake, Syringe, Thermometer,
   Timer, TrendingDown, TrendingUp, UserCheck, Users, X,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ *
  *  Blood Bank & Transfusion Medicine Command Hub
@@ -662,13 +663,7 @@ export default function BloodBankTransfusionHub() {
             ]),
           ];
 
-    const csv = table.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = `blood-bank-${tab}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+    downloadCsv(`blood-bank-${tab}.csv`, table);
     toast("CSV export downloaded", "Low");
   };
 

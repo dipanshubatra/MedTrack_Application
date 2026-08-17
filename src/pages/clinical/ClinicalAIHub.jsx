@@ -12,6 +12,7 @@ import PlaybackControls from "../../components/common/PlaybackControls";
 import { ExportButton } from "../../components/common/ExportButton";
 import LiveStatus from "../../components/common/LiveStatus";
 import ToastStack, { useToasts } from "../../components/common/ToastStack";
+import { downloadCsv } from "../../utils/csv";
 // The shared primitives this console renders. They were page-local components until the
 // extraction into src/components/common; the local definitions were removed then, but these
 // imports were never added, so every identifier below was a ReferenceError at first render.
@@ -160,7 +161,6 @@ const computeRisk = (patient, overrides = {}) => {
   return clamp(Math.round(score), 0, 99);
 };
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
 
 /* ------------------------------------------------------------------ *
  *  Small presentational components
@@ -701,24 +701,16 @@ export default function ClinicalAIHub({ onNavigate }) {
     const header = activeTab === "risk"
       ? ["id", "name", "mrn", "ward", "bed", "diagnosis", "hr", "rr", "spo2", "sbp", "temp", "glucose", "acuity"]
       : ["id", "patient", "mrn", "study", "modality", "confidence", "status", "priority"];
-    const csv = [
-      header.map(CSV_ESCAPE).join(","),
+    const table = [
+      header,
       ...rows.map((r) =>
         (activeTab === "risk"
           ? [r.id, r.name, r.mrn, r.ward, r.bed, r.diagnosis, r.vitals.hr, r.vitals.rr, r.vitals.spo2, r.vitals.sbp, r.vitals.temp, r.vitals.glucose, computeRisk(r, overrides)]
           : [r.id, r.patientName, r.mrn, r.study, r.modality, r.confidence.toFixed(3), r.status, r.priority]
-        ).map(CSV_ESCAPE).join(",")
+        )
       ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-${activeTab}-export-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    ];
+    downloadCsv(`medtrack-${activeTab}-export-${Date.now()}.csv`, table);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

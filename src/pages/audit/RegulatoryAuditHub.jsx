@@ -7,6 +7,7 @@ import {
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
 import { ExportCsvButton } from "../../components/common/ExportButton";
+import { downloadCsv } from "../../utils/csv";
 // The shared primitives this console renders. They were page-local components until the
 // extraction into src/components/common; the local definitions were removed then, but these
 // imports were never added, so every identifier below was a ReferenceError at first render.
@@ -254,13 +255,7 @@ export default function RegulatoryAuditHub() {
         : tab === "audit"
         ? [["ID", "Actor", "Action", "Resource", "IP", "Risk", "Time", "Retention"], ...filteredEvents.map((e) => [e.id, e.actor, e.action, e.resource, e.ip, e.risk, e.ts, e.retention])]
         : [["ID", "Evidence", "Framework", "Status", "Reviewer", "Expires (d)", "Coverage"], ...filteredEvidence.map((e) => [e.id, e.name, e.framework, e.status, e.reviewer, e.expires, e.coverage])];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `regulatory-audit-${tab}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`regulatory-audit-${tab}-${Date.now()}.csv`, rows);
     toast("CSV export downloaded", "Low");
   };
 

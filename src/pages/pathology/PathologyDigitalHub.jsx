@@ -6,6 +6,7 @@ import {
   RefreshCw, Scan, Search, ShieldAlert, ShieldCheck, Siren, SlidersHorizontal,
   Timer, TrendingDown, TrendingUp, User, Users, X, Zap,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -265,13 +266,7 @@ export default function PathologyDigitalHub() {
         : [["Panel", "Case", "Target", "Panel", "Method", "Status", "Score", "QC", "TAT(h)"]].concat(
             filteredPanels.map((p) => [p.id, p.caseId, p.target, p.panel, p.method, p.status, p.score || "—", p.qc, p.tatHours])
           );
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `pathology-${activeTab}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`pathology-${activeTab}.csv`, rows);
     addToast("CSV exported", "success");
   }, [activeTab, filteredCases, filteredGross, filteredPanels, addToast]);
 

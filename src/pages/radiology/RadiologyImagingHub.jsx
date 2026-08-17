@@ -7,6 +7,7 @@ import {
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
 import { ExportCsvButton } from "../../components/common/ExportButton";
+import { downloadCsv } from "../../utils/csv";
 // The shared primitives this console renders. They were page-local components until the
 // extraction into src/components/common; the local definitions were removed then, but these
 // imports were never added, so every identifier below was a ReferenceError at first render.
@@ -271,13 +272,7 @@ export default function RadiologyImagingHub() {
         : tab === "modalities"
         ? [["ID", "Modality", "Model", "Room", "Status", "Load %", "Studies", "Uptime %", "Dose"], ...filteredModalities.map((m) => [m.id, m.name, m.model, m.room, m.status, m.load, m.studies, m.uptime, m.dose])]
         : [["ID", "Study", "AI Model", "Version", "Status", "Confidence %", "Findings", "Latency"], ...filteredAi.map((a) => [a.id, a.study, a.model, a.version, a.status, a.confidence, a.findings, a.latency])];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `radiology-imaging-${tab}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`radiology-imaging-${tab}-${Date.now()}.csv`, rows);
     toast("CSV export downloaded", "Low");
   };
 

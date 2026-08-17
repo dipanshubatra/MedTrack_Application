@@ -4,6 +4,7 @@ import {
   Download, Droplet, FileText, FlaskConical, Gauge, Info, Layers, Pause, Play, RefreshCw,
   Search, ShieldAlert, ShieldCheck, Siren, Syringe, Timer, TrendingDown, User, Wind, X,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ *
  *  Oncology Infusion & Hazardous Drug Safety Hub
@@ -573,13 +574,7 @@ export default function OncologyInfusionHub() {
             ]),
           ];
 
-    const csv = table.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = `oncology-${tab}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+    downloadCsv(`oncology-${tab}.csv`, table);
     toast("CSV export downloaded", "Low");
   };
 

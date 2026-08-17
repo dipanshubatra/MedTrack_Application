@@ -6,6 +6,7 @@ import {
   PackageCheck, Pause, Play, Plus, RefreshCw, Search, ShieldAlert, ShieldCheck,
   Siren, Syringe, Timer, TrendingDown, TrendingUp, User, Users, X, Zap,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -300,13 +301,7 @@ export default function BloodBankHub() {
         : [["Reaction", "Patient", "Type", "Severity", "Phase", "Onset", "TempRise"]].concat(
             filteredReactions.map((r) => [r.id, r.patient, r.type, r.severity, r.phase, r.onset, r.tempRise])
           );
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `blood-bank-${activeTab}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`blood-bank-${activeTab}.csv`, rows);
     addToast("CSV exported", "success");
   }, [activeTab, filteredUnits, filteredOrders, filteredReactions, addToast]);
 

@@ -4,6 +4,7 @@ import {
   FileText, Flame, Gauge, Hourglass, Info, Layers, Lock, Package, Pause, Play, RefreshCw,
   Search, ShieldAlert, ShieldCheck, Siren, Thermometer, Timer, TrendingUp, Waves, Wrench, X,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ *
  *  Sterile Processing (CSSD) & Instrument Tray Traceability Hub
@@ -555,13 +556,7 @@ export default function SterileProcessingHub() {
             ]),
           ];
 
-    const csv = table.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = `sterile-processing-${tab}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+    downloadCsv(`sterile-processing-${tab}.csv`, table);
     toast("CSV export downloaded", "Low");
   };
 
