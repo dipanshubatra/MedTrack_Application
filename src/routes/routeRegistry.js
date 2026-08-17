@@ -100,6 +100,16 @@ const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRobotic
 const TelehealthRemoteMonitoringHubPage = lazy(() => import("../pages/telehealth/TelehealthRemoteMonitoringHubPage"));
 const GenomicClinicalTrialsHubPage = lazy(() => import("../pages/trials/GenomicClinicalTrialsHubPage"));
 const NeonatalNicuHub = lazy(() => import("../pages/neonatal/NeonatalNicuHub"));
+const BiomedicalAiDiagnosticsOverwatchPage = lazy(() => import("../pages/ai/BiomedicalAiDiagnosticsOverwatchPage"));
+const BackendAuthenticationSecurityInfrastructurePage = lazy(() => import("../pages/auth/BackendAuthenticationSecurityInfrastructurePage"));
+const EnterpriseZeroTrustSecurityGovernancePage = lazy(() => import("../pages/auth/EnterpriseZeroTrustSecurityGovernancePage"));
+const BloodBankHub = lazy(() => import("../pages/bloodbank/BloodBankHub"));
+const BloodBankTransfusionHub = lazy(() => import("../pages/bloodbank/BloodBankTransfusionHub"));
+const CardiologyCathLabHub = lazy(() => import("../pages/cardiology/CardiologyCathLabHub"));
+const ICUTelemetryOverwatchHubPage = lazy(() => import("../pages/hospital/ICUTelemetryOverwatchHubPage"));
+const PathologyDigitalHub = lazy(() => import("../pages/pathology/PathologyDigitalHub"));
+const PatientEhrAnalyticsPredictivePage = lazy(() => import("../pages/patient/PatientEhrAnalyticsPredictivePage"));
+const GenomicsPrecisionHub = lazy(() => import("../pages/genomics/GenomicsPrecisionHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -268,6 +278,18 @@ export const ROUTES = [
   { page: "medication-cold-chain", slugs: ["medication-cold-chain", "med-supply-chain"], component: MedicationSupplyColdChainHubPage, access: AUTHENTICATED },
   { page: "telehealth-remote-monitoring", slugs: ["telehealth-remote-monitoring", "remote-monitoring"], component: TelehealthRemoteMonitoringHubPage, access: AUTHENTICATED },
   { page: "genomic-clinical-trials", slugs: ["genomic-clinical-trials", "genomics"], component: GenomicClinicalTrialsHubPage, access: AUTHENTICATED },
+  { page: "biomedical-ai-diagnostics", slugs: ["biomedical-ai-diagnostics", "ai-diagnostics"], component: BiomedicalAiDiagnosticsOverwatchPage, access: AUTHENTICATED },
+  { page: "backend-auth-security", slugs: ["backend-auth-security", "auth-security-infrastructure"], component: BackendAuthenticationSecurityInfrastructurePage, access: AUTHENTICATED },
+  { page: "zero-trust-governance", slugs: ["zero-trust-governance", "zero-trust"], component: EnterpriseZeroTrustSecurityGovernancePage, access: AUTHENTICATED },
+  { page: "blood-bank", slugs: ["blood-bank", "transfusion", "bloodbank"], component: BloodBankHub, access: AUTHENTICATED },
+  { page: "blood-bank-transfusion", slugs: ["blood-bank-transfusion", "transfusion-medicine"], component: BloodBankTransfusionHub, access: AUTHENTICATED },
+  { page: "cardiology-cathlab", slugs: ["cardiology-cathlab", "cath-lab", "cardiology"], component: CardiologyCathLabHub, access: AUTHENTICATED },
+  { page: "icu-telemetry-overwatch", slugs: ["icu-telemetry-overwatch", "icu-overwatch"], component: ICUTelemetryOverwatchHubPage, access: AUTHENTICATED },
+  { page: "pathology-digital", slugs: ["pathology-digital", "pathology", "digital-pathology"], component: PathologyDigitalHub, access: AUTHENTICATED },
+  { page: "patient-ehr-analytics", slugs: ["patient-ehr-analytics", "ehr-analytics"], component: PatientEhrAnalyticsPredictivePage, access: AUTHENTICATED },
+  { page: "dialysis-renal", slugs: ["dialysis-renal", "dialysis", "nephrology"], component: DialysisRenalHub, access: AUTHENTICATED },
+  { page: "sterile-processing", slugs: ["sterile-processing", "cssd"], component: SterileProcessingHub, access: AUTHENTICATED },
+  { page: "genomics-precision", slugs: ["genomics-precision", "precision-medicine", "genomic-medicine"], component: GenomicsPrecisionHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
