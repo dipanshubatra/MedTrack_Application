@@ -6,11 +6,7 @@ import {
   Plus, Radar, RefreshCw, Scale, Search, Server, ShieldAlert, ShieldCheck, Siren,
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
-import { downloadCsv } from "../../utils/export";
-import { Meter } from "../../components/common/Meter";
-import { PageHeader, Footer } from "../../components/common/PageHeader";
-import ToastTray, { useToastTray } from "../../components/common/ToastTray";
-import { SectionHeader, PanelHeader } from "../../components/common/SectionHeader";
+import { ExportCsvButton } from "../../components/common/ExportButton";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -58,81 +54,20 @@ const toneOf = (v) => {
   return "slate";
 };
 
-const toneClass = {
-  red: "bg-red-500/10 text-red-400 border-red-500/30",
-  amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  green: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  slate: "bg-slate-500/10 text-slate-400 border-slate-500/30",
-};
 
-const Badge = ({ children, tone }) => (
-  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClass[tone || toneOf(children)]}`}>
-    {children}
-  </span>
-);
 
-const Sparkline = ({ points, color = "#34d399", w = 88, h = 24 }) => {
-  if (!points || points.length < 2) return <div className="h-6" />;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const step = w / (points.length - 1);
-  const d = points
-    .map((p, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${(h - ((p - min) / range) * (h - 4) - 2).toFixed(1)}`)
-    .join(" ");
-  const last = points[points.length - 1];
-  return (
-    <svg width={w} height={h} className="overflow-visible">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={w - 1} cy={h - ((last - min) / range) * (h - 4) - 2} r="2.2" fill={color} />
-    </svg>
-  );
-};
+const Badge = ({ children, tone }) => <ToneBadge toneOf={toneOf} tone={tone}>{children}</ToneBadge>;
 
-const Modal = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-    <div
-      className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
-        </div>
-        <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
-          <XIcon size={16} />
-        </button>
-      </div>
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm text-slate-300">{children}</div>
-    </div>
+
+
+const Meter = ({ value, color = "bg-emerald-400" }) => (
+  <div className="h-1.5 w-24 rounded-full bg-slate-800">
+    <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
   </div>
 );
 
-const Row = ({ label, value, accent }) => (
-  <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0">
-    <span className="text-xs text-slate-400">{label}</span>
-    <span className={`text-xs font-medium ${accent || "text-slate-200"}`}>{value}</span>
-  </div>
-);
 
-const StatCard = ({ icon: Icon, label, value, sub, accent = "text-emerald-400" }) => (
-  <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-slate-400">{label}</span>
-      <Icon size={16} className={accent} />
-    </div>
-    <div className="mt-2 text-2xl font-bold text-slate-100">{value}</div>
-    {sub && <div className="mt-1 text-[11px] text-slate-500">{sub}</div>}
-  </div>
-);
 
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <ShieldCheck size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
 
 const XIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -357,12 +292,7 @@ export default function PharmacovigilanceHub() {
                 <RefreshCw size={15} />
               </button>
             </div>
-            <button
-              onClick={exportCsv}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300"
-            >
-              <Download size={14} /> Export CSV
-            </button>
+            <ExportCsvButton onClick={exportCsv} />
           </div>
         </div>
 
@@ -374,81 +304,19 @@ export default function PharmacovigilanceHub() {
           <StatCard icon={Activity} label="Cases This Week" value={events.filter((e) => e.ts.includes("h ago") || e.ts === "just now").length} sub="reported to safety DB" accent="text-emerald-400" />
         </div>
 
-        {/* tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                  active ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabsBar tabs={tabs} active={tab} onChange={setTab} />
 
         {/* toolbar */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search cases, signals, submissions…"
-              className="w-64 rounded-xl border border-slate-800 bg-slate-900 py-2 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
-            />
-          </div>
+          <CompactSearch value={query} onChange={setQuery} placeholder="Search cases, signals, submissions…" />
           {tab === "cases" && (
-            <div className="flex gap-1.5">
-              {["All", "Serious", "Non-serious"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setSevFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    sevFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "Serious", "Non-serious"]} value={sevFilter} onChange={setSevFilter} />
           )}
           {tab === "signals" && (
-            <div className="flex gap-1.5">
-              {["All", "Tier 1", "Tier 2", "Tier 3"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setTierFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    tierFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "Tier 1", "Tier 2", "Tier 3"]} value={tierFilter} onChange={setTierFilter} />
           )}
           {tab === "submissions" && (
-            <div className="flex gap-1.5">
-              {["All", "In Progress", "Drafting", "Review", "Scheduled"].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-medium ${
-                    statusFilter === f ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <FilterChips options={["All", "In Progress", "Drafting", "Review", "Scheduled"]} value={statusFilter} onChange={setStatusFilter} />
           )}
           <span className="ml-auto text-[11px] text-slate-500">
             {sim.tick} ticks · <span className={sim.running ? "text-emerald-400" : "text-amber-400"}>{sim.running ? "LIVE" : "PAUSED"}</span>
@@ -487,7 +355,7 @@ export default function PharmacovigilanceHub() {
                 right="ICSR triage · E2B(R3) formatted"
               />
               {filteredEvents.length === 0 ? (
-                <EmptyState message="No cases match the current filters." />
+                <EmptyState icon={ShieldCheck} message="No cases match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -597,7 +465,7 @@ export default function PharmacovigilanceHub() {
                 right="EudraVigilance-style ROR · EBGM overlay"
               />
               {filteredSignals.length === 0 ? (
-                <EmptyState message="No signals match the current filters." />
+                <EmptyState icon={ShieldCheck} message="No signals match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -693,7 +561,7 @@ export default function PharmacovigilanceHub() {
                   })}
                 {filteredSubmissions.length === 0 && (
                   <div className="sm:col-span-2 lg:col-span-3">
-                    <EmptyState message="No submissions match the current filters." />
+                    <EmptyState icon={ShieldCheck} message="No submissions match the current filters." />
                   </div>
                 )}
               </div>
@@ -708,7 +576,7 @@ export default function PharmacovigilanceHub() {
                 right="GVP VI · 21 CFR 314.80(c)"
               />
               {filteredSubmissions.length === 0 ? (
-                <EmptyState message="No submissions match the current filters." />
+                <EmptyState icon={ShieldCheck} message="No submissions match the current filters." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">

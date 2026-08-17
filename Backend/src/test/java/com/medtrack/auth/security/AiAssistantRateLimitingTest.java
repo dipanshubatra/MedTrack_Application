@@ -61,7 +61,7 @@ public class AiAssistantRateLimitingTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"prompt\":\"hello\"}"))
                 .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.message").value("AI Assistant request rate limit exceeded. Please try again later."));
+                .andExpect(jsonPath("$.detail").value("AI Assistant request rate limit exceeded. Please try again later."));
     }
 
     @Test
@@ -81,7 +81,7 @@ public class AiAssistantRateLimitingTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"prompt\":\"hello\"}"))
                 .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.message").value("AI Assistant request rate limit exceeded. Please try again later."));
+                .andExpect(jsonPath("$.detail").value("AI Assistant request rate limit exceeded. Please try again later."));
     }
 
     @Test

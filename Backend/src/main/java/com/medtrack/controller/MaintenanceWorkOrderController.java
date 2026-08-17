@@ -1,14 +1,19 @@
 package com.medtrack.controller;
 
+import com.medtrack.auth.model.User;
+import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.MaintenanceWorkOrderAssignmentRequest;
 import com.medtrack.dto.MaintenanceWorkOrderCompletionRequest;
 import com.medtrack.dto.MaintenanceWorkOrderDashboardResponse;
 import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.dto.MaintenanceWorkOrderStatusRequest;
+import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.repository.HospitalRepository;
 import com.medtrack.service.MaintenanceWorkOrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/maintenance/work-orders")
@@ -28,6 +34,8 @@ import java.util.List;
 public class MaintenanceWorkOrderController {
 
     private final MaintenanceWorkOrderService workOrderService;
+    private final UserRepository userRepository;
+    private final HospitalRepository hospitalRepository;
 
     /**
      * Creates a new maintenance work order.
@@ -292,17 +300,40 @@ public class MaintenanceWorkOrderController {
     }
 
     /**
-     * Resolves the authenticated user's hospital.
+     * Resolves the hospital ID for the authenticated principal.
      *
-     * <p>This method is intentionally kept behind the controller boundary.
-     * Replace the implementation with the project's existing hospital/user
-     * resolution mechanism if the application already exposes one.</p>
+     * <p>Finds the associated User entity by username or email, then queries the Hospital profile
+     * assigned to that user.</p>
+     *
+     * @param principal authenticated user principal
+     * @return resolved hospital ID
+     * @throws IllegalArgumentException if principal or username is missing
+     * @throws ResourceNotFoundException if user or hospital profile is not found
      */
     private Long resolveHospitalId(Principal principal) {
+        validatePrincipal(principal);
 
-        throw new UnsupportedOperationException(
-                "Connect resolveHospitalId() to the existing authenticated-user "
-                        + "hospital resolution service."
-        );
+        String identifier = principal.getName().trim();
+
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(Locale.ROOT)))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + identifier));
+
+        Hospital hospital = hospitalRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user: " + identifier));
+
+        return hospital.getId();
+    }
+
+    /**
+     * Validates that the provided principal contains a valid, non-blank username.
+     *
+     * @param principal security principal to validate
+     * @throws IllegalArgumentException if principal is null or has a blank name
+     */
+    private void validatePrincipal(Principal principal) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            throw new IllegalArgumentException("Authenticated principal username is required");
+        }
     }
 }
