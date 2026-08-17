@@ -193,12 +193,7 @@ export default function SecurityComplianceHub() {
   const [postureFilter, setPostureFilter] = useState("All");
   const [keyStatusFilter, setKeyStatusFilter] = useState("All");
 
-  const [toasts, setToasts] = useState([]);
-  const toast = useCallback((msg, sev = "Low") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-4), { id, msg, sev }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
-  }, []);
+  const { toasts, toast } = useToastTray();
 
   const [identities, setIdentities] = useState(() => IDENTITIES.map((u) => ({ ...u })));
   const [keys, setKeys] = useState(() => KEYS.map((k) => ({ ...k })));
@@ -285,13 +280,7 @@ export default function SecurityComplianceHub() {
         : tab === "kms"
         ? [["ID", "Key", "Algorithm", "Status", "Age (d)", "Rotation (d)", "Enclave", "Version"], ...filteredKeys.map((k) => [k.id, k.name, k.algo, k.status, k.age.toFixed(1), k.rotation, k.enclave, k.version])]
         : [["ID", "Title", "Source", "Severity", "Status", "Asset", "Time", "Score"], ...filteredDetections.map((d) => [d.id, d.title, d.src, d.sev, d.status, d.asset, d.time, d.score])];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `security-compliance-${tab}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`security-compliance-${tab}-${Date.now()}.csv`, rows);
     toast("CSV export downloaded", "Low");
   };
 
@@ -306,35 +295,16 @@ export default function SecurityComplianceHub() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* toast stack */}
-      <div className="fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
-            {t.sev === "High" || t.sev === "Critical" ? (
-              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
-            ) : t.sev === "Medium" ? (
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-            ) : (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-            )}
-            <p className="text-xs text-slate-300">{t.msg}</p>
-          </div>
-        ))}
-      </div>
+      <ToastTray toasts={toasts} />
 
       {/* header */}
       <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-              <ShieldCheck size={24} className="text-emerald-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100">Enterprise Security &amp; Compliance Hub</h1>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Zero-trust posture · Post-quantum KMS · Confidential enclaves · CTEM &amp; SIEM — NIST SP 800-207 / FIPS 203 aligned
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            icon={<ShieldCheck size={24} className="text-emerald-400" />}
+            title="Enterprise Security &amp; Compliance Hub"
+            subtitle="Zero-trust posture · Post-quantum KMS · Confidential enclaves · CTEM &amp; SIEM — NIST SP 800-207 / FIPS 203 aligned"
+          />
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
               <button
@@ -420,14 +390,12 @@ export default function SecurityComplianceHub() {
 
             {/* identity table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Fingerprint size={16} className="text-emerald-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Identity &amp; Device Trust Inventory</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredIdentities.length} subjects</span>
-                </div>
-                <span className="text-[11px] text-slate-500">Continuous verification · NIST SP 800-207</span>
-              </div>
+              <SectionHeader
+                icon={<Fingerprint size={16} className="text-emerald-400" />}
+                title="Identity &amp; Device Trust Inventory"
+                badge={`${filteredIdentities.length} subjects`}
+                right="Continuous verification · NIST SP 800-207"
+              />
               {filteredIdentities.length === 0 ? (
                 <EmptyState icon={Radar} message="No identities match the current filters." />
               ) : (
@@ -504,11 +472,11 @@ export default function SecurityComplianceHub() {
           <div className="space-y-6">
             {/* enclave grid */}
             <section>
-              <div className="mb-3 flex items-center gap-2">
-                <Server size={16} className="text-sky-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Confidential Computing Enclaves</h2>
-                <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">Hardware TEE attestation</span>
-              </div>
+              <PanelHeader
+                icon={<Server size={16} className="text-sky-400" />}
+                title="Confidential Computing Enclaves"
+                badge="Hardware TEE attestation"
+              />
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {ENCLAVES.map((e) => (
                   <button
@@ -545,14 +513,12 @@ export default function SecurityComplianceHub() {
 
             {/* key table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <KeyRound size={16} className="text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Post-Quantum Key Inventory</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredKeys.length} keys</span>
-                </div>
-                <span className="text-[11px] text-slate-500">NIST FIPS 203 (ML-KEM) · FIPS 204 (ML-DSA) hybrid</span>
-              </div>
+              <SectionHeader
+                icon={<KeyRound size={16} className="text-amber-400" />}
+                title="Post-Quantum Key Inventory"
+                badge={`${filteredKeys.length} keys`}
+                right="NIST FIPS 203 (ML-KEM) · FIPS 204 (ML-DSA) hybrid"
+              />
               {filteredKeys.length === 0 ? (
                 <EmptyState icon={Radar} message="No keys match the current filters." />
               ) : (
@@ -654,14 +620,12 @@ export default function SecurityComplianceHub() {
 
             {/* detection queue */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Radar size={16} className="text-red-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Detection &amp; Exposure Queue</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredDetections.length} detections</span>
-                </div>
-                <span className="text-[11px] text-slate-500">MITRE ATT&amp;CK mapped · kill-chain scoring</span>
-              </div>
+              <SectionHeader
+                icon={<Radar size={16} className="text-red-400" />}
+                title="Detection &amp; Exposure Queue"
+                badge={`${filteredDetections.length} detections`}
+                right="MITRE ATT&amp;CK mapped · kill-chain scoring"
+              />
               {filteredDetections.length === 0 ? (
                 <EmptyState icon={Radar} message="No detections match the current filters." />
               ) : (
@@ -714,10 +678,7 @@ export default function SecurityComplianceHub() {
 
             {/* kill chain strip */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Network size={16} className="text-purple-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Active Kill-Chain Coverage</h2>
-              </div>
+              <PanelHeader icon={<Network size={16} className="text-purple-400" />} title="Active Kill-Chain Coverage" />
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-9">
                 {["Recon", "Delivery", "Exploit", "Priv Esc", "Lateral", "Exfil", "C2", "Impact", "Persistence"].map((stage, i) => {
                   const hits = detections.filter((d) => d.mitre && ["TA0001", "TA0011", "TA0004", "TA0008", "TA0010", "TA0009", "TA0011", "TA0040", "TA0003"].indexOf(d.mitre) === i).length;
@@ -819,9 +780,9 @@ export default function SecurityComplianceHub() {
         </Modal>
       )}
 
-      <footer className="border-t border-slate-800 px-6 py-4 text-center text-[10px] text-slate-600">
+      <Footer>
         Enterprise Security &amp; Compliance Hub — simulation environment · Zero-trust, post-quantum crypto, confidential compute, CTEM &amp; SIEM telemetry (NIST SP 800-207, FIPS 203/204, HIPAA Security Rule)
-      </footer>
+      </Footer>
     </div>
   );
 }
