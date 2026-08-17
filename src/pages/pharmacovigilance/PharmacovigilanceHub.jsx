@@ -7,6 +7,18 @@ import {
   Timer, TrendingDown, TrendingUp, User, Users, Wifi, WifiOff, Zap,
 } from "lucide-react";
 import { ExportCsvButton } from "../../components/common/ExportButton";
+// The shared primitives this console renders. They were page-local components until the
+// extraction into src/components/common; the local definitions were removed then, but these
+// imports were never added, so every identifier below was a ReferenceError at first render.
+import { CompactStatCard as StatCard } from "../../components/common/StatCard";
+import { CompactSearch } from "../../components/common/SearchBox";
+import { FilterChips } from "../../components/common/FilterChips";
+import { Row } from "../../components/common/InfoRow";
+import { EmptyState } from "../../components/common/EmptyState";
+import { ToneBadge } from "../../components/common/ToneBadge";
+import { TabsBar } from "../../components/common/TabsBar";
+import { SimpleModal as Modal } from "../../components/common/Modal";
+import { Sparkline } from "../../components/common/Sparkline";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
