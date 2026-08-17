@@ -1,5 +1,10 @@
 package com.medtrack.service;
 
+// TODO: Fix missing InventoryItem and InventoryRepository dependencies
+// This service was added in upstream merge but is incomplete
+// Commented out to allow compilation during refactor
+
+/*
 import com.medtrack.model.InventoryItem;
 import com.medtrack.repository.InventoryRepository;
 import org.springframework.stereotype.Service;
@@ -65,3 +70,4 @@ public class PredictiveSupplyService {
         return 1.0;
     }
 }
+*/
