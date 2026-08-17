@@ -42,6 +42,13 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
             @Param("email") String email,
             Pageable pageable);
 
+    @Query("SELECT o FROM EquipmentOrder o WHERE " + HOSPITAL_IDENTITY_MATCH + " AND (:status IS NULL OR UPPER(o.status) = UPPER(:status))")
+    Page<EquipmentOrder> findVisibleToHospitalUserWithStatus(
+            @Param("organization") String organization,
+            @Param("email") String email,
+            @Param("status") String status,
+            Pageable pageable);
+
     @Query("SELECT o FROM EquipmentOrder o WHERE " + HOSPITAL_IDENTITY_MATCH)
     List<EquipmentOrder> findVisibleToHospitalUser(
             @Param("organization") String organization,
@@ -82,6 +89,15 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
             + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId)")
     Page<EquipmentOrder> findBySupplierId(
             @Param("supplierId") Long supplierId,
+            Pageable pageable);
+
+    @Query("SELECT order FROM EquipmentOrder order "
+            + "WHERE EXISTS (SELECT shipment FROM ShipmentTracking shipment "
+            + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId) "
+            + "AND (:status IS NULL OR UPPER(order.status) = UPPER(:status))")
+    Page<EquipmentOrder> findBySupplierIdWithStatus(
+            @Param("supplierId") Long supplierId,
+            @Param("status") String status,
             Pageable pageable);
 
     @Query("SELECT order FROM EquipmentOrder order "

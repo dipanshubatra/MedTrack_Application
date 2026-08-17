@@ -3,11 +3,14 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { getAllOrders } from "../../services/OrderService";
 import { getUnreadCounts } from "../../services/EventStreamService";
+import usePermissions from "../../hooks/usePermissions";
+import { filterNavLinks } from "../../security/permissions";
 import MedTrackLogo from "./MedTrackLogo";
 import ActivityCenter from "../../pages/hospital/ActivityCenter";
 
 export default function Navbar({ onNavigate, currentPage }) {
   const { user, logout } = useAuth();
+  const { hasPermission } = usePermissions();
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -88,13 +91,18 @@ export default function Navbar({ onNavigate, currentPage }) {
 ];
 
   // Dashboard links after login
+  // Links are tagged with the fine-grained permission they need (mirroring the
+  // backend authority model). filterNavLinks drops any whose permission the
+  // session no longer holds, so a permission revoked through the RBAC console
+  // removes the menu entry instead of navigating to a page that 403s. Public
+  // links carry no permission and always show.
   const privateLinks = user
     ? user.role === "hospital"
       ? [
           { label: "Dashboard", page: "dashboard" },
-          { label: "Equipment", page: "equipment" },
-          { label: "Maintenance", page: "maintenance" },
-          { label: "PM Rules", page: "maintenance-rules" },
+          { label: "Equipment", page: "equipment", permission: "READ_EQUIPMENT" },
+          { label: "Maintenance", page: "maintenance", permission: "READ_MAINTENANCE" },
+          { label: "PM Rules", page: "maintenance-rules", permission: "READ_MAINTENANCE" },
         ]
       : user.role === "technician"
       ? [
@@ -102,16 +110,23 @@ export default function Navbar({ onNavigate, currentPage }) {
           { label: "Update Task", page: "update-task" },
         ]
       : [
-          { label: "Orders", page: "orders" },
-          { label: "Order Status", page: "orderstatus" },
+          { label: "Orders", page: "orders", permission: "READ_ORDERS" },
+          { label: "Order Status", page: "orderstatus", permission: "READ_ORDERS" },
         ]
     : [];
 
-  // Add procurement links for hospital
-  const navLinks = user ? (user.role === "hospital" ? [...privateLinks, ...[
-    { label: "New Procurement", page: "procurement-wizard" },
-    { label: "Approval Inbox", page: "approval-inbox" },
-  ]] : privateLinks) : publicLinks;
+  // Procurement links for hospital
+  const navLinks = user
+    ? user.role === "hospital"
+      ? [
+          ...privateLinks,
+          { label: "New Procurement", page: "procurement-wizard", permission: "CREATE_ORDERS" },
+          { label: "Approval Inbox", page: "approval-inbox", permission: "READ_ORDERS" },
+        ]
+      : privateLinks
+    : publicLinks;
+
+  const visibleLinks = filterNavLinks(navLinks, hasPermission);
 
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${isLanding ? (scrolled ? 'top-0 bg-surface/95 backdrop-blur-md shadow-sm border-b border-subtle' : 'top-0 bg-transparent border-transparent') : 'sticky top-0 bg-surface/80 backdrop-blur-lg border-b border-subtle'}`}>
@@ -129,7 +144,7 @@ export default function Navbar({ onNavigate, currentPage }) {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
 
-            {navLinks.map((link) => (
+            {visibleLinks.map((link) => (
               <button
                 key={link.label}
                 onClick={() => {
@@ -294,7 +309,7 @@ export default function Navbar({ onNavigate, currentPage }) {
       {/* Mobile Navigation */}
       {menuOpen && (
         <div className="md:hidden border-t border-subtle bg-surface px-6 py-4 space-y-3">
-          {navLinks.map((link) => (
+          {visibleLinks.map((link) => (
             <button
               key={link.label}
               onClick={() => {
