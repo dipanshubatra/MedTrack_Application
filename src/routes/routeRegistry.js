@@ -109,7 +109,7 @@ const CardiologyCathLabHub = lazy(() => import("../pages/cardiology/CardiologyCa
 const ICUTelemetryOverwatchHubPage = lazy(() => import("../pages/hospital/ICUTelemetryOverwatchHubPage"));
 const PathologyDigitalHub = lazy(() => import("../pages/pathology/PathologyDigitalHub"));
 const PatientEhrAnalyticsPredictivePage = lazy(() => import("../pages/patient/PatientEhrAnalyticsPredictivePage"));
-const BehavioralHealthHub = lazy(() => import("../pages/behavioral/BehavioralHealthHub"));
+const GenomicsPrecisionHub = lazy(() => import("../pages/genomics/GenomicsPrecisionHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -289,7 +289,7 @@ export const ROUTES = [
   { page: "patient-ehr-analytics", slugs: ["patient-ehr-analytics", "ehr-analytics"], component: PatientEhrAnalyticsPredictivePage, access: AUTHENTICATED },
   { page: "dialysis-renal", slugs: ["dialysis-renal", "dialysis", "nephrology"], component: DialysisRenalHub, access: AUTHENTICATED },
   { page: "sterile-processing", slugs: ["sterile-processing", "cssd"], component: SterileProcessingHub, access: AUTHENTICATED },
-  { page: "behavioral-health", slugs: ["behavioral-health", "behavioral", "mental-health"], component: BehavioralHealthHub, access: AUTHENTICATED },
+  { page: "genomics-precision", slugs: ["genomics-precision", "precision-medicine", "genomic-medicine"], component: GenomicsPrecisionHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
