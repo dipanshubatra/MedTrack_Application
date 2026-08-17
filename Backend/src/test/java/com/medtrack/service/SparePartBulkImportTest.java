@@ -157,4 +157,73 @@ class SparePartBulkImportTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Malformed CSV");
     }
+
+    @Test
+    @DisplayName("bulkImport - successfully maps reordered CSV headers")
+    void bulkImport_ReorderedCsvHeaders_Success() {
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(eq(1L), anyString())).thenReturn(false);
+
+        String csvContent = "Quantity,Part Number,Unit Cost,Minimum Stock,Description\n15,PART-REORDER,49.99,5,Reordered Valve\n";
+        MultipartFile file = createCsvFile(csvContent);
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getTotalRows()).isEqualTo(1);
+        assertThat(summary.getSuccessCount()).isEqualTo(1);
+        assertThat(summary.getFailureCount()).isEqualTo(0);
+
+        ArgumentCaptor<List<SparePart>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sparePartRepository).saveAll(captor.capture());
+
+        SparePart saved = captor.getValue().get(0);
+        assertThat(saved.getPartNumber()).isEqualTo("PART-REORDER");
+        assertThat(saved.getDescription()).isEqualTo("Reordered Valve");
+        assertThat(saved.getStockLevel()).isEqualTo(15);
+        assertThat(saved.getReorderPoint()).isEqualTo(5);
+        assertThat(saved.getUnitCost()).isEqualTo(49.99);
+    }
+
+    @Test
+    @DisplayName("bulkImport - ignores extra non-cost text columns gracefully")
+    void bulkImport_ExtraMetadataColumns_Success() {
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(eq(1L), anyString())).thenReturn(false);
+
+        String csvContent = "Part Number,Name,Quantity,Minimum Stock,Supplier,Location\nPART-EXTRA,Sensor C,30,10,Vendor Z,Shelf 4\n";
+        MultipartFile file = createCsvFile(csvContent);
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getTotalRows()).isEqualTo(1);
+        assertThat(summary.getSuccessCount()).isEqualTo(1);
+
+        ArgumentCaptor<List<SparePart>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sparePartRepository).saveAll(captor.capture());
+
+        SparePart saved = captor.getValue().get(0);
+        assertThat(saved.getPartNumber()).isEqualTo("PART-EXTRA");
+        assertThat(saved.getDescription()).isEqualTo("Sensor C");
+        assertThat(saved.getUnitCost()).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("bulkImport - correctly maps compatible models column header")
+    void bulkImport_CompatibleModelsHeader_Success() {
+        when(userRepository.findByUsername("hospitalAdmin")).thenReturn(Optional.of(testUser));
+        when(hospitalRepository.findByUserId(100L)).thenReturn(Optional.of(testHospital));
+        when(sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(eq(1L), anyString())).thenReturn(false);
+
+        String csvContent = "Part Number,Item Name,Qty,Reorder Point,Compatible Models\nPART-MODEL,Cable D,5,2,Model X / Model Y\n";
+        MultipartFile file = createCsvFile(csvContent);
+
+        SparePartImportSummary summary = sparePartService.bulkImport(file, "hospitalAdmin");
+
+        assertThat(summary.getSuccessCount()).isEqualTo(1);
+        ArgumentCaptor<List<SparePart>> captor = ArgumentCaptor.forClass(List.class);
+        verify(sparePartRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getCompatibleModels()).isEqualTo("Model X / Model Y");
+    }
 }
