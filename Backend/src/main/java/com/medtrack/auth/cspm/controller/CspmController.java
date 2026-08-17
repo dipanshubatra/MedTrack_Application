@@ -52,6 +52,13 @@ public class CspmController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/findings/{findingId}/remediate")
+    @Operation(summary = "Remediate Finding", description = "Marks a specific CSPM finding as remediated.")
+    public ResponseEntity<CspmSecurityFindingResponse> remediateFinding(@PathVariable String findingId) {
+        CspmSecurityFindingResponse response = cspmService.remediateFinding(findingId);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/scan/{accountNumber}")
     @Operation(summary = "Execute Posture Assessment Scan", description = "Runs synthetic continuous monitoring scan over AWS/Azure/GCP resources.")
     public ResponseEntity<Map<String, Object>> executeScan(@PathVariable String accountNumber) {
