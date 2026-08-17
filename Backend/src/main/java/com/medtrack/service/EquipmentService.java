@@ -1637,7 +1637,11 @@ public class EquipmentService {
 
     private String getFieldValue(List<String> fields, List<String> headers, String columnName) {
         for (int i = 0; i < headers.size(); i++) {
-            if (headers.get(i).equalsIgnoreCase(columnName)) {
+            String header = headers.get(i);
+            if (header != null && header.startsWith("\uFEFF")) {
+                header = header.substring(1);
+            }
+            if (header != null && header.equalsIgnoreCase(columnName)) {
                 if (i < fields.size()) {
                     return fields.get(i);
                 }
@@ -1665,7 +1669,8 @@ public class EquipmentService {
     public void exportEquipmentCsv(String username, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         Hospital hospital = getHospitalForUser(username);
 
-        response.setContentType("text/csv");
+        response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
+        response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=equipment.csv");
 
         try (java.io.PrintWriter writer = response.getWriter();
