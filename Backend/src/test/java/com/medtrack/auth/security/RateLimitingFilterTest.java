@@ -69,7 +69,7 @@ class RateLimitingFilterTest {
         ReflectionTestUtils.setField(filter, "writeRefillTokens", writeCapacity);
         ReflectionTestUtils.setField(filter, "writeRefillDurationStr", "1m");
 
-5        ReflectionTestUtils.setField(filter, "aiTechnicianCapacity", 10);
+        ReflectionTestUtils.setField(filter, "aiTechnicianCapacity", 10);
         ReflectionTestUtils.setField(filter, "aiTechnicianRefillDurationStr", "1m");
         ReflectionTestUtils.setField(filter, "aiAdminCapacity", 10);
         ReflectionTestUtils.setField(filter, "aiAdminRefillDurationStr", "1m");
