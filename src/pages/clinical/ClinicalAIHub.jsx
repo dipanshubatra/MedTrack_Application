@@ -148,8 +148,6 @@ const computeRisk = (patient, overrides = {}) => {
   return clamp(Math.round(score), 0, 99);
 };
 
-const CSV_ESCAPE = (s) => `"${String(s).replace(/"/g, '""')}"`;
-
 /* ------------------------------------------------------------------ *
  *  Small presentational components
  * ------------------------------------------------------------------ */
@@ -690,23 +688,15 @@ export default function ClinicalAIHub({ onNavigate }) {
       ? ["id", "name", "mrn", "ward", "bed", "diagnosis", "hr", "rr", "spo2", "sbp", "temp", "glucose", "acuity"]
       : ["id", "patient", "mrn", "study", "modality", "confidence", "status", "priority"];
     const csv = [
-      header.map(CSV_ESCAPE).join(","),
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "risk"
           ? [r.id, r.name, r.mrn, r.ward, r.bed, r.diagnosis, r.vitals.hr, r.vitals.rr, r.vitals.spo2, r.vitals.sbp, r.vitals.temp, r.vitals.glucose, computeRisk(r, overrides)]
           : [r.id, r.patientName, r.mrn, r.study, r.modality, r.confidence.toFixed(3), r.status, r.priority]
-        ).map(CSV_ESCAPE).join(",")
+        ).map(csvEscape).join(",")
       ),
     ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-${activeTab}-export-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`medtrack-${activeTab}-export-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

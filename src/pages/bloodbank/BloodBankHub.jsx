@@ -6,6 +6,9 @@ import {
   PackageCheck, Pause, Play, Plus, RefreshCw, Search, ShieldAlert, ShieldCheck,
   Siren, Syringe, Timer, TrendingDown, TrendingUp, User, Users, X, Zap,
 } from "lucide-react";
+import { downloadCsv } from "../../utils/csv";
+import { useKindToasts, KindToastTray } from "../../components/common/HubToasts";
+import { DetailRow as Row, AlertStatCard as StatCard } from "../../components/common/HubCards";
 
 /* ------------------------------------------------------------------ */
 /*  Seed data                                                          */
@@ -133,7 +136,7 @@ export default function BloodBankHub() {
   const [speed, setSpeed] = useState(1);
   const [tick, setTick] = useState(0);
   const [modal, setModal] = useState(null);
-  const [toasts, setToasts] = useState([]);
+  const { toasts, addToast } = useKindToasts();
   const [mtpActive, setMtpActive] = useState(false);
   const speedRef = useRef(1);
   const pausedRef = useRef(false);
@@ -142,12 +145,6 @@ export default function BloodBankHub() {
   useEffect(() => { speedRef.current = speed; }, [speed]);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { tickRef.current = tick; }, [tick]);
-
-  const addToast = useCallback((msg, kind = "info") => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setToasts((t) => [...t.slice(-3), { id, msg, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
-  }, []);
 
   /* ---------------- simulation tick loop ---------------- */
   useEffect(() => {
@@ -300,13 +297,7 @@ export default function BloodBankHub() {
         : [["Reaction", "Patient", "Type", "Severity", "Phase", "Onset", "TempRise"]].concat(
             filteredReactions.map((r) => [r.id, r.patient, r.type, r.severity, r.phase, r.onset, r.tempRise])
           );
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `blood-bank-${activeTab}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCsv(`blood-bank-${activeTab}.csv`, rows, "text/csv;charset=utf-8;");
     addToast("CSV exported", "success");
   }, [activeTab, filteredUnits, filteredOrders, filteredReactions, addToast]);
 
@@ -973,23 +964,7 @@ export default function BloodBankHub() {
       {renderModal()}
 
       {/* toasts */}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 space-y-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${
-              t.kind === "error"
-                ? "border-rose-500/50 bg-rose-950/90 text-rose-200"
-                : t.kind === "warn"
-                  ? "border-amber-500/50 bg-amber-950/90 text-amber-200"
-                  : "border-emerald-500/50 bg-emerald-950/90 text-emerald-200"
-            }`}
-          >
-            {t.kind === "error" ? <AlertTriangle className="h-4 w-4 shrink-0" /> : t.kind === "warn" ? <Bell className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-            <span>{t.msg}</span>
-          </div>
-        ))}
-      </div>
+      <KindToastTray toasts={toasts} />
     </div>
   );
 }
@@ -998,26 +973,6 @@ export default function BloodBankHub() {
 /*  Small presentational helpers                                       */
 /* ------------------------------------------------------------------ */
 
-function Row({ label, value }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
-      <span className="text-xs text-slate-400">{label}</span>
-      <span className="text-right text-sm font-medium text-slate-200">{value}</span>
-    </div>
-  );
-}
-
-function StatCard({ label, value, icon, alert }) {
-  return (
-    <div className={`rounded-xl border p-4 ${alert ? "border-rose-500/40 bg-rose-500/5" : "border-slate-800 bg-slate-900"}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-400">{label}</span>
-        {icon}
-      </div>
-      <p className={`mt-2 text-2xl font-bold ${alert ? "text-rose-300" : "text-white"}`}>{value}</p>
-    </div>
-  );
-}
 
 function SnowflakeIcon({ className }) {
   return (

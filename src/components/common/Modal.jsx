@@ -80,3 +80,32 @@ export function SimpleModal({ title, subtitle, onClose, children, closeIcon: Clo
     </div>
   );
 }
+
+/**
+ * Detail modal used by the transfusion/oncology/renal/sterile hubs: identical
+ * to their page-local `Modal`, with an `aria-label` on the dialog and a
+ * `gap-4` header row.
+ */
+export function DetailModal({ title, subtitle, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label={title}
+        className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm text-slate-300">{children}</div>
+      </div>
+    </div>
+  );
+}

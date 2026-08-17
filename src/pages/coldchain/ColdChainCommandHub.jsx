@@ -253,15 +253,6 @@ function FilterChips({ value, onChange, options, allLabel = "All" }) {
 
 const Modal = (props) => <InspectionModal {...props} accent="text-cyan-400" />;
 
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ *
  *  Tab 1 - Cryo Telemetry
  * ------------------------------------------------------------------ */
@@ -931,7 +922,7 @@ export default function ColdChainCommandHub({ onNavigate }) {
             ? ["id", "unit", "product", "startTick", "elapsed", "maxTemp", "ea", "lossPct", "impact"]
             : ["id", "name", "model", "location", "temp", "rangeMin", "rangeMax", "humidity", "co2", "battery", "status"];
     const csv = [
-      header.map(CSV_ESCAPE).join(","),
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "rfid"
           ? [r.id, r.product, r.serial, r.lot, r.zone, rfidState(r), r.strength.toFixed(1), r.lastRead, r.tampered]
@@ -942,18 +933,10 @@ export default function ColdChainCommandHub({ onNavigate }) {
               : activeTab === "arrhenius"
                 ? [r.id, r.unit, r.product, r.startTick, r.elapsed, r.maxTemp, r.ea, arrheniusImpact(r).lossPct.toFixed(1), arrheniusImpact(r).impact]
                 : [r.id, r.name, r.model, r.location, r.temp, r.rangeMin, r.rangeMax, r.humidity, r.co2, r.battery, cryoState(r)]
-        ).map(CSV_ESCAPE).join(",")
+        ).map(csvEscape).join(",")
       ),
     ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medtrack-cold-chain-${activeTab}-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadCsv(`medtrack-cold-chain-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

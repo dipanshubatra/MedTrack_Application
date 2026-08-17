@@ -240,9 +240,11 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             String fullKey = group + ":" + key;
 
             Bucket bucket = resolveBucket(fullKey, group);
+            metricsTracker.incrementEvaluated();
             io.github.bucket4j.ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
             if (!probe.isConsumed()) {
+                metricsTracker.incrementThrottled();
                 long waitForRefillNanos = probe.getNanosToWaitForRefill();
                 long waitForRefillSeconds = java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(waitForRefillNanos);
                 // Ensure Retry-After is at least 1 second if greater than 0 nanos
