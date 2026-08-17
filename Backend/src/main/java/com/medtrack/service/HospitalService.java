@@ -6,8 +6,9 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
-import com.medtrack.repository.HospitalRepository;
-import com.medtrack.exception.ResourceNotFoundException;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class HospitalService {
      * @return the saved hospital
      */
     @Transactional
+    @CacheEvict(value = "hospitalByUserId", allEntries = true)
     public Hospital createHospitalProfile(Hospital hospital, String userEmail) {
 
         User user = userRepository.findByEmail(userEmail)
@@ -58,6 +60,7 @@ public class HospitalService {
      * @param userId the user ID
      * @return the Hospital
      */
+    @Cacheable(value = "hospitalByUserId", key = "#userId")
     public Hospital getHospitalByUserId(Long userId) {
         return hospitalRepository.findByUserId(userId)
                 .orElseThrow(() ->
@@ -72,6 +75,9 @@ public class HospitalService {
      * @return the archived hospital
      */
     @Transactional
+    @Caching(evict = { 
+        @CacheEvict(value = "hospitalByUserId", allEntries = true)
+    })
     public Hospital archiveHospital(Long id, String requestedBy) {
         Hospital hospital = hospitalRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
