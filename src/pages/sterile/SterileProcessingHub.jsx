@@ -4,6 +4,13 @@ import {
   FileText, Flame, Gauge, Hourglass, Info, Layers, Lock, Package, Pause, Play, RefreshCw,
   Search, ShieldAlert, ShieldCheck, Siren, Thermometer, Timer, TrendingUp, Waves, Wrench, X,
 } from "lucide-react";
+import { ToneBadge } from "../../components/common/ToneBadge";
+import { CompactStatCard as StatCard } from "../../components/common/StatCard";
+import { Row } from "../../components/common/InfoRow";
+import { DetailModal as Modal } from "../../components/common/Modal";
+import { EmptyState } from "../../components/common/EmptyState";
+import { Meter } from "../../components/common/MeterBar";
+import { useSeverityToasts, SeverityToastTray } from "../../components/common/HubToasts";
 import { downloadCsv } from "../../utils/csv";
 
 /* ------------------------------------------------------------------ *
@@ -198,14 +205,6 @@ const stageOrder = ["Decontamination", "Assembly", "Sterilisation", "Quarantine"
 /*  Presentational helpers                                             */
 /* ------------------------------------------------------------------ */
 
-const toneClass = {
-  red: "bg-red-500/10 text-red-400 border-red-500/30",
-  amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  green: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  sky: "bg-sky-500/10 text-sky-400 border-sky-500/30",
-  slate: "bg-slate-500/10 text-slate-400 border-slate-500/30",
-};
-
 const toneOf = (value) => {
   if (["Failed", "Fail", "Positive", "Fault", "Emergency", "overdue"].includes(value)) return "red";
   if (["Quarantined", "Incubating", "Urgent", "Quarantine", "Assembly"].includes(value)) return "amber";
@@ -214,68 +213,9 @@ const toneOf = (value) => {
   return "slate";
 };
 
-const Badge = ({ children, tone }) => (
-  <span
-    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-      toneClass[tone || toneOf(children)]
-    }`}
-  >
-    {children}
-  </span>
-);
+const Badge = ({ children, tone }) => <ToneBadge tone={tone} toneOf={toneOf}>{children}</ToneBadge>;
 
-const Meter = ({ value, color = "bg-emerald-400" }) => (
-  <div className="h-1.5 w-24 rounded-full bg-slate-800">
-    <div className={`h-full rounded-full ${color}`} style={{ width: `${clamp(value, 0, 100)}%` }} />
-  </div>
-);
 
-const StatCard = ({ icon: Icon, label, value, sub, accent = "text-emerald-400" }) => (
-  <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-slate-400">{label}</span>
-      <Icon size={16} className={accent} />
-    </div>
-    <div className="mt-2 text-2xl font-bold text-slate-100">{value}</div>
-    {sub && <div className="mt-1 text-[11px] text-slate-500">{sub}</div>}
-  </div>
-);
-
-const Row = ({ label, value, accent }) => (
-  <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0">
-    <span className="text-xs text-slate-400">{label}</span>
-    <span className={`text-xs font-medium ${accent || "text-slate-200"}`}>{value}</span>
-  </div>
-);
-
-const Modal = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-    <div
-      role="dialog"
-      aria-label={title}
-      className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
-        </div>
-        <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
-          <X size={16} />
-        </button>
-      </div>
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm text-slate-300">{children}</div>
-    </div>
-  </div>
-);
-
-const EmptyState = ({ message }) => (
-  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 py-14 text-slate-500">
-    <Package size={28} className="mb-2 opacity-40" />
-    <p className="text-sm">{message}</p>
-  </div>
-);
 
 /* ------------------------------------------------------------------ */
 /*  Live simulation                                                    */
@@ -391,12 +331,7 @@ export default function SterileProcessingHub() {
   const [stageFilter, setStageFilter] = useState("All");
   const [releaseFilter, setReleaseFilter] = useState("All");
 
-  const [toasts, setToasts] = useState([]);
-  const toast = useCallback((message, severity = "Low") => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setToasts((current) => [...current.slice(-4), { id, message, severity }]);
-    setTimeout(() => setToasts((current) => current.filter((item) => item.id !== id)), 4200);
-  }, []);
+  const { toasts, toast } = useSeverityToasts();
 
   const [trays, setTrays] = useState(() => TRAYS.map((tray) => ({ ...tray })));
   const [loads, setLoads] = useState(() => LOADS.map((load) => ({ ...load })));
@@ -569,23 +504,7 @@ export default function SterileProcessingHub() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
-      <div className="fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-900/95 p-3 shadow-xl backdrop-blur"
-          >
-            {item.severity === "High" ? (
-              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
-            ) : item.severity === "Medium" ? (
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-            ) : (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-            )}
-            <p className="text-xs text-slate-300">{item.message}</p>
-          </div>
-        ))}
-      </div>
+      <SeverityToastTray toasts={toasts} />
 
       <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -852,7 +771,7 @@ export default function SterileProcessingHub() {
                   })}
                 </tbody>
               </table>
-              {filteredTrays.length === 0 && <EmptyState message="No trays match the current search and filter." />}
+              {filteredTrays.length === 0 && <EmptyState message="No trays match the current search and filter." icon={Package} />}
             </section>
           </div>
         )}
@@ -979,7 +898,7 @@ export default function SterileProcessingHub() {
                   </div>
                 );
               })}
-              {filteredLoads.length === 0 && <EmptyState message="No loads match the current search and filter." />}
+              {filteredLoads.length === 0 && <EmptyState message="No loads match the current search and filter." icon={Package} />}
             </section>
           </div>
         )}
@@ -1063,7 +982,7 @@ export default function SterileProcessingHub() {
                 </div>
               );
             })}
-            {filteredLoads.length === 0 && <EmptyState message="No loads match the current search and filter." />}
+            {filteredLoads.length === 0 && <EmptyState message="No loads match the current search and filter." icon={Package} />}
           </div>
         )}
 
@@ -1130,7 +1049,7 @@ export default function SterileProcessingHub() {
                 </div>
               ))}
             </div>
-            {filteredWashers.length === 0 && <EmptyState message="No washer-disinfectors match the search." />}
+            {filteredWashers.length === 0 && <EmptyState message="No washer-disinfectors match the search." icon={Package} />}
           </div>
         )}
       </main>

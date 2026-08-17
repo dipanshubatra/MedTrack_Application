@@ -152,7 +152,6 @@ const deviceFirmwareState = (d) => {
   return patch < "PS-2026-07" ? "patch-outstanding" : "current";
 };
 
-
 /* ------------------------------------------------------------------ *
  *  Small presentational components
  * ------------------------------------------------------------------ */
@@ -708,18 +707,18 @@ export default function IcuTelemetryHub({ onNavigate }) {
       : activeTab === "alerts"
         ? ["id", "severity", "title", "body", "ref", "assignedTo", "acknowledged"]
         : ["id", "name", "mrn", "room", "acuity", "hr", "rr", "spo2", "sbp", "temp", "etco2"];
-    const table = [
-      header,
+    const csv = [
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "devices"
           ? [r.id, r.type, r.model, r.room, r.battery, r.signal, r.firmware, r.status, r.heartbeatMin]
           : activeTab === "alerts"
             ? [r.id, r.severity, r.title, r.body, r.refLabel, r.assignedTo, r.acknowledged]
             : [r.id, r.name, r.mrn, r.room, r.acuity, r.vitals.hr, r.vitals.rr, r.vitals.spo2, r.vitals.sbp, r.vitals.temp, r.vitals.etco2]
-        )
+        ).map(csvEscape).join(",")
       ),
-    ];
-    downloadCsv(`medtrack-icu-${activeTab}-${Date.now()}.csv`, table);
+    ].join("\n");
+    downloadCsv(`medtrack-icu-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

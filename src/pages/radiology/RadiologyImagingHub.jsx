@@ -185,12 +185,7 @@ export default function RadiologyImagingHub() {
   const [modalityFilter, setModalityFilter] = useState("All");
   const [aiFilter, setAiFilter] = useState("All");
 
-  const [toasts, setToasts] = useState([]);
-  const toast = useCallback((msg, sev = "Low") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-4), { id, msg, sev }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
-  }, []);
+  const { toasts, toast } = useToastTray();
 
   const [studies, setStudies] = useState(() => STUDIES.map((s) => ({ ...s })));
   const [modalities, setModalities] = useState(() => MODALITIES.map((m) => ({ ...m })));
@@ -287,35 +282,16 @@ export default function RadiologyImagingHub() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* toast stack */}
-      <div className="fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
-            {t.sev === "High" || t.sev === "Critical" ? (
-              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
-            ) : t.sev === "Medium" ? (
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-            ) : (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-            )}
-            <p className="text-xs text-slate-300">{t.msg}</p>
-          </div>
-        ))}
-      </div>
+      <ToastTray toasts={toasts} />
 
       {/* header */}
       <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-              <ScanIcon />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100">Radiology Imaging &amp; PACS Overwatch Hub</h1>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Study worklist · modality fleet · AI CAD &amp; reporting — DICOM / HL7 / IHE aligned
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            icon={<ScanIcon />}
+            title="Radiology Imaging &amp; PACS Overwatch Hub"
+            subtitle="Study worklist · modality fleet · AI CAD &amp; reporting — DICOM / HL7 / IHE aligned"
+          />
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
               <button
@@ -393,14 +369,12 @@ export default function RadiologyImagingHub() {
 
             {/* worklist table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-emerald-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Radiology Worklist</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredStudies.length} studies</span>
-                </div>
-                <span className="text-[11px] text-slate-500">DICOM MWL · TAT in minutes</span>
-              </div>
+              <SectionHeader
+                icon={<FileText size={16} className="text-emerald-400" />}
+                title="Radiology Worklist"
+                badge={`${filteredStudies.length} studies`}
+                right="DICOM MWL · TAT in minutes"
+              />
               {filteredStudies.length === 0 ? (
                 <EmptyState icon={ScanIcon} message="No studies match the current filters." />
               ) : (
@@ -530,10 +504,7 @@ export default function RadiologyImagingHub() {
 
             {/* uptime strip */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Activity size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Fleet Performance</h2>
-              </div>
+              <PanelHeader icon={<Activity size={16} className="text-emerald-400" />} title="Fleet Performance" />
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
                   <p className="text-xl font-bold text-emerald-400">{(modalities.reduce((a, x) => a + x.uptime, 0) / Math.max(1, modalities.length)).toFixed(1)}%</p>
@@ -587,14 +558,12 @@ export default function RadiologyImagingHub() {
 
             {/* ai job table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Radar size={16} className="text-sky-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">AI CAD Inference Queue</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredAi.length} jobs</span>
-                </div>
-                <span className="text-[11px] text-slate-500">DICOM SR structured findings</span>
-              </div>
+              <SectionHeader
+                icon={<Radar size={16} className="text-sky-400" />}
+                title="AI CAD Inference Queue"
+                badge={`${filteredAi.length} jobs`}
+                right="DICOM SR structured findings"
+              />
               {filteredAi.length === 0 ? (
                 <EmptyState icon={ScanIcon} message="No AI jobs match the current filters." />
               ) : (
@@ -711,9 +680,9 @@ export default function RadiologyImagingHub() {
         </Modal>
       )}
 
-      <footer className="border-t border-slate-800 px-6 py-4 text-center text-[10px] text-slate-600">
+      <Footer>
         Radiology Imaging &amp; PACS Overwatch Hub — DICOM, HL7 FHIR, IHE, ACR-AI-LAB · simulation environment · not connected to live imaging devices
-      </footer>
+      </Footer>
     </div>
   );
 }

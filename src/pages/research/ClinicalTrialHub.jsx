@@ -141,7 +141,6 @@ const fmtP = (v) => v.toExponential(2).replace("e", " × 10^");
 
 const enrollmentPct = (t) => Math.round((t.enrolled / t.target) * 100);
 
-
 /* Cohort matcher: pure function of criteria so the sandbox recomputes instantly. */
 const matchCohort = (patients, criteria) => patients.filter((p) => {
   const { ageMin, ageMax, stages, ecogMax, genotypes, pdl1Min, priorLinesMax } = criteria;
@@ -167,15 +166,6 @@ const DEFAULT_CRITERIA = { ageMin: 18, ageMax: 85, stages: [], ecogMax: 2, genot
 
 
 
-
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
-    </div>
-  );
-}
 
 function CriteriaToggle({ label, hint, checked, onChange }) {
   return (
@@ -709,11 +699,11 @@ export default function ClinicalTrialHub({ onNavigate }) {
   const handleExportCohort = useCallback(() => {
     const matched = matchCohort(PATIENT_POOL, criteria);
     setExporting(true);
-    const table = [
-      ["id", "age", "sex", "stage", "ecog", "genotype", "pdl1", "ki67", "priorLines", "arm"],
-      ...matched.map((p) => [p.id, p.age, p.sex, p.stage, p.ecog, p.genotype, p.pdl1, p.ki67, p.priorLines, p.arm]),
-    ];
-    downloadCsv(`medtrack-cohort-${matched.length}-patients-${Date.now()}.csv`, table);
+    const csv = [
+      ["id", "age", "sex", "stage", "ecog", "genotype", "pdl1", "ki67", "priorLines", "arm"].map(csvEscape).join(","),
+      ...matched.map((p) => [p.id, p.age, p.sex, p.stage, p.ecog, p.genotype, p.pdl1, p.ki67, p.priorLines, p.arm].map(csvEscape).join(",")),
+    ].join("\n");
+    downloadCsv(`medtrack-cohort-${matched.length}-patients-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Cohort exported", `${matched.length} patients matched current criteria and written to CSV`, "low");
@@ -726,16 +716,16 @@ export default function ClinicalTrialHub({ onNavigate }) {
     const header = activeTab === "trials"
       ? ["id", "title", "phase", "status", "sponsor", "sites", "target", "enrolled", "endpoint", "biomarkers"]
       : ["id", "gene", "name", "assay", "expression", "foldChange", "pValue", "qValue", "direction", "relevance"];
-    const table = [
-      header,
+    const csv = [
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "trials"
           ? [r.id, r.title, r.phase, r.status, r.sponsor, r.sites, r.target, r.enrolled, r.endpoint, r.biomarkers.join(" | ")]
           : [r.id, r.gene, r.name, r.assay, r.expression, r.foldChange, r.pValue, r.qValue, r.direction, r.relevance]
-        )
+        ).map(csvEscape).join(",")
       ),
-    ];
-    downloadCsv(`medtrack-research-${activeTab}-${Date.now()}.csv`, table);
+    ].join("\n");
+    downloadCsv(`medtrack-research-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

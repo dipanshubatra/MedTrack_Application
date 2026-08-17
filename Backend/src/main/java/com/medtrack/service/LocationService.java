@@ -15,6 +15,9 @@ import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.FacilityLocationRepository;
 import com.medtrack.repository.HospitalRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,12 +62,17 @@ public class LocationService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "locationTree", key = "#username")
     public List<FacilityLocation> getLocationTree(String username) {
         Hospital hospital = getHospitalForUser(username);
         return facilityLocationRepository.findByHospitalId(hospital.getId());
     }
 
     @Transactional
+    @Caching(evict = { 
+        @CacheEvict(value = "locationTree", key = "#username"),
+        @CacheEvict(value = "locationDescendants", allEntries = true)
+    })
     public FacilityLocation createLocation(FacilityLocation location, String username) {
         Hospital hospital = getHospitalForUser(username);
         if (location.getName() == null || location.getName().isBlank()) {
@@ -87,6 +95,10 @@ public class LocationService {
     }
 
     @Transactional
+    @Caching(evict = { 
+        @CacheEvict(value = "locationTree", key = "#username"),
+        @CacheEvict(value = "locationDescendants", allEntries = true)
+    })
     public FacilityLocation updateLocation(Long id, FacilityLocation details, String username) {
         Hospital hospital = getHospitalForUser(username);
         FacilityLocation location = facilityLocationRepository.findById(id)
@@ -133,6 +145,10 @@ public class LocationService {
      * out so a later restore does not resurrect a reference to a location that is gone.</p>
      */
     @Transactional
+    @Caching(evict = { 
+        @CacheEvict(value = "locationTree", key = "#username"),
+        @CacheEvict(value = "locationDescendants", allEntries = true)
+    })
     public void deleteLocation(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         FacilityLocation location = facilityLocationRepository.findById(id)
@@ -156,6 +172,10 @@ public class LocationService {
     }
 
     @Transactional
+    @Caching(evict = { 
+        @CacheEvict(value = "equipmentList", key = "#username"),
+        @CacheEvict(value = "equipmentById", key = "#equipmentId + '-' + #username")
+    })
     public Equipment assignEquipmentToLocation(Long equipmentId, Long locationId, LocalDate effectiveDate,
                                                String notes, String username) {
         Hospital hospital = getHospitalForUser(username);
@@ -200,6 +220,7 @@ public class LocationService {
      * matches assets placed anywhere beneath it (issue #745 hierarchical filtering).
      */
     @Transactional(readOnly = true)
+    @Cacheable(value = "locationDescendants", key = "#rootId + '-' + #username")
     public Set<Long> resolveDescendantIds(Long rootId, String username) {
         Hospital hospital = getHospitalForUser(username);
         List<FacilityLocation> all = facilityLocationRepository.findByHospitalId(hospital.getId());

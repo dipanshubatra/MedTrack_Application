@@ -171,12 +171,7 @@ export default function PharmacovigilanceHub() {
   const [tierFilter, setTierFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const [toasts, setToasts] = useState([]);
-  const toast = useCallback((msg, sev = "Low") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-4), { id, msg, sev }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
-  }, []);
+  const { toasts, toast } = useToastTray();
 
   const [events, setEvents] = useState(() => ADVERSE_EVENTS.map((a) => ({ ...a })));
   const [signals, setSignals] = useState(() => SIGNALS.map((s) => ({ ...s })));
@@ -274,35 +269,16 @@ export default function PharmacovigilanceHub() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* toast stack */}
-      <div className="fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
-            {t.sev === "High" || t.sev === "Critical" ? (
-              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
-            ) : t.sev === "Medium" ? (
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-            ) : (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-            )}
-            <p className="text-xs text-slate-300">{t.msg}</p>
-          </div>
-        ))}
-      </div>
+      <ToastTray toasts={toasts} />
 
       {/* header */}
       <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-              <ShieldCheck size={24} className="text-emerald-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100">Pharmacovigilance &amp; Drug Safety Hub</h1>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Adverse-event triage · signal detection · SAE reporting — GVP Module VI / FDA 21 CFR 314.80 aligned
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            icon={<ShieldCheck size={24} className="text-emerald-400" />}
+            title="Pharmacovigilance &amp; Drug Safety Hub"
+            subtitle="Adverse-event triage · signal detection · SAE reporting — GVP Module VI / FDA 21 CFR 314.80 aligned"
+          />
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
               <button
@@ -385,14 +361,12 @@ export default function PharmacovigilanceHub() {
 
             {/* case table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Siren size={16} className="text-red-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Adverse Event Case Queue</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredEvents.length} cases</span>
-                </div>
-                <span className="text-[11px] text-slate-500">ICSR triage · E2B(R3) formatted</span>
-              </div>
+              <SectionHeader
+                icon={<Siren size={16} className="text-red-400" />}
+                title="Adverse Event Case Queue"
+                badge={`${filteredEvents.length} cases`}
+                right="ICSR triage · E2B(R3) formatted"
+              />
               {filteredEvents.length === 0 ? (
                 <EmptyState icon={ShieldCheck} message="No cases match the current filters." />
               ) : (
@@ -497,14 +471,12 @@ export default function PharmacovigilanceHub() {
 
             {/* signal table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Radar size={16} className="text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Disproportionality Signals</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredSignals.length} signals</span>
-                </div>
-                <span className="text-[11px] text-slate-500">EudraVigilance-style ROR · EBGM overlay</span>
-              </div>
+              <SectionHeader
+                icon={<Radar size={16} className="text-amber-400" />}
+                title="Disproportionality Signals"
+                badge={`${filteredSignals.length} signals`}
+                right="EudraVigilance-style ROR · EBGM overlay"
+              />
               {filteredSignals.length === 0 ? (
                 <EmptyState icon={ShieldCheck} message="No signals match the current filters." />
               ) : (
@@ -574,10 +546,7 @@ export default function PharmacovigilanceHub() {
           <div className="space-y-6">
             {/* deadline strip */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Timer size={16} className="text-sky-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Regulatory Submission Pipeline</h2>
-              </div>
+              <PanelHeader icon={<Timer size={16} className="text-sky-400" />} title="Regulatory Submission Pipeline" />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredSubmissions
                   .sort((a, b) => parseInt(a.due, 10) - parseInt(b.due, 10))
@@ -613,14 +582,12 @@ export default function PharmacovigilanceHub() {
 
             {/* obligation table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-sky-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Submission Obligations</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredSubmissions.length} tracked</span>
-                </div>
-                <span className="text-[11px] text-slate-500">GVP VI · 21 CFR 314.80(c)</span>
-              </div>
+              <SectionHeader
+                icon={<FileText size={16} className="text-sky-400" />}
+                title="Submission Obligations"
+                badge={`${filteredSubmissions.length} tracked`}
+                right="GVP VI · 21 CFR 314.80(c)"
+              />
               {filteredSubmissions.length === 0 ? (
                 <EmptyState icon={ShieldCheck} message="No submissions match the current filters." />
               ) : (
@@ -753,9 +720,9 @@ export default function PharmacovigilanceHub() {
         </Modal>
       )}
 
-      <footer className="border-t border-slate-800 px-6 py-4 text-center text-[10px] text-slate-600">
+      <Footer>
         Pharmacovigilance &amp; Drug Safety Hub — GVP Module VI, FDA 21 CFR 314.80, E2B(R3) · simulation environment · not for actual regulatory submission
-      </footer>
+      </Footer>
     </div>
   );
 }
