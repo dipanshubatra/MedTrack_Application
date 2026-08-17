@@ -272,129 +272,314 @@ public class SparePartService {
         }
     }
 
+    /**
+     * Executes bulk import of spare part records from a CSV file.
+     *
+     * <p>Header row names are dynamically resolved to map fields ('Part Number', 'Name'/'Description',
+     * 'Quantity'/'Stock Level', 'Minimum Stock'/'Reorder Point', 'Unit Cost', 'Compatible Models')
+     * to their respective column indices. If headers are absent, positional mapping is used with
+     * safe type validation for optional cost and model columns.</p>
+     *
+     * @param file CSV file payload
+     * @param username acting user's username or email
+     * @return import summary detailing total, success, and failure counts
+     */
     @Transactional
     public com.medtrack.dto.SparePartImportSummary bulkImport(org.springframework.web.multipart.MultipartFile file, String username) {
         Hospital hospital = getHospitalForUser(username);
         com.medtrack.dto.SparePartImportSummary summary = new com.medtrack.dto.SparePartImportSummary();
         summary.setFailures(new java.util.ArrayList<>());
-        
+
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("CSV file is empty");
         }
-        
+
         String csvContent;
         try {
             csvContent = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
         } catch (java.io.IOException e) {
             throw new IllegalArgumentException("Failed to read file", e);
         }
-        
+
         java.util.List<String> records;
         try {
             records = com.medtrack.util.CsvSupport.splitRecords(csvContent);
         } catch (com.medtrack.util.CsvSupport.MalformedCsvException e) {
             throw new IllegalArgumentException("Malformed CSV: " + e.getMessage());
         }
-        
+
         if (records.isEmpty()) {
             throw new IllegalArgumentException("CSV file contains no records");
         }
-        
+
         int startIndex = 0;
         java.util.List<String> firstRow = com.medtrack.util.CsvSupport.parseLine(records.get(0));
-        if (!firstRow.isEmpty() && firstRow.get(0).toLowerCase(Locale.ROOT).contains("part")) {
+        SparePartCsvHeaderMap headerMap;
+
+        if (!firstRow.isEmpty() && isHeaderRow(firstRow)) {
             startIndex = 1;
+            headerMap = SparePartCsvHeaderMap.fromHeaderRow(firstRow);
+        } else {
+            headerMap = SparePartCsvHeaderMap.defaultPositional();
         }
-        
+
         java.util.List<SparePart> validParts = new java.util.ArrayList<>();
         int processedRows = 0;
-        
+
         for (int i = startIndex; i < records.size(); i++) {
             processedRows++;
             String rowData = records.get(i);
             try {
                 java.util.List<String> fields = com.medtrack.util.CsvSupport.parseLine(rowData);
                 if (fields.size() < 4) {
-                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Insufficient columns. Expected at least 4."));
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Insufficient columns. Expected at least 4."));
                     continue;
                 }
-                
-                String partNumber = trimToNull(fields.get(0));
-                String description = trimToNull(fields.get(1));
-                String quantityStr = trimToNull(fields.get(2));
-                String minStockStr = trimToNull(fields.get(3));
-                
+
+                String partNumber = getFieldValue(fields, headerMap.partNumberIndex());
+                String description = getFieldValue(fields, headerMap.descriptionIndex());
+                String quantityStr = getFieldValue(fields, headerMap.quantityIndex());
+                String minStockStr = getFieldValue(fields, headerMap.reorderPointIndex());
+
                 if (partNumber == null || description == null || quantityStr == null || minStockStr == null) {
-                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Missing required fields"));
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Missing required fields"));
                     continue;
                 }
-                
+
                 int stockLevel;
                 int reorderPoint;
                 try {
                     stockLevel = Integer.parseInt(quantityStr);
                     reorderPoint = Integer.parseInt(minStockStr);
                 } catch (NumberFormatException e) {
-                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Quantity and minimum stock must be numeric"));
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Quantity and minimum stock must be numeric"));
                     continue;
                 }
-                
+
                 if (stockLevel < 0 || reorderPoint < 0) {
-                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Quantity and minimum stock cannot be negative"));
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Quantity and minimum stock cannot be negative"));
                     continue;
                 }
-                
-                Double unitCost = 0.0;
-                if (fields.size() >= 5 && trimToNull(fields.get(4)) != null) {
-                    try {
-                        unitCost = Double.parseDouble(trimToNull(fields.get(4)));
-                        if (unitCost < 0.0 || !Double.isFinite(unitCost)) {
-                            summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Unit cost must be a non-negative finite number"));
-                            continue;
-                        }
-                    } catch (NumberFormatException e) {
-                        summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Unit cost must be numeric"));
-                        continue;
-                    }
+
+                Double unitCost = extractUnitCost(fields, headerMap, summary, processedRows, rowData);
+                if (unitCost == null) {
+                    // Row failure was appended inside extractUnitCost
+                    continue;
                 }
-                
+
+                String compatibleModels = null;
+                Integer modelIdx = headerMap.compatibleModelsIndex();
+                if (modelIdx != null && modelIdx < fields.size()) {
+                    compatibleModels = trimToNull(fields.get(modelIdx));
+                }
+
                 final String pNum = partNumber;
                 if (validParts.stream().anyMatch(p -> p.getPartNumber().equalsIgnoreCase(pNum))) {
-                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Duplicate part number in import file"));
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Duplicate part number in import file"));
                     continue;
                 }
-                
+
                 if (sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(hospital.getId(), partNumber)) {
-                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Spare part with part number already exists"));
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Spare part with part number already exists"));
                     continue;
                 }
-                
+
                 SparePart part = SparePart.builder()
                         .hospitalId(hospital.getId())
                         .partNumber(partNumber)
                         .description(description)
+                        .compatibleModels(compatibleModels)
                         .stockLevel(stockLevel)
                         .reorderPoint(reorderPoint)
                         .unitCost(unitCost)
                         .createdAt(java.time.LocalDateTime.now())
                         .deleted(false)
                         .build();
-                        
+
                 validParts.add(part);
             } catch (Exception e) {
-                summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, e.getMessage() != null ? e.getMessage() : "Invalid data"));
+                summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                        processedRows, rowData, e.getMessage() != null ? e.getMessage() : "Invalid data"));
             }
         }
-        
+
         if (!validParts.isEmpty()) {
             sparePartRepository.saveAll(validParts);
         }
-        
+
         summary.setTotalRows(processedRows);
         summary.setSuccessCount(validParts.size());
         summary.setFailureCount(summary.getFailures().size());
-        
+
         return summary;
+    }
+
+    private Double extractUnitCost(
+            java.util.List<String> fields,
+            SparePartCsvHeaderMap headerMap,
+            com.medtrack.dto.SparePartImportSummary summary,
+            int processedRows,
+            String rowData) {
+
+        Double unitCost = 0.0;
+        Integer costIdx = headerMap.unitCostIndex();
+
+        if (costIdx != null && costIdx < fields.size()) {
+            String costStr = trimToNull(fields.get(costIdx));
+            if (costStr != null) {
+                try {
+                    unitCost = Double.parseDouble(costStr);
+                    if (unitCost < 0.0 || !Double.isFinite(unitCost)) {
+                        summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                                processedRows, rowData, "Unit cost must be a non-negative finite number"));
+                        return null;
+                    }
+                } catch (NumberFormatException e) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Unit cost must be numeric"));
+                    return null;
+                }
+            }
+        } else if (headerMap.isPositional() && fields.size() >= 5) {
+            String possibleCost = trimToNull(fields.get(4));
+            if (possibleCost != null && isNumericDouble(possibleCost)) {
+                unitCost = Double.parseDouble(possibleCost);
+                if (unitCost < 0.0 || !Double.isFinite(unitCost)) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(
+                            processedRows, rowData, "Unit cost must be a non-negative finite number"));
+                    return null;
+                }
+            }
+        }
+
+        return unitCost;
+    }
+
+    private boolean isHeaderRow(java.util.List<String> row) {
+        if (row == null || row.isEmpty()) return false;
+        String line = String.join(" ", row).toLowerCase(java.util.Locale.ROOT);
+        return line.contains("part") || line.contains("name") || line.contains("quantity") || line.contains("stock");
+    }
+
+    private String getFieldValue(java.util.List<String> fields, Integer index) {
+        if (fields == null || index == null || index < 0 || index >= fields.size()) {
+            return null;
+        }
+        return trimToNull(fields.get(index));
+    }
+
+    private boolean isNumericDouble(String value) {
+        if (value == null || value.isBlank()) return false;
+        try {
+            double d = Double.parseDouble(value);
+            return Double.isFinite(d);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Internal encapsulation record representing mapped header column indices for spare part bulk import.
+     */
+    private record SparePartCsvHeaderMap(
+            Integer partNumberIndex,
+            Integer descriptionIndex,
+            Integer quantityIndex,
+            Integer reorderPointIndex,
+            Integer unitCostIndex,
+            Integer compatibleModelsIndex,
+            boolean isPositional) {
+
+        public static SparePartCsvHeaderMap defaultPositional() {
+            return new SparePartCsvHeaderMap(0, 1, 2, 3, 4, null, true);
+        }
+
+        public static SparePartCsvHeaderMap fromHeaderRow(java.util.List<String> headers) {
+            Integer partNum = null;
+            Integer desc = null;
+            Integer qty = null;
+            Integer minStock = null;
+            Integer cost = null;
+            Integer models = null;
+
+            for (int i = 0; i < headers.size(); i++) {
+                String header = headers.get(i).trim().toLowerCase(java.util.Locale.ROOT);
+                if (isPartNumberHeader(header)) {
+                    if (partNum == null) partNum = i;
+                } else if (isDescriptionHeader(header)) {
+                    if (desc == null) desc = i;
+                } else if (isQuantityHeader(header)) {
+                    if (qty == null) qty = i;
+                } else if (isReorderPointHeader(header)) {
+                    if (minStock == null) minStock = i;
+                } else if (isUnitCostHeader(header)) {
+                    if (cost == null) cost = i;
+                } else if (isCompatibleModelsHeader(header)) {
+                    if (models == null) models = i;
+                }
+            }
+
+            if (partNum == null) partNum = 0;
+            if (desc == null) desc = 1;
+            if (qty == null) qty = 2;
+            if (minStock == null) minStock = 3;
+
+            return new SparePartCsvHeaderMap(partNum, desc, qty, minStock, cost, models, false);
+        }
+
+        /**
+         * Validates that all mandatory spare part fields have resolved column indices.
+         *
+         * @return true if mandatory header fields are mapped
+         */
+        public boolean hasValidMandatoryHeaders() {
+            return partNumberIndex != null && descriptionIndex != null
+                    && quantityIndex != null && reorderPointIndex != null;
+        }
+
+        /**
+         * Returns a human-readable log summary of resolved CSV column indices.
+         *
+         * @return formatted mapping summary string
+         */
+        public String toMappingSummary() {
+            return String.format(
+                    "CSV Header Mapping [PartNumber: %d, Description: %d, Quantity: %d, ReorderPoint: %d, UnitCost: %s, CompatibleModels: %s, Positional: %b]",
+                    partNumberIndex, descriptionIndex, quantityIndex, reorderPointIndex,
+                    unitCostIndex != null ? unitCostIndex.toString() : "N/A",
+                    compatibleModelsIndex != null ? compatibleModelsIndex.toString() : "N/A",
+                    isPositional);
+        }
+
+        private static boolean isPartNumberHeader(String h) {
+            return h.contains("part") && (h.contains("num") || h.contains("code") || h.contains("#") || h.equals("part number") || h.equals("partnumber") || h.equals("part_number"));
+        }
+
+        private static boolean isDescriptionHeader(String h) {
+            return h.contains("name") || h.contains("desc") || h.contains("item") || h.contains("title");
+        }
+
+        private static boolean isQuantityHeader(String h) {
+            return h.contains("quantity") || h.contains("qty") || (h.contains("stock") && !h.contains("min") && !h.contains("reorder"));
+        }
+
+        private static boolean isReorderPointHeader(String h) {
+            return h.contains("min") || h.contains("reorder") || h.contains("threshold");
+        }
+
+        private static boolean isUnitCostHeader(String h) {
+            return h.contains("cost") || h.contains("price") || h.contains("unit");
+        }
+
+        private static boolean isCompatibleModelsHeader(String h) {
+            return h.contains("model") || h.contains("compatib");
+        }
     }
 
 private void validateSparePart(SparePart sparePart) {

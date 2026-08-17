@@ -133,7 +133,6 @@ const consultLevel = (c) => {
 
 const adherenceRisk = (a) => (a.medAdherence < 80 || a.apptAdherence < 85 ? "high" : a.medAdherence < 90 ? "medium" : "low");
 
-
 /* ------------------------------------------------------------------ *
  *  Small presentational components
  * ------------------------------------------------------------------ */
@@ -147,15 +146,6 @@ const adherenceRisk = (a) => (a.medAdherence < 80 || a.apptAdherence < 85 ? "hig
 
 
 
-
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
-    </div>
-  );
-}
 
 function QualityMeter({ label, value, icon: Icon, tone = "sky" }) {
   const color = value >= 90 ? "text-emerald-400" : value >= 75 ? "text-amber-400" : "text-rose-400";
@@ -625,18 +615,18 @@ export default function TelehealthHub({ onNavigate }) {
       : activeTab === "adherence"
         ? ["id", "patient", "medAdherence", "apptAdherence", "tasksDone", "tasksTotal", "risk", "nextVisit"]
         : ["id", "provider", "specialty", "patient", "status", "durationMin", "device", "location", "video", "audio", "latencyMs"];
-    const table = [
-      header,
+    const csv = [
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "vitals"
           ? [r.id, r.name, r.condition, r.vitals.hr, r.vitals.sbp, r.vitals.spo2, r.vitals.glucose, r.vitals.weight, r.compliance, r.flags.join(" | ")]
           : activeTab === "adherence"
             ? [r.id, r.patient, r.medAdherence, r.apptAdherence, r.tasksDone, r.tasksTotal, adherenceRisk(r), r.nextVisit]
             : [r.id, r.provider, r.specialty, r.patient, r.status, r.durationMin, r.device, r.location, r.quality.video, r.quality.audio, r.quality.latencyMs]
-        )
+        ).map(csvEscape).join(",")
       ),
-    ];
-    downloadCsv(`medtrack-telehealth-${activeTab}-${Date.now()}.csv`, table);
+    ].join("\n");
+    downloadCsv(`medtrack-telehealth-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");

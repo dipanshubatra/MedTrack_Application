@@ -175,12 +175,7 @@ export default function SurgicalRoboticsHub() {
   const [priorityFilter, setPriorityFilter] = useState("All");
   const [instFilter, setInstFilter] = useState("All");
 
-  const [toasts, setToasts] = useState([]);
-  const toast = useCallback((msg, sev = "Low") => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-4), { id, msg, sev }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
-  }, []);
+  const { toasts, toast } = useToastTray();
 
   const [robots, setRobots] = useState(() => ROBOTS.map((r) => ({ ...r })));
   const [orList, setOrList] = useState(() => OR_SCHEDULE.map((o) => ({ ...o })));
@@ -276,35 +271,16 @@ export default function SurgicalRoboticsHub() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* toast stack */}
-      <div className="fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
-            {t.sev === "High" || t.sev === "Critical" ? (
-              <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
-            ) : t.sev === "Medium" ? (
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-            ) : (
-              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-            )}
-            <p className="text-xs text-slate-300">{t.msg}</p>
-          </div>
-        ))}
-      </div>
+      <ToastTray toasts={toasts} />
 
       {/* header */}
       <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-              <Bot size={24} className="text-emerald-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100">Surgical Robotics &amp; OR Orchestration Hub</h1>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Robot fleet · OR scheduling &amp; utilization · live procedure telemetry — AAMI/IEC 80601-2-77 aligned
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            icon={<Bot size={24} className="text-emerald-400" />}
+            title="Surgical Robotics &amp; OR Orchestration Hub"
+            subtitle="Robot fleet · OR scheduling &amp; utilization · live procedure telemetry — AAMI/IEC 80601-2-77 aligned"
+          />
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-2 py-1.5">
               <button
@@ -408,10 +384,7 @@ export default function SurgicalRoboticsHub() {
 
             {/* firmware strip */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Layers size={16} className="text-purple-400" />
-                <h2 className="text-sm font-semibold text-slate-100">Fleet Firmware &amp; Service Posture</h2>
-              </div>
+              <PanelHeader icon={<Layers size={16} className="text-purple-400" />} title="Fleet Firmware &amp; Service Posture" />
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {["v5.2.1", "v4.1.2", "v3.9.0", "v2.8.4"].map((fw) => {
                   const count = robots.filter((r) => r.firmware === fw).length;
@@ -447,14 +420,12 @@ export default function SurgicalRoboticsHub() {
 
             {/* OR board */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Calendar size={16} className="text-emerald-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Operating Room Board</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredOr.length} rooms</span>
-                </div>
-                <span className="text-[11px] text-slate-500">live progress · priority-coded</span>
-              </div>
+              <SectionHeader
+                icon={<Calendar size={16} className="text-emerald-400" />}
+                title="Operating Room Board"
+                badge={`${filteredOr.length} rooms`}
+                right="live progress · priority-coded"
+              />
               {filteredOr.length === 0 ? (
                 <EmptyState icon={Bot} message="No OR cases match the current filters." />
               ) : (
@@ -579,14 +550,12 @@ export default function SurgicalRoboticsHub() {
 
             {/* instrument lifecycle */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60">
-              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <HardDrive size={16} className="text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Instrument Lifecycle &amp; Sterility</h2>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{filteredInstruments.length} instruments</span>
-                </div>
-                <span className="text-[11px] text-slate-500">10-use limit · AAMI ST79 sterilization tracking</span>
-              </div>
+              <SectionHeader
+                icon={<HardDrive size={16} className="text-amber-400" />}
+                title="Instrument Lifecycle &amp; Sterility"
+                badge={`${filteredInstruments.length} instruments`}
+                right="10-use limit · AAMI ST79 sterilization tracking"
+              />
               {filteredInstruments.length === 0 ? (
                 <EmptyState icon={Bot} message="No instruments match the current filters." />
               ) : (
@@ -745,9 +714,9 @@ export default function SurgicalRoboticsHub() {
         </Modal>
       )}
 
-      <footer className="border-t border-slate-800 px-6 py-4 text-center text-[10px] text-slate-600">
+      <Footer>
         Surgical Robotics &amp; OR Orchestration Hub — IEC 80601-2-77, AAMI ST79, ISO 13485 · simulation environment · not connected to live devices
-      </footer>
+      </Footer>
     </div>
   );
 }

@@ -139,7 +139,6 @@ const unitStatus = (u) => (occupancyPct(u) >= 100 ? "critical" : occupancyPct(u)
 
 const esiTone = (esi) => ESI_META[esi].tone;
 
-
 /* ------------------------------------------------------------------ *
  *  Small presentational components
  * ------------------------------------------------------------------ */
@@ -151,15 +150,6 @@ const esiTone = (esi) => ESI_META[esi].tone;
 
 
 
-
-function ProgressBar({ pct, tone = "sky" }) {
-  const cls = { sky: "bg-sky-500", rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500", violet: "bg-violet-500" }[tone] || "bg-sky-500";
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${cls} transition-all duration-700`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
-    </div>
-  );
-}
 
 function EsiPad({ esi }) {
   const meta = ESI_META[esi] || ESI_META[3];
@@ -666,18 +656,18 @@ export default function EmergencyTriageHub({ onNavigate }) {
       : activeTab === "routing"
         ? ["id", "unit", "origin", "dest", "etaTicks", "acuity", "lightsSirens", "status", "route"]
         : ["id", "name", "mrn", "esi", "chiefComplaint", "zone", "disposition", "hr", "spo2"];
-    const table = [
-      header,
+    const csv = [
+      header.map(csvEscape).join(","),
       ...rows.map((r) =>
         (activeTab === "beds"
           ? [r.id, r.name, r.type, r.total, r.occupied, r.boarding, r.predictedDemand]
           : activeTab === "routing"
             ? [r.id, r.unit, r.origin, r.dest, r.etaTicks, r.acuity, r.lightsSirens, r.status, r.route]
             : [r.id, r.name, r.mrn, r.esi, r.chiefComplaint, r.zone, r.disposition, r.vitals.hr, r.vitals.spo2]
-        )
+        ).map(csvEscape).join(",")
       ),
-    ];
-    downloadCsv(`medtrack-ems-${activeTab}-${Date.now()}.csv`, table);
+    ].join("\n");
+    downloadCsv(`medtrack-ems-${activeTab}-${Date.now()}.csv`, csv);
     window.setTimeout(() => {
       setExporting(false);
       pushToast("Export complete", `${rows.length} rows written to CSV · audit entry logged`, "low");
