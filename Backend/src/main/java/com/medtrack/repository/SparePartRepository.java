@@ -33,17 +33,21 @@ public interface SparePartRepository extends JpaRepository<SparePart, Long> {
             @Param("hospitalId") Long hospitalId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM SparePart s WHERE s.hospitalId = :hospitalId AND s.partNumber = :partNumber AND s.deleted = false")
+    @Query("SELECT s FROM SparePart s WHERE s.hospitalId = :hospitalId AND LOWER(s.partNumber) = LOWER(:partNumber) AND s.deleted = false")
     Optional<SparePart> findActiveByHospitalIdAndPartNumberForUpdate(
             @Param("hospitalId") Long hospitalId,
             @Param("partNumber") String partNumber);
 
-    boolean existsByHospitalIdAndPartNumberAndDeletedFalse(Long hospitalId, String partNumber);
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM SparePart s WHERE s.hospitalId = :hospitalId AND LOWER(s.partNumber) = LOWER(:partNumber) AND s.deleted = false")
+    boolean existsByHospitalIdAndPartNumberAndDeletedFalse(
+            @Param("hospitalId") Long hospitalId,
+            @Param("partNumber") String partNumber);
 
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM SparePart s WHERE s.hospitalId = :hospitalId AND LOWER(s.partNumber) = LOWER(:partNumber) AND s.id <> :id AND s.deleted = false")
     boolean existsByHospitalIdAndPartNumberAndIdNotAndDeletedFalse(
-            Long hospitalId,
-            String partNumber,
-            Long id);
+            @Param("hospitalId") Long hospitalId,
+            @Param("partNumber") String partNumber,
+            @Param("id") Long id);
 
     @Query("SELECT s FROM SparePart s WHERE s.hospitalId = :hospitalId AND s.deleted = false AND s.stockLevel <= s.reorderPoint")
     List<SparePart> findLowStockPartsByHospitalId(@Param("hospitalId") Long hospitalId);

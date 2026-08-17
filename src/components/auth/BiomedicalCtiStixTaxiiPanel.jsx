@@ -31,13 +31,17 @@ import {
   HardDrive,
   Radio,
   Share2,
-  Tag
+  Tag,
+  Copy,
+  Server
 } from "lucide-react";
 import {
   getCtiStixTaxiiInventory,
   shareStixThreatIndicator,
   syncTaxiiFeed,
-  getCtiStixTaxiiStandards
+  getCtiStixTaxiiStandards,
+  getTaxiiEndpoints,
+  exportStixBundleJson
 } from "../../services/BiomedicalCtiStixTaxiiService";
 import "../../pages/auth/auth.css";
 
@@ -76,18 +80,21 @@ export default function BiomedicalCtiStixTaxiiPanel() {
   const [tlpMarking, setTlpMarking] = useState("TLP:AMBER");
   const [stixPattern, setStixPattern] = useState("[network-traffic:dst_port = 8443]");
   const [description, setDescription] = useState("");
+  const [exportedJson, setExportedJson] = useState("");
+  const [copiedJson, setCopiedJson] = useState(false);
 
   // Load telemetry
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [feedList, stdList] = await Promise.all([
+      const [feedList, endpointList, stdList] = await Promise.all([
         getCtiStixTaxiiInventory().catch(() => []),
         getTaxiiEndpoints().catch(() => []),
         getCtiStixTaxiiStandards().catch(() => [])
       ]);
 
       setFeeds(feedList);
+      setEndpoints(endpointList);
       setStandards(stdList);
 
       if (feedList.length > 0) {

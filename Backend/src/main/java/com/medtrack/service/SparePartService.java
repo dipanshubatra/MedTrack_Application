@@ -16,7 +16,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +38,24 @@ public class SparePartService {
                 .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
         return hospitalRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
+                .orElseGet(() -> resolveHospitalForTechnician(user, username));
+    }
+
+    private Hospital resolveHospitalForTechnician(User user, String username) {
+        if ("technician".equalsIgnoreCase(user.getRole())) {
+            String organization = user.getOrganization();
+            if (organization != null && !organization.isBlank()) {
+                List<Hospital> matchingHospitals =
+                        hospitalRepository.findByNameIgnoreCaseAndTrimmed(organization.trim());
+                if (!matchingHospitals.isEmpty()) {
+                    return matchingHospitals.get(0);
+                }
+            }
+            throw new ResourceNotFoundException(
+                    "Hospital profile not found for technician organization: "
+                            + (user.getOrganization() != null && !user.getOrganization().isBlank() ? user.getOrganization() : "unassigned"));
+        }
+        throw new ResourceNotFoundException("Hospital profile not found for user: " + username);
     }
 
     public List<SparePartResponse> getAllSpareParts(String username) {
@@ -217,29 +237,167 @@ public class SparePartService {
             return;
         }
 
+        Map<String, Integer> aggregatedQuantities = new LinkedHashMap<>();
+        Map<String, String> displayPartNumbers = new LinkedHashMap<>();
+
         for (com.medtrack.dto.SparePartDeductionItem item : items) {
-            if (item.getPartNumber() == null || item.getPartNumber().isBlank()) {
+            if (item == null || item.getPartNumber() == null || item.getPartNumber().isBlank()) {
                 continue;
             }
-            String partNumber = item.getPartNumber().trim();
+            String trimmed = item.getPartNumber().trim();
+            String normalizedKey = trimmed.toUpperCase(Locale.ROOT);
             int quantity = item.getQuantity() != null && item.getQuantity() > 0 ? item.getQuantity() : 1;
 
-            SparePart part = sparePartRepository
-                    .findActiveByHospitalIdAndPartNumberForUpdate(hospitalId, partNumber)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Spare part with part number '" + partNumber + "' not found in hospital inventory"));
+            aggregatedQuantities.put(normalizedKey, aggregatedQuantities.getOrDefault(normalizedKey, 0) + quantity);
+            displayPartNumbers.putIfAbsent(normalizedKey, trimmed);
+        }
 
-            if (part.getStockLevel() < quantity) {
-                throw new IllegalArgumentException("Insufficient stock for spare part: " + partNumber
-                        + ". Available: " + part.getStockLevel() + ", Required: " + quantity);
+        for (Map.Entry<String, Integer> entry : aggregatedQuantities.entrySet()) {
+            String normalizedKey = entry.getKey();
+            String displayPartNumber = displayPartNumbers.get(normalizedKey);
+            int requiredQuantity = entry.getValue();
+
+            SparePart part = sparePartRepository
+                    .findActiveByHospitalIdAndPartNumberForUpdate(hospitalId, displayPartNumber)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Spare part with part number '" + displayPartNumber + "' not found in hospital inventory"));
+
+            if (part.getStockLevel() < requiredQuantity) {
+                throw new IllegalArgumentException("Insufficient stock for spare part: " + displayPartNumber
+                        + ". Available: " + part.getStockLevel() + ", Required: " + requiredQuantity);
             }
 
-            part.setStockLevel(part.getStockLevel() - quantity);
+            part.setStockLevel(part.getStockLevel() - requiredQuantity);
             sparePartRepository.save(part);
         }
     }
 
-    private void validateSparePart(SparePart sparePart) {
+    @Transactional
+    public com.medtrack.dto.SparePartImportSummary bulkImport(org.springframework.web.multipart.MultipartFile file, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        com.medtrack.dto.SparePartImportSummary summary = new com.medtrack.dto.SparePartImportSummary();
+        summary.setFailures(new java.util.ArrayList<>());
+        
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("CSV file is empty");
+        }
+        
+        String csvContent;
+        try {
+            csvContent = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Failed to read file", e);
+        }
+        
+        java.util.List<String> records;
+        try {
+            records = com.medtrack.util.CsvSupport.splitRecords(csvContent);
+        } catch (com.medtrack.util.CsvSupport.MalformedCsvException e) {
+            throw new IllegalArgumentException("Malformed CSV: " + e.getMessage());
+        }
+        
+        if (records.isEmpty()) {
+            throw new IllegalArgumentException("CSV file contains no records");
+        }
+        
+        int startIndex = 0;
+        java.util.List<String> firstRow = com.medtrack.util.CsvSupport.parseLine(records.get(0));
+        if (!firstRow.isEmpty() && firstRow.get(0).toLowerCase(Locale.ROOT).contains("part")) {
+            startIndex = 1;
+        }
+        
+        java.util.List<SparePart> validParts = new java.util.ArrayList<>();
+        int processedRows = 0;
+        
+        for (int i = startIndex; i < records.size(); i++) {
+            processedRows++;
+            String rowData = records.get(i);
+            try {
+                java.util.List<String> fields = com.medtrack.util.CsvSupport.parseLine(rowData);
+                if (fields.size() < 4) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Insufficient columns. Expected at least 4."));
+                    continue;
+                }
+                
+                String partNumber = trimToNull(fields.get(0));
+                String description = trimToNull(fields.get(1));
+                String quantityStr = trimToNull(fields.get(2));
+                String minStockStr = trimToNull(fields.get(3));
+                
+                if (partNumber == null || description == null || quantityStr == null || minStockStr == null) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Missing required fields"));
+                    continue;
+                }
+                
+                int stockLevel;
+                int reorderPoint;
+                try {
+                    stockLevel = Integer.parseInt(quantityStr);
+                    reorderPoint = Integer.parseInt(minStockStr);
+                } catch (NumberFormatException e) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Quantity and minimum stock must be numeric"));
+                    continue;
+                }
+                
+                if (stockLevel < 0 || reorderPoint < 0) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Quantity and minimum stock cannot be negative"));
+                    continue;
+                }
+                
+                Double unitCost = 0.0;
+                if (fields.size() >= 5 && trimToNull(fields.get(4)) != null) {
+                    try {
+                        unitCost = Double.parseDouble(trimToNull(fields.get(4)));
+                        if (unitCost < 0.0 || !Double.isFinite(unitCost)) {
+                            summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Unit cost must be a non-negative finite number"));
+                            continue;
+                        }
+                    } catch (NumberFormatException e) {
+                        summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Unit cost must be numeric"));
+                        continue;
+                    }
+                }
+                
+                final String pNum = partNumber;
+                if (validParts.stream().anyMatch(p -> p.getPartNumber().equalsIgnoreCase(pNum))) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Duplicate part number in import file"));
+                    continue;
+                }
+                
+                if (sparePartRepository.existsByHospitalIdAndPartNumberAndDeletedFalse(hospital.getId(), partNumber)) {
+                    summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, "Spare part with part number already exists"));
+                    continue;
+                }
+                
+                SparePart part = SparePart.builder()
+                        .hospitalId(hospital.getId())
+                        .partNumber(partNumber)
+                        .description(description)
+                        .stockLevel(stockLevel)
+                        .reorderPoint(reorderPoint)
+                        .unitCost(unitCost)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .deleted(false)
+                        .build();
+                        
+                validParts.add(part);
+            } catch (Exception e) {
+                summary.getFailures().add(new com.medtrack.dto.SparePartImportSummary.RowFailure(processedRows, rowData, e.getMessage() != null ? e.getMessage() : "Invalid data"));
+            }
+        }
+        
+        if (!validParts.isEmpty()) {
+            sparePartRepository.saveAll(validParts);
+        }
+        
+        summary.setTotalRows(processedRows);
+        summary.setSuccessCount(validParts.size());
+        summary.setFailureCount(summary.getFailures().size());
+        
+        return summary;
+    }
+
+private void validateSparePart(SparePart sparePart) {
         if (sparePart == null) {
             throw new IllegalArgumentException("Spare part payload is required");
         }

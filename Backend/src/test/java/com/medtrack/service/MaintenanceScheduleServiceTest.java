@@ -109,7 +109,303 @@ class MaintenanceScheduleServiceTest {
         assertNotNull(revision.getAmendedAt());
     }
 
+    @Test
+    void amendScheduleUpdatesMaintenanceTypeAndRecordsRevision() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .maintenanceType("Full Calibration")
+                .reason("Scheduled calibration cycle")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertSame(task, result);
+        assertEquals("Full Calibration", task.getMaintenanceType());
+        assertEquals(3, task.getScheduleRevision());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        MaintenanceScheduleRevision revision = revisionCaptor.getValue();
+        assertEquals("Inspection", revision.getPreviousMaintenanceType());
+        assertEquals("Full Calibration", revision.getNewMaintenanceType());
+        assertTrue(revision.getChangedFields().contains("maintenanceType"));
+    }
+
+    @Test
+    void amendScheduleUpdatesDescriptionAndRecordsRevision() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .description("Updated calibration instructions for technician")
+                .reason("Scope updated by engineering")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertSame(task, result);
+        assertEquals("Updated calibration instructions for technician", task.getDescription());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        MaintenanceScheduleRevision revision = revisionCaptor.getValue();
+        assertEquals("Original instructions", revision.getPreviousDescription());
+        assertEquals("Updated calibration instructions for technician", revision.getNewDescription());
+        assertTrue(revision.getChangedFields().contains("description"));
+    }
+
+    @Test
+    void amendScheduleUpdatesPriorityAndRecordsRevision() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .priority("critical")
+                .reason("Equipment reported malfunction")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertSame(task, result);
+        assertEquals("Critical", task.getPriority());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        MaintenanceScheduleRevision revision = revisionCaptor.getValue();
+        assertEquals("Normal", revision.getPreviousPriority());
+        assertEquals("Critical", revision.getNewPriority());
+        assertTrue(revision.getChangedFields().contains("priority"));
+    }
+
+    @Test
+    void amendScheduleUpdatesRecurrencePeriodDaysAndRecordsRevision() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .recurrencePeriodDays(60)
+                .reason("Increased maintenance interval")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertSame(task, result);
+        assertEquals(60, task.getRecurrencePeriodDays());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        MaintenanceScheduleRevision revision = revisionCaptor.getValue();
+        assertEquals(30, revision.getPreviousRecurrencePeriodDays());
+        assertEquals(60, revision.getNewRecurrencePeriodDays());
+        assertTrue(revision.getChangedFields().contains("recurrencePeriodDays"));
+    }
+
+    @Test
+    void amendScheduleUpdatesAllFieldsSimultaneouslyAndRecordsRevision() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        LocalDate newDeadline = LocalDate.now().plusDays(15);
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .newDeadline(newDeadline)
+                .maintenanceType("Complete Overhaul")
+                .description("Overhaul all worn mechanical components")
+                .priority("High")
+                .recurrencePeriodDays(90)
+                .reason("Comprehensive schedule update")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertSame(task, result);
+        assertEquals(newDeadline, task.getDeadline());
+        assertEquals("Complete Overhaul", task.getMaintenanceType());
+        assertEquals("Overhaul all worn mechanical components", task.getDescription());
+        assertEquals("High", task.getPriority());
+        assertEquals(90, task.getRecurrencePeriodDays());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        MaintenanceScheduleRevision revision = revisionCaptor.getValue();
+
+        List<String> changedFieldsList = List.of(revision.getChangedFields().split(","));
+        assertTrue(changedFieldsList.contains("deadline"));
+        assertTrue(changedFieldsList.contains("maintenanceType"));
+        assertTrue(changedFieldsList.contains("description"));
+        assertTrue(changedFieldsList.contains("priority"));
+        assertTrue(changedFieldsList.contains("recurrencePeriodDays"));
+    }
+
+    @Test
+    void amendScheduleRejectsInvalidPriorityAndNegativeRecurrencePeriod() {
+        arrangeOwnedHospitalTask();
+
+        MaintenanceScheduleAmendmentRequest invalidPriority = MaintenanceScheduleAmendmentRequest.builder()
+                .priority("SuperUrgent")
+                .reason("Invalid priority test")
+                .build();
+        assertEquals("Priority must be Normal, High, or Critical", assertThrows(
+                IllegalArgumentException.class,
+                () -> service.amendSchedule(44L, invalidPriority, hospitalAuthentication)).getMessage());
+
+        MaintenanceScheduleAmendmentRequest negativeRecurrence = MaintenanceScheduleAmendmentRequest.builder()
+                .recurrencePeriodDays(-10)
+                .reason("Negative recurrence test")
+                .build();
+        assertEquals("Recurrence period days must not be negative", assertThrows(
+                IllegalArgumentException.class,
+                () -> service.amendSchedule(44L, negativeRecurrence, hospitalAuthentication)).getMessage());
+
+        verify(taskRepository, never()).save(any());
+        verify(revisionRepository, never()).save(any());
+    }
+
+    @Test
+    void amendScheduleRejectsBlankMaintenanceTypeWhenTaskHasNoType() {
+        task.setMaintenanceType("   ");
+        arrangeOwnedHospitalTask();
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .reason("Blank type test")
+                .build();
+
+        assertEquals("Maintenance type cannot be blank", assertThrows(
+                IllegalArgumentException.class,
+                () -> service.amendSchedule(44L, request, hospitalAuthentication)).getMessage());
+
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void amendSchedulePreservesUnchangedFieldsWhenOnlyUpdatingDeadline() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocalDate newDeadline = LocalDate.now().plusDays(14);
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .newDeadline(newDeadline)
+                .reason("Rescheduled due to holiday")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertSame(task, result);
+        assertEquals(newDeadline, task.getDeadline());
+        assertEquals("Inspection", task.getMaintenanceType());
+        assertEquals("Original instructions", task.getDescription());
+        assertEquals("Normal", task.getPriority());
+        assertEquals(30, task.getRecurrencePeriodDays());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        MaintenanceScheduleRevision revision = revisionCaptor.getValue();
+        assertEquals(List.of("deadline"), List.of(revision.getChangedFields().split(",")));
+    }
+
+    @Test
+    void amendScheduleTrimsWhitespaceFromRequestedMaintenanceTypeAndDescription() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .maintenanceType("   Electrical Audit   ")
+                .description("   Inspect main breaker panels   ")
+                .reason("  Standardizing task formatting  ")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertSame(task, result);
+        assertEquals("Electrical Audit", task.getMaintenanceType());
+        assertEquals("Inspect main breaker panels", task.getDescription());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        MaintenanceScheduleRevision revision = revisionCaptor.getValue();
+        assertEquals("Electrical Audit", revision.getNewMaintenanceType());
+        assertEquals("Inspect main breaker panels", revision.getNewDescription());
+        assertEquals("Standardizing task formatting", revision.getReason());
+    }
+
+    @Test
+    void amendScheduleNormalizesPriorityCaseInsensitively() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceScheduleAmendmentRequest requestHigh = MaintenanceScheduleAmendmentRequest.builder()
+                .priority("HIGH")
+                .reason("Escalated priority to high")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, requestHigh, hospitalAuthentication);
+
+        assertEquals("High", result.getPriority());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        assertEquals("High", revisionCaptor.getValue().getNewPriority());
+    }
+
+    @Test
+    void amendScheduleAcceptsZeroRecurrencePeriodDays() {
+        arrangeOwnedHospitalTask();
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .recurrencePeriodDays(0)
+                .reason("One-off non-recurring task adjustment")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertEquals(0, result.getRecurrencePeriodDays());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        assertEquals(0, revisionCaptor.getValue().getNewRecurrencePeriodDays());
+    }
+
+    @Test
+    void amendScheduleIncrementsRevisionSequentiallyAcrossMultipleAmendments() {
+        arrangeOwnedHospitalTask();
+        task.setScheduleRevision(5);
+        when(taskRepository.save(task)).thenReturn(task);
+        when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceScheduleAmendmentRequest request = MaintenanceScheduleAmendmentRequest.builder()
+                .priority("High")
+                .reason("Sequential revision increment test")
+                .build();
+
+        MaintenanceTask result = service.amendSchedule(44L, request, hospitalAuthentication);
+
+        assertEquals(6, result.getScheduleRevision());
+
+        ArgumentCaptor<MaintenanceScheduleRevision> revisionCaptor =
+                ArgumentCaptor.forClass(MaintenanceScheduleRevision.class);
+        verify(revisionRepository).save(revisionCaptor.capture());
+        assertEquals(6, revisionCaptor.getValue().getRevisionNumber());
+    }
 
     @Test
     void generatedTaskAmendmentUsesOwnedPolicySlaWindows() {

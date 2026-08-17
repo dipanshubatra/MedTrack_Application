@@ -31,6 +31,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
@@ -105,6 +108,7 @@ public class EquipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
     }
 
+    @Cacheable(value = "equipmentDashboard", key = "#username")
     public EquipmentDashboardResponse getDashboardOverview(String username) {
 
         Hospital hospital = getHospitalForUser(username);
@@ -251,6 +255,7 @@ public class EquipmentService {
      * @throws IllegalArgumentException  if the delta is zero, or would drive quantity negative
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment adjustStock(Long id, StockAdjustmentRequest request, String username) {
         if (request == null || request.getDelta() == null) {
             throw new IllegalArgumentException("Stock delta is required");
@@ -800,6 +805,7 @@ public class EquipmentService {
      * If no equipmentCode is provided by the caller, auto-generates one
      * using a unique UUID.
      */
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment addEquipment(Equipment equipment , String username) {
         Hospital hospital = getHospitalForUser(username);
         equipment.setHospital(hospital);
@@ -832,13 +838,13 @@ public class EquipmentService {
             throw new IllegalArgumentException("Purchase cost cannot be negative");
         }
 
-        if (equipment.getEquipmentCode() != null &&
-                equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
+        if (equipment.getEquipmentCode() != null && !equipment.getEquipmentCode().isBlank() &&
+                equipmentRepository.findByHospitalIdAndEquipmentCode(hospital.getId(), equipment.getEquipmentCode().trim()).isPresent()) {
             throw new IllegalArgumentException("Equipment Code already exists.");
         }
 
-        if (equipment.getSerialNumber() != null &&
-                equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
+        if (equipment.getSerialNumber() != null && !equipment.getSerialNumber().isBlank() &&
+                equipmentRepository.findByHospitalIdAndSerialNumber(hospital.getId(), equipment.getSerialNumber().trim()).isPresent()) {
             throw new IllegalArgumentException("Serial Number already exists.");
         }
 
@@ -874,30 +880,42 @@ public class EquipmentService {
     /**
      * Deletes an equipment record by ID.
      */
-    public void deleteEquipment(Long id , String username) {
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
+    public void deleteEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
-        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
+                .orElse(null);
+                
+        if (equipment == null) {
+            if (equipmentRepository.findByIdAndDeletedTrue(id).isPresent()) {
+                return; // Idempotent success
+            }
+            throw new ResourceNotFoundException("Equipment not found or you don't have access");
+        }
 
         logger.info(
                 "Equipment deleted | User: {} | Equipment ID: {} | Name: {}",
-                username,
-                equipment.getId(),
-                equipment.getName()
+                username, equipment.getId(), equipment.getName()
         );
-        equipmentRepository.delete(equipment);
+
+        equipment.setDeleted(true);
+        equipment.setDeletedAt(LocalDateTime.now());
+        equipment.setDeletedBy(username);
+        equipmentRepository.save(equipment);
     }
 
     /**
      * Updates an existing equipment record's fields.
      */
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment updateEquipment(Long id, Equipment equipmentDetails , String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
 
-        if (equipmentDetails.getEquipmentCode() != null) {
-            equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
+        if (equipmentDetails.getEquipmentCode() != null && !equipmentDetails.getEquipmentCode().isBlank()) {
+            String trimmedCode = equipmentDetails.getEquipmentCode().trim();
+            equipmentRepository.findByHospitalIdAndEquipmentCode(hospital.getId(), trimmedCode)
                     .ifPresent(existing -> {
                         if (!existing.getId().equals(id)) {
                             throw new IllegalArgumentException("Equipment Code already exists.");
@@ -905,8 +923,9 @@ public class EquipmentService {
                     });
         }
 
-        if (equipmentDetails.getSerialNumber() != null) {
-            equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
+        if (equipmentDetails.getSerialNumber() != null && !equipmentDetails.getSerialNumber().isBlank()) {
+            String trimmedSerial = equipmentDetails.getSerialNumber().trim();
+            equipmentRepository.findByHospitalIdAndSerialNumber(hospital.getId(), trimmedSerial)
                     .ifPresent(existing -> {
                         if (!existing.getId().equals(id)) {
                             throw new IllegalArgumentException("Serial Number already exists.");
@@ -1004,6 +1023,7 @@ public class EquipmentService {
      * actor and contents.</p>
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public EquipmentImportSummary importEquipmentFromCsv(MultipartFile file, String username) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("CSV file is empty or missing");
@@ -1639,43 +1659,41 @@ public class EquipmentService {
      * {@link #importEquipmentFromCsv}.</p>
      *
      * @param username authenticated user's username
-     * @return UTF-8 encoded CSV, prefixed with a byte order mark for Excel
+     * @param response the HTTP response to write the CSV to
      */
-    public byte[] exportEquipmentCsv(String username) {
+    @Transactional(readOnly = true)
+    public void exportEquipmentCsv(String username, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         Hospital hospital = getHospitalForUser(username);
-        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
 
-        StringBuilder csv = new StringBuilder(CsvSupport.UTF8_BOM);
-        csv.append(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=equipment.csv");
 
-        for (Equipment equipment : equipmentList) {
-            csv.append(CsvSupport.encodeRow(
-                    equipment.getEquipmentCode(),
-                    equipment.getName(),
-                    equipment.getModel(),
-                    equipment.getSerialNumber(),
-                    equipment.getDepartment(),
-                    // Enum constants, not display names. The import accepts both, so the round
-                    // trip works either way, but the constant is the stable identifier.
-                    equipment.getCategory(),
-                    equipment.getStatus(),
-                    equipment.getPurchaseDate(),
-                    equipment.getWarrantyExpiry(),
-                    // Depreciation & valuation columns, so an export can feed an accounting
-                    // package or round-trip through the import without losing the finance data.
-                    equipment.getPurchaseCost(),
-                    equipment.getUsefulLifeYears(),
-                    equipment.getDepreciationMethod(),
-                    // Warranty & service contract columns (issue #703), so the report export
-                    // carries the full coverage picture and round-trips through the import.
-                    equipment.getWarrantyProvider(),
-                    equipment.getWarrantyContractNumber(),
-                    equipment.getWarrantyStartDate(),
-                    equipment.getWarrantyCoverageType(),
-                    equipment.getWarrantyTerms()));
+        try (java.io.PrintWriter writer = response.getWriter();
+             java.util.stream.Stream<Equipment> equipmentStream = equipmentRepository.findStreamByHospitalId(hospital.getId())) {
+            writer.write(CsvSupport.UTF8_BOM);
+            writer.write(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
+
+            equipmentStream.forEach(equipment -> {
+                writer.write(CsvSupport.encodeRow(
+                        equipment.getEquipmentCode(),
+                        equipment.getName(),
+                        equipment.getModel(),
+                        equipment.getSerialNumber(),
+                        equipment.getDepartment(),
+                        equipment.getCategory(),
+                        equipment.getStatus(),
+                        equipment.getPurchaseDate(),
+                        equipment.getWarrantyExpiry(),
+                        equipment.getPurchaseCost(),
+                        equipment.getUsefulLifeYears(),
+                        equipment.getDepreciationMethod(),
+                        equipment.getWarrantyProvider(),
+                        equipment.getWarrantyContractNumber(),
+                        equipment.getWarrantyStartDate(),
+                        equipment.getWarrantyCoverageType(),
+                        equipment.getWarrantyTerms()));
+            });
         }
-
-        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**
@@ -1683,6 +1701,7 @@ public class EquipmentService {
      * Sets deleted = true, deletedAt, and deletedBy instead of hard deleting.
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment archiveEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
@@ -1709,6 +1728,7 @@ public class EquipmentService {
      * Sets deleted = false, clears deletedAt and deletedBy.
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public Equipment restoreEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());
@@ -1742,6 +1762,7 @@ public class EquipmentService {
      * Only callable after 90 days from archival.
      */
     @Transactional
+    @Caching(evict = { @CacheEvict(value = "equipmentDashboard", key = "#username"), @CacheEvict(value = "financialDashboard", key = "#username") })
     public void permanentlyDeleteEquipment(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = getOwnedArchivedEquipment(id, hospital.getId());

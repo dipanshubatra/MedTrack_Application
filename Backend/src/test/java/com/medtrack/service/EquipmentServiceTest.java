@@ -627,17 +627,19 @@ public class EquipmentServiceTest {
     }
 
     @Test
-    void exportEquipmentCsv_IncludesFinanceColumns() {
+    void exportEquipmentCsv_IncludesFinanceColumns() throws Exception {
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
         when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
-        when(equipmentRepository.findByHospitalId(mockHospital.getId()))
-                .thenReturn(Collections.singletonList(mockEquipment));
+        when(equipmentRepository.findStreamByHospitalId(mockHospital.getId()))
+                .thenReturn(java.util.stream.Stream.of(mockEquipment));
 
         mockEquipment.setPurchaseCost(new BigDecimal("250000.00"));
         mockEquipment.setUsefulLifeYears(10);
         mockEquipment.setDepreciationMethod(DepreciationMethod.STRAIGHT_LINE);
 
-        byte[] csvBytes = equipmentService.exportEquipmentCsv(username);
+        org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
+        equipmentService.exportEquipmentCsv(username, response);
+        byte[] csvBytes = response.getContentAsByteArray();
         String csv = new String(csvBytes, StandardCharsets.UTF_8);
 
         String headerLine = csv.lines().findFirst().orElse("");

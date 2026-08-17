@@ -3,6 +3,7 @@ import React, { Suspense } from "react";
 import { useAuth } from "../context/AuthContext";
 import PageLoader from "../components/common/PageLoader";
 import { checkAccess, getRoute, resolveEffectivePage } from "./routeRegistry";
+import { mergePermissions, describePermissionDenial } from "../security/permissions";
 
 /**
  * Shown when a signed-in user reaches a console their role is not permitted to open.
@@ -53,7 +54,7 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
  *   - a signed-in user whose role is not on the route's allow-list gets the Access Denied page.
  */
 export default function AppRoutes({ currentPage, onNavigate, pageData }) {
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
 
   // resolveEffectivePage decides which page actually renders: the requested one, or the login
   // screen for an unauthenticated caller, or the 404 page for an unknown slug. App.jsx calls the
@@ -76,6 +77,23 @@ export default function AppRoutes({ currentPage, onNavigate, pageData }) {
     const { allowed, reason } = checkAccess(user, effectivePage);
     if (!allowed) {
       return <UnauthorizedPage onNavigate={onNavigate} message={reason} />;
+    }
+
+    // Role gates separate *kinds* of account; permission gates separate what a
+    // hospital administrator has granted a role through the RBAC console. The
+    // server's authority list is authoritative when present (mergePermissions
+    // falls back to the role matrix only until the fetch answers), so a
+    // permission revoked mid-session locks the route on the next authority poll.
+    if (route.permission) {
+      const effectivePermissions = mergePermissions(permissions, user && user.role);
+      if (!effectivePermissions.includes(route.permission)) {
+        return (
+          <UnauthorizedPage
+            onNavigate={onNavigate}
+            message={describePermissionDenial(route.permission)}
+          />
+        );
+      }
     }
 
     const Component = route.component;
