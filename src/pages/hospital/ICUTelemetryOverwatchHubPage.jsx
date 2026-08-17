@@ -977,7 +977,8 @@ export default function ICUTelemetryOverwatchHubPage() {
 
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
               <div className="flex justify-between"><span>Negative Room Pressure:</span><strong className="text-emerald-400">-14.2 Pa (ISOLATION ACTIVE)</strong></div>
-              <div className="flex justify-between"><span>Air Changes Per Hour (ACH):</span><strong className="text-cyan-300">14.5 ACH (CDC Standard > 12)</strong></div>
+              {/* &gt; rather than a bare ">": a relational operator in JSX text does not parse. */}
+              <div className="flex justify-between"><span>Air Changes Per Hour (ACH):</span><strong className="text-cyan-300">14.5 ACH (CDC Standard &gt; 12)</strong></div>
               <div className="flex justify-between"><span>HEPA Filtration Exhaust Status:</span><strong className="text-emerald-400">CLEAN (0.00% Differential Leakage)</strong></div>
             </div>
           </div>
@@ -1269,7 +1270,7 @@ export default function ICUTelemetryOverwatchHubPage() {
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
               <div>Bed: <strong className="text-white">{fluidBalanceModal.bedId}</strong></div>
               <div>Furosemide Challenge: <span className="text-cyan-300">40mg IV Push Response Optimal</span></div>
-              <div>Target Hourly Diuresis: <span className="text-emerald-400">> 100 mL/hr</span></div>
+              <div>Target Hourly Diuresis: <span className="text-emerald-400">&gt; 100 mL/hr</span></div>
             </div>
 
             <div className="flex justify-end pt-2">

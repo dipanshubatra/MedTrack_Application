@@ -825,12 +825,15 @@ export default function EnterpriseZeroTrustSecurityGovernancePage() {
               </div>
               <div className="flex justify-between text-white">
                 <span>POL-EHR-RESTRICT-01</span>
-                <span>user.role == 'PHYSICIAN' && patient.assignedFacility == user.facility</span>
+                {/* Rendered from a string literal rather than as JSX text: these are policy
+                    expressions, and a relational operator in JSX text is a parse error, not an
+                    escaping nicety. See the sibling DEA-VAULT policy below. */}
+                <span>{"user.role == 'PHYSICIAN' && patient.assignedFacility == user.facility"}</span>
                 <span className="text-emerald-400 font-bold">PERMIT_READ_WRITE</span>
               </div>
               <div className="flex justify-between text-white">
                 <span>POL-DEA-VAULT-02</span>
-                <span>user.clearanceLevel >= 4 && device.isHardwareTpm == true</span>
+                <span>{"user.clearanceLevel >= 4 && device.isHardwareTpm == true"}</span>
                 <span className="text-emerald-400 font-bold">PERMIT_DISPENSE_NARCOTICS</span>
               </div>
             </div>

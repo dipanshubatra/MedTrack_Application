@@ -11,6 +11,17 @@ import PlaybackControls from "../../components/common/PlaybackControls";
 import { ExportButton } from "../../components/common/ExportButton";
 import LiveStatus from "../../components/common/LiveStatus";
 import ToastStack, { useToasts } from "../../components/common/ToastStack";
+// The shared primitives this console renders. They were page-local components until the
+// extraction into src/components/common; the local definitions were removed then, but these
+// imports were never added, so every identifier below was a ReferenceError at first render.
+import { SEVERITY_META, SeverityBadge as Badge } from "../../components/common/SeverityBadge";
+import { StatCard } from "../../components/common/StatCard";
+import { SearchBox } from "../../components/common/SearchBox";
+import { InfoRow } from "../../components/common/InfoRow";
+import { MiniSparkline } from "../../components/common/Sparkline";
+import { StatusPill } from "../../components/common/StatusPill";
+import { TabsBar } from "../../components/common/TabsBar";
+import { InspectionModal as Modal } from "../../components/common/Modal";
 
 /* ------------------------------------------------------------------ *
  *  MedTrack Telehealth & Remote Patient Management Hub

@@ -747,12 +747,15 @@ export default function BackendAuthenticationSecurityInfrastructurePage() {
               </div>
               <div className="flex justify-between text-white">
                 <span>RULE-ABAC-ICU-01</span>
-                <span>user.role == 'INTENSIVIST' && request.resource == 'HEMODYNAMIC_STREAM'</span>
+                {/* Rendered from a string literal rather than as JSX text: these are ABAC
+                    expressions, and a relational operator in JSX text is a parse error, not an
+                    escaping nicety. See the sibling NARCOTIC rule below. */}
+                <span>{"user.role == 'INTENSIVIST' && request.resource == 'HEMODYNAMIC_STREAM'"}</span>
                 <span className="text-emerald-400 font-bold">PERMIT (0.28ms)</span>
               </div>
               <div className="flex justify-between text-white">
                 <span>RULE-ABAC-NARCOTIC-02</span>
-                <span>user.clearanceLevel >= 4 && device.isTpmVerified == true</span>
+                <span>{"user.clearanceLevel >= 4 && device.isTpmVerified == true"}</span>
                 <span className="text-emerald-400 font-bold">PERMIT (0.35ms)</span>
               </div>
             </div>

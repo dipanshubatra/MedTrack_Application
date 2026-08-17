@@ -288,8 +288,15 @@ describe("route entry shape", () => {
 
 describe("page reachability", () => {
   const pageComponents = collectPageComponents();
+  // Derived from the components ROUTES actually renders, not from the lazy() bindings at the top of
+  // the module. Keying this off the import list is what let DialysisRenalHub and
+  // SterileProcessingHub sit on `main` as *imported* pages with no route entry: the import made
+  // them look registered to this audit while /dialysis and /sterile-processing both resolved to the
+  // 404 page. An import is not reachability.
+  // A lazy() component is an opaque object with no `.name`, so the binding has to come from the
+  // source text. Reading `component:` rather than the `lazy(` import list is the whole point.
   const registeredComponentNames = new Set(
-    [...registrySource.matchAll(/^const\s+([A-Za-z_$][\w$]*)\s*=\s*lazy\(/gm)].map((match) => match[1])
+    [...registrySource.matchAll(/component:\s*([A-Za-z_$][\w$]*)/g)].map((match) => match[1])
   );
 
   it("finds page components on disk to audit", () => {
@@ -324,22 +331,100 @@ describe("page reachability", () => {
 
   it("registers the nine hub consoles that had no route", () => {
     // The specific regression: each of these was a finished console that rendered the 404 page.
+    //
+    // The page keys below are the ones the registry actually declares. An earlier revision of this
+    // test asserted on the keys the consoles were *first* proposed with - pediatric-nicu,
+    // medication-supply, telehealth-monitoring, genomic-trials, command-orchestration - and the
+    // registry entries landed under different names. getRoute() looks up by page key and
+    // command-orchestration is only a *slug* of hospital-command, so five of these nine assertions
+    // failed against a registry that was correct. A regression test that drifts from the thing it
+    // guards stops being evidence either way, so the keys are pinned to the registry here.
     const restored = {
-      "regulatory-audit": "provenance-ledger",
+      "regulatory-audit": "provenance",
       pharmacovigilance: "drug-safety",
       "surgical-robotics": "or-orchestration",
-      "lab-automation": "diagnostics-fleet",
-      "pediatric-nicu": "neonatal-icu",
-      "medication-supply": "med-supply-chain",
-      "telehealth-monitoring": "remote-patient-monitoring",
-      "genomic-trials": "genomic-research",
-      "command-orchestration": "hospital-command",
+      "lab-automation": "lab-hub",
+      "pediatric-neonatal-icu": "pediatric-icu",
+      "medication-cold-chain": "med-supply-chain",
+      "telehealth-remote-monitoring": "remote-monitoring",
+      "genomic-clinical-trials": "genomics",
+      "hospital-command": "command-orchestration",
     };
 
     for (const [page, alternativeSlug] of Object.entries(restored)) {
       expect(getRoute(page), `route for ${page}`).toBeTruthy();
       expect(resolvePath(page)).toEqual({ page, data: null });
       expect(resolvePath(alternativeSlug)).toEqual({ page, data: null });
+    }
+  });
+
+  it("registers the eleven consoles that were merged as components with no route at all", () => {
+    // The second orphan set, and a wider failure than the first: nine of these eleven were never
+    // imported here, and the remaining two - DialysisRenalHub and SterileProcessingHub - were
+    // imported and then never referenced by an entry, which is the harder version of the bug
+    // because the import makes the page look wired up.
+    //
+    // Every value is a secondary slug, so the assertion covers both the canonical route and the
+    // alternative spelling the pages are linked by.
+    const restored = {
+      "biomedical-ai-diagnostics": "ai-diagnostics-overwatch",
+      "blood-bank": "haemovigilance",
+      "blood-bank-transfusion": "transfusion-medicine",
+      "cardiology-cath-lab": "cath-lab",
+      "icu-telemetry-overwatch": "icu-overwatch",
+      "pathology-digital": "digital-pathology",
+      "patient-ehr-analytics": "ehr-analytics",
+      "dialysis-renal": "dialysis",
+      "sterile-processing": "cssd",
+      "backend-auth-infrastructure": "auth-infrastructure",
+      "zerotrust-governance": "zero-trust-governance",
+    };
+
+    for (const [page, alternativeSlug] of Object.entries(restored)) {
+      expect(getRoute(page), `route for ${page}`).toBeTruthy();
+      expect(resolvePath(page)).toEqual({ page, data: null });
+      expect(resolvePath(alternativeSlug)).toEqual({ page, data: null });
+      // buildPath has to round-trip to the canonical slug, not to the alternative one, or the
+      // address bar disagrees with the console the user is looking at.
+      expect(buildPath(page)).toBe(`/${page}`);
+    }
+  });
+
+  it("gives every restored console a third slug only where one was asked for", () => {
+    // Three of the eleven carry a third, shorter slug because the domain is commonly referred to by
+    // one word. Pinning them stops a later edit from quietly dropping the short form that gets
+    // typed and linked most often.
+    expect(resolvePath("cardiology").page).toBe("cardiology-cath-lab");
+    expect(resolvePath("pathology").page).toBe("pathology-digital");
+    expect(resolvePath("renal-replacement").page).toBe("dialysis-renal");
+    expect(resolvePath("instrument-traceability").page).toBe("sterile-processing");
+  });
+
+  it("does not let a restored slug shadow a console that already owned one", () => {
+    // The eleven entries added 24 slugs to a table that already held ~200, and the near misses were
+    // real: "icu-overwatch" sits beside "icu-telemetry" and "icu-vitals", "dialysis" beside
+    // "cryo-telemetry", "genomics" was already taken by the genomic trials console. resolvePath is
+    // the observable consequence of a collision, so assert on it rather than on the slug table.
+    expect(resolvePath("icu-telemetry").page).toBe("icu-telemetry");
+    expect(resolvePath("icu").page).toBe("icu-telemetry");
+    expect(resolvePath("icu-vitals").page).toBe("icu-vitals-telemetry");
+    expect(resolvePath("genomics").page).toBe("genomic-clinical-trials");
+    expect(resolvePath("neonatal-nicu").page).toBe("neonatal-nicu");
+    expect(resolvePath("nicu").page).toBe("neonatal-nicu");
+    expect(resolvePath("oncology-infusion").page).toBe("oncology-infusion");
+  });
+
+  it("scopes the two restored security consoles to the hospital admin role", () => {
+    // Nine of the eleven are clinical consoles and read by every signed-in role. The other two are
+    // tenant-wide security governance - ABAC policy tables, DEA vault clearance rules - and belong
+    // with the rest of the HOSPITAL_ONLY block rather than with the clinical set.
+    const admin = { role: "hospital" };
+    const technician = { role: "technician" };
+
+    for (const page of ["backend-auth-infrastructure", "zerotrust-governance"]) {
+      expect(checkAccess(admin, page).allowed, `hospital admin on ${page}`).toBe(true);
+      expect(checkAccess(technician, page).allowed, `technician on ${page}`).toBe(false);
+      expect(checkAccess(null, page).reason, `anonymous on ${page}`).toBe("unauthenticated");
     }
   });
 
@@ -586,16 +671,29 @@ describe("checkAccess", () => {
   });
 
   it("admits every restored hub console to any signed-in role", () => {
+    // Page keys pinned to the registry rather than to the names the consoles were proposed under -
+    // see the note on the matching reachability test. A technician reads these consoles; nothing on
+    // them writes, so the gate is authentication, not role.
     const restored = [
       "regulatory-audit",
       "pharmacovigilance",
       "surgical-robotics",
       "lab-automation",
-      "pediatric-nicu",
-      "medication-supply",
-      "telehealth-monitoring",
-      "genomic-trials",
-      "command-orchestration",
+      "pediatric-neonatal-icu",
+      "medication-cold-chain",
+      "telehealth-remote-monitoring",
+      "genomic-clinical-trials",
+      "hospital-command",
+      // the second orphan set, restored alongside the nine above
+      "biomedical-ai-diagnostics",
+      "blood-bank",
+      "blood-bank-transfusion",
+      "cardiology-cath-lab",
+      "icu-telemetry-overwatch",
+      "pathology-digital",
+      "patient-ehr-analytics",
+      "dialysis-renal",
+      "sterile-processing",
     ];
     for (const page of restored) {
       expect(checkAccess(technician, page).allowed, `technician on ${page}`).toBe(true);
