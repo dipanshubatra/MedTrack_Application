@@ -61,6 +61,9 @@ class EquipmentCsvServiceTest {
     @Mock
     private EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
 
+    @Mock
+    private EquipmentCsvService equipmentCsvService;
+
     @InjectMocks
     private EquipmentService equipmentService;
 
@@ -78,7 +81,7 @@ class EquipmentCsvServiceTest {
     private byte[] exportAsBytes() {
         org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
         try {
-            equipmentService.exportEquipmentCsv(USERNAME, response);
+            equipmentCsvService.exportEquipmentCsv(HOSPITAL_ID, response);
             return response.getContentAsByteArray();
         } catch (Exception e) {
             throw new RuntimeException(e);
