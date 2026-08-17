@@ -104,6 +104,7 @@ const NeonatalNicuHub = lazy(() => import("../pages/neonatal/NeonatalNicuHub"));
 // Eleven consoles that were merged as page components and never given a registry entry, so no URL
 // reached them and every one of them rendered the 404 page. They are grouped here rather than
 // interleaved above because they were restored as a set, in one change, for one reason.
+const OphthalmologyVisionHub = lazy(() => import("../pages/ophthalmology/OphthalmologyVisionHub"));
 const BiomedicalAiDiagnosticsOverwatchPage = lazy(() => import("../pages/ai/BiomedicalAiDiagnosticsOverwatchPage"));
 const BloodBankHub = lazy(() => import("../pages/bloodbank/BloodBankHub"));
 const BloodBankTransfusionHub = lazy(() => import("../pages/bloodbank/BloodBankTransfusionHub"));
@@ -298,6 +299,7 @@ export const ROUTES = [
   { page: "cardiology-cath-lab", slugs: ["cardiology-cath-lab", "cath-lab", "cardiology"], component: CardiologyCathLabHub, access: AUTHENTICATED },
   { page: "icu-telemetry-overwatch", slugs: ["icu-telemetry-overwatch", "icu-overwatch"], component: ICUTelemetryOverwatchHubPage, access: AUTHENTICATED },
   { page: "pathology-digital", slugs: ["pathology-digital", "digital-pathology", "pathology"], component: PathologyDigitalHub, access: AUTHENTICATED },
+  { page: "ophthalmology-vision", slugs: ["ophthalmology-vision", "ophthalmology", "eye-unit"], component: OphthalmologyVisionHub, access: AUTHENTICATED },
   { page: "patient-ehr-analytics", slugs: ["patient-ehr-analytics", "ehr-analytics"], component: PatientEhrAnalyticsPredictivePage, access: AUTHENTICATED },
   { page: "dialysis-renal", slugs: ["dialysis-renal", "dialysis", "renal-replacement"], component: DialysisRenalHub, access: AUTHENTICATED },
   { page: "sterile-processing", slugs: ["sterile-processing", "cssd", "instrument-traceability"], component: SterileProcessingHub, access: AUTHENTICATED },
