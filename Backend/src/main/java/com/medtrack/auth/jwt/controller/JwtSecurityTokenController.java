@@ -23,7 +23,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/auth/jwt")
-@CrossOrigin(origins = "*")
 public class JwtSecurityTokenController {
 
     private final JwtSecurityTokenService jwtService;

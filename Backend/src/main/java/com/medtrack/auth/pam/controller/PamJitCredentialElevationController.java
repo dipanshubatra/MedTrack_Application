@@ -26,7 +26,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/pam")
-@CrossOrigin(origins = "*")
 public class PamJitCredentialElevationController {
 
     private final PamJitCredentialElevationService pamService;
