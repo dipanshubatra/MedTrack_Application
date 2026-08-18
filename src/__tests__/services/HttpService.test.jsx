@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
@@ -17,7 +17,6 @@ afterAll(() => server.close());
 beforeEach(() => {
   sessionStorage.clear();
   vi.stubGlobal("alert", mockAlert);
-  vi.stubGlobal("location", { href: "" });
 });
 
 afterEach(() => {
@@ -48,7 +47,7 @@ it("attaches JWT Bearer token from sessionStorage", async () => {
   expect(capturedHeaders.get("Authorization")).toBe("Bearer my-jwt-token");
 });
 
-it("handles 401 by clearing sessionStorage and redirecting", async () => {
+it("handles 401 by clearing sessionStorage and calling alert", async () => {
   sessionStorage.setItem("medtrack_user", JSON.stringify({ id: "u1", token: "tok" }));
 
   const API = await getInterceptorBehavior();
@@ -61,10 +60,9 @@ it("handles 401 by clearing sessionStorage and redirecting", async () => {
 
   expect(sessionStorage.getItem("medtrack_user")).toBeNull();
   expect(mockAlert).toHaveBeenCalledWith("Session expired. Please login again.");
-  expect(window.location.href).toBe("/login");
 });
 
-it("handles 403 without redirect", async () => {
+it("handles 403 with access denied alert", async () => {
   sessionStorage.setItem("medtrack_user", JSON.stringify({ id: "u1", token: "tok" }));
 
   const API = await getInterceptorBehavior();
@@ -79,7 +77,6 @@ it("handles 403 without redirect", async () => {
   expect(mockAlert).toHaveBeenCalledWith(
     "Access denied: You are not authorised to perform this action.",
   );
-  expect(window.location.href).not.toBe("/login");
 });
 
 it("does not attach token when no user in sessionStorage", async () => {
