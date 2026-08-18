@@ -9,6 +9,7 @@ import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.dto.MaintenanceWorkOrderResponse;
 import com.medtrack.dto.MaintenanceWorkOrderStatusRequest;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentDisposalStatus;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
@@ -16,6 +17,7 @@ import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
@@ -29,6 +31,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -55,10 +59,13 @@ public class MaintenanceWorkOrderService {
 
     private final UserRepository userRepository;
     private final MaintenanceWorkOrderValidator workOrderValidator;
+    private final EquipmentDisposalRepository disposalRepository;
+    private final SparePartService sparePartService;
 
     /**
      * Create a new maintenance work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse createWorkOrder(
             MaintenanceWorkOrderRequest request,
             Long hospitalId,
@@ -86,6 +93,8 @@ public class MaintenanceWorkOrderService {
         );
 
         validateEquipmentIsServiceable(equipment);
+
+        workOrderValidator.validateCreationDates(request);
 
         MaintenanceTask maintenanceTask = null;
 
@@ -284,6 +293,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Assign a work order to a technician.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse assignWorkOrder(
             Long id,
             MaintenanceWorkOrderAssignmentRequest request,
@@ -337,6 +347,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Start execution of a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse startWorkOrder(
             Long id,
             Long hospitalId,
@@ -386,6 +397,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Put an active work order on hold.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse holdWorkOrder(
             Long id,
             MaintenanceWorkOrderStatusRequest request,
@@ -433,6 +445,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Complete a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse completeWorkOrder(
             Long id,
             MaintenanceWorkOrderCompletionRequest request,
@@ -443,12 +456,14 @@ public class MaintenanceWorkOrderService {
         MaintenanceWorkOrder workOrder =
                 getOwnedWorkOrder(id, hospitalId);
 
-        if (workOrder.getStatus()
-                != MaintenanceWorkOrderStatus.IN_PROGRESS) {
+        workOrderValidator.validateCompletion(workOrder, request);
 
-            throw new IllegalStateException(
-                    "Only IN_PROGRESS work orders can be completed"
-            );
+        if (request != null && request.getPartsUsed() != null && !request.getPartsUsed().isBlank()) {
+            List<com.medtrack.dto.SparePartDeductionItem> deductionItems =
+                    workOrderValidator.validateAndExtractSparePartUsage(request.getPartsUsed());
+            if (!deductionItems.isEmpty() && hospitalId != null) {
+                sparePartService.deductSparePartsForWorkOrder(deductionItems, hospitalId, username);
+            }
         }
 
         workOrder.setStatus(
@@ -458,6 +473,8 @@ public class MaintenanceWorkOrderService {
         workOrder.setCompletedAt(
                 LocalDateTime.now()
         );
+
+        workOrderValidator.validateCompletionTimestamp(workOrder);
 
         workOrder.setCompletionNotes(
                 request.getCompletionNotes()
@@ -486,6 +503,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Cancel a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse cancelWorkOrder(
             Long id,
             MaintenanceWorkOrderStatusRequest request,
@@ -546,6 +564,7 @@ public class MaintenanceWorkOrderService {
      * <p>This method deliberately validates every transition rather
      * than allowing arbitrary status changes.</p>
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderResponse updateStatus(
             Long id,
             MaintenanceWorkOrderStatusRequest request,
@@ -592,9 +611,28 @@ public class MaintenanceWorkOrderService {
         if (target
                 == MaintenanceWorkOrderStatus.COMPLETED) {
 
+            if (request != null && request.getReason() != null && !request.getReason().isBlank()) {
+                workOrder.setCompletionNotes(request.getReason().trim());
+            }
+
+            if (workOrder.getCompletionNotes() == null
+                    || workOrder.getCompletionNotes().isBlank()) {
+                throw new IllegalArgumentException(
+                        "Completion notes are required when completing a work order"
+                );
+            }
+
+            if (workOrder.getStartedAt() == null) {
+                throw new IllegalStateException(
+                        "Work order cannot be completed before it is started"
+                );
+            }
+
             workOrder.setCompletedAt(
                     LocalDateTime.now()
             );
+
+            workOrderValidator.validateCompletionTimestamp(workOrder);
         }
 
         if (target
@@ -667,7 +705,8 @@ public class MaintenanceWorkOrderService {
                 );
                 maintenanceTaskRepository.save(task);
             } else if (targetStatus == MaintenanceWorkOrderStatus.CANCELLED) {
-                task.setStatus(MaintenanceStatus.ON_HOLD);
+                task.setStatus(MaintenanceStatus.SCHEDULED);
+                task.setCompletedAt(null);
                 maintenanceTaskRepository.save(task);
             }
         }
@@ -698,6 +737,7 @@ public class MaintenanceWorkOrderService {
      * Dashboard summary for a hospital.
      */
     @Transactional
+    @Cacheable(value = "workOrderDashboard", key = "#hospitalId")
     public MaintenanceWorkOrderDashboardResponse getDashboard(
             Long hospitalId
     ) {
@@ -834,6 +874,7 @@ public class MaintenanceWorkOrderService {
     /**
      * Soft delete/archive a work order.
      */
+    @CacheEvict(value = "workOrderDashboard", key = "#hospitalId")
     public void archiveWorkOrder(
             Long id,
             Long hospitalId,
@@ -902,6 +943,22 @@ public class MaintenanceWorkOrderService {
                             + status.name().toLowerCase()
                             + " and cannot have new maintenance work raised against it"
             );
+        }
+
+        if (equipment.getHospital() != null) {
+            boolean pendingDisposal = disposalRepository
+                    .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(
+                            equipment.getId(), equipment.getHospital().getId())
+                    .stream()
+                    .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                            || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+            if (pendingDisposal) {
+                throw new IllegalArgumentException(
+                        "Equipment "
+                                + equipment.getEquipmentCode()
+                                + " has an active disposal request awaiting approval or completion and cannot have new maintenance work raised against it"
+                );
+            }
         }
     }
 

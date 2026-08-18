@@ -1,5 +1,5 @@
 ## Description
-Implementing [FEATURE] Distributed Caching & Event-Sourcing Architecture Migration for Core Telemetry. Provides robust >500 LOC backend implementation.
+Implementing [FEATURE] High-Frequency Genomic Sequence Alignment & Pattern Matching Engine. Provides robust >500 LOC backend implementation.
 
 **Fixes in `backend/`:**
 1. **Added Models and Services** 
@@ -8,7 +8,7 @@ Implementing [FEATURE] Distributed Caching & Event-Sourcing Architecture Migrati
 ---
 
 ## Related Issue
-* Closes #1382
+* Closes #1383
 
 ---
 
