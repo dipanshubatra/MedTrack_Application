@@ -25,6 +25,7 @@ import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
 import com.medtrack.util.CsvSupport;
 import lombok.RequiredArgsConstructor;
+import com.medtrack.service.EquipmentCsvService;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -1267,7 +1268,7 @@ public class EquipmentService {
         try (java.io.PrintWriter writer = response.getWriter();
              java.util.stream.Stream<Equipment> equipmentStream = equipmentRepository.findStreamByHospitalId(hospital.getId())) {
             writer.write(CsvSupport.UTF8_BOM);
-            writer.write(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
+            writer.write(CsvSupport.encodeRow((Object[]) EquipmentCsvService.EQUIPMENT_CSV_HEADERS));
 
             equipmentStream.forEach(equipment -> {
                 writer.write(CsvSupport.encodeRow(
