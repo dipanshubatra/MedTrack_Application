@@ -555,6 +555,7 @@ public class EquipmentService {
     /**
      * Deletes an equipment record by ID.
      */
+    @Transactional
     @Caching(evict = { 
         @CacheEvict(value = "equipmentDashboard", key = "#username"), 
         @CacheEvict(value = "financialDashboard", key = "#username"),
