@@ -3,6 +3,7 @@ package com.medtrack.service;
 import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.dto.MaintenanceScheduleAmendmentRequest;
 import com.medtrack.dto.MaintenanceScheduleRevisionPageResponse;
 import com.medtrack.dto.MaintenanceScheduleRevisionResponse;
@@ -44,9 +45,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class MaintenanceScheduleService {
 
-    static final int DEFAULT_REVISION_PAGE_SIZE = 50;
     static final int MAX_REVISION_PAGE_SIZE = 100;
     private static final Set<String> PRIORITIES = Set.of("Normal", "High", "Critical");
+    private final PaginationConfig paginationConfig;
 
     private final MaintenanceTaskRepository taskRepository;
     private final MaintenanceScheduleRevisionRepository revisionRepository;
@@ -98,8 +99,8 @@ public class MaintenanceScheduleService {
     @Transactional(readOnly = true)
     public MaintenanceScheduleRevisionPageResponse getRevisions(
             Long taskId, Integer page, Integer size, Authentication authentication) {
-        int resolvedPage = page != null ? page : 0;
-        int resolvedSize = size != null ? size : DEFAULT_REVISION_PAGE_SIZE;
+        int resolvedPage = page != null ? page : paginationConfig.getDefaultPage();
+        int resolvedSize = size != null ? size : paginationConfig.getDefaultPageSize();
         validatePage(resolvedPage, resolvedSize);
 
         Long hospitalId = authorizeRevisionRead(taskId, authentication);

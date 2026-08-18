@@ -3,6 +3,7 @@ package com.medtrack.service;
 import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
 import com.medtrack.dto.MaintenanceActivityPageResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
@@ -53,7 +54,6 @@ public class MaintenanceService {
     private final MaintenanceTaskScheduleAmendmentRepository
             scheduleAmendmentRepository;
     private static final int ICAL_MAX_LINE_OCTETS = 75;
-    private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 100;
     private static final DateTimeFormatter ICAL_UTC_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -64,6 +64,7 @@ public class MaintenanceService {
     private final EquipmentRepository equipmentRepository;
     private final MaintenanceActivityService activityService;
     private final EquipmentDisposalRepository disposalRepository;
+    private final PaginationConfig paginationConfig;
 
     // The lifecycle is centralized here so every update path follows the same rules.
     private static final Map<MaintenanceStatus, Set<MaintenanceStatus>> ALLOWED_TRANSITIONS = Map.of(
@@ -478,8 +479,8 @@ public class MaintenanceService {
             return Pageable.unpaged();
         }
 
-        int resolvedPage = page != null ? page : 0;
-        int resolvedSize = size != null ? size : DEFAULT_PAGE_SIZE;
+        int resolvedPage = page != null ? page : paginationConfig.getDefaultPage();
+        int resolvedSize = size != null ? size : paginationConfig.getDefaultPageSize();
         if (resolvedPage < 0) {
             throw new IllegalArgumentException("Page index cannot be negative");
         }
