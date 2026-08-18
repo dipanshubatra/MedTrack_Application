@@ -106,6 +106,7 @@ const EnterpriseZeroTrustSecurityGovernancePage = lazy(() => import("../pages/au
 const BloodBankHub = lazy(() => import("../pages/bloodbank/BloodBankHub"));
 const BloodBankTransfusionHub = lazy(() => import("../pages/bloodbank/BloodBankTransfusionHub"));
 const CardiologyCathLabHub = lazy(() => import("../pages/cardiology/CardiologyCathLabHub"));
+const CardiovascularHemodynamicsEcmoPage = lazy(() => import("../pages/cardiology/CardiovascularHemodynamicsEcmoPage"));
 const ICUTelemetryOverwatchHubPage = lazy(() => import("../pages/hospital/ICUTelemetryOverwatchHubPage"));
 const PathologyDigitalHub = lazy(() => import("../pages/pathology/PathologyDigitalHub"));
 const PatientEhrAnalyticsPredictivePage = lazy(() => import("../pages/patient/PatientEhrAnalyticsPredictivePage"));
@@ -304,6 +305,7 @@ export const ROUTES = [
   { page: "blood-bank", slugs: ["blood-bank", "transfusion", "bloodbank"], component: BloodBankHub, access: AUTHENTICATED },
   { page: "blood-bank-transfusion", slugs: ["blood-bank-transfusion", "transfusion-medicine"], component: BloodBankTransfusionHub, access: AUTHENTICATED },
   { page: "cardiology-cathlab", slugs: ["cardiology-cathlab", "cath-lab", "cardiology"], component: CardiologyCathLabHub, access: AUTHENTICATED },
+  { page: "cardiovascular-hemodynamics-ecmo", slugs: ["cardiovascular-hemodynamics-ecmo", "hemodynamics-ecmo", "ecmo-station"], component: CardiovascularHemodynamicsEcmoPage, access: AUTHENTICATED },
   { page: "icu-telemetry-overwatch", slugs: ["icu-telemetry-overwatch", "icu-overwatch"], component: ICUTelemetryOverwatchHubPage, access: AUTHENTICATED },
   { page: "pathology-digital", slugs: ["pathology-digital", "pathology", "digital-pathology"], component: PathologyDigitalHub, access: AUTHENTICATED },
   { page: "patient-ehr-analytics", slugs: ["patient-ehr-analytics", "ehr-analytics"], component: PatientEhrAnalyticsPredictivePage, access: AUTHENTICATED },
