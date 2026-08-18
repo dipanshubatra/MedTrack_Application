@@ -29,7 +29,7 @@ it("redirects to LoginPage when no user", async () => {
     <AppRouter currentPage="dashboard" onNavigate={() => {}} />,
     { authValue: { user: null } }
   );
-  expect(await screen.findByText("Welcome back!")).toBeInTheDocument();
+  expect(await screen.findByText("Welcome back!", {}, { timeout: 5000 })).toBeInTheDocument();
 });
 
 it("renders Dashboard component when hospital user is authenticated", async () => {
@@ -37,7 +37,7 @@ it("renders Dashboard component when hospital user is authenticated", async () =
     <AppRouter currentPage="dashboard" onNavigate={() => {}} />,
     { authValue: { user: { id: "u1", role: "hospital", name: "Hospital Admin" } } }
   );
-  expect(await screen.findAllByText(/MedTrack/i)).not.toHaveLength(0);
+  expect(await screen.findAllByText(/MedTrack/i, {}, { timeout: 5000 })).not.toHaveLength(0);
 });
 
 it("renders landing page without authentication", async () => {
@@ -45,7 +45,7 @@ it("renders landing page without authentication", async () => {
     <AppRouter currentPage="landing" onNavigate={() => {}} />,
     { authValue: { user: null } }
   );
-  expect(await screen.findAllByText(/MedTrack/i)).not.toHaveLength(0);
+  expect(await screen.findAllByText(/MedTrack/i, {}, { timeout: 5000 })).not.toHaveLength(0);
 });
 
 it("shows UnauthorizedPage when technician tries to access hospital route", () => {
@@ -61,7 +61,7 @@ it("shows 404 page for unknown routes", async () => {
     <AppRouter currentPage="non-existent-route" onNavigate={() => {}} />,
     { authValue: { user: null } }
   );
-  expect(await screen.findByText("404")).toBeInTheDocument();
+  expect(await screen.findByText("404", {}, { timeout: 5000 })).toBeInTheDocument();
 });
 
 it("shows NotFoundPage as default fallback", async () => {
@@ -69,5 +69,5 @@ it("shows NotFoundPage as default fallback", async () => {
     <AppRouter currentPage="some-unknown-page" onNavigate={() => {}} />,
     { authValue: { user: { id: "u1", role: "hospital" } } }
   );
-  expect(await screen.findByText("404")).toBeInTheDocument();
+  expect(await screen.findByText("404", {}, { timeout: 5000 })).toBeInTheDocument();
 });

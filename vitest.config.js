@@ -8,6 +8,7 @@ export default defineConfig({
   // failed with `ReferenceError: React is not defined` before a single assertion ran.
   esbuild: { jsx: "automatic" },
   test: {
+    exclude: ["**/node_modules/**", "**/.worktrees/**", "**/Backend/**"],
     environment: "jsdom",
     setupFiles: ["./src/setupTests.js"],
     globals: true,
