@@ -110,6 +110,7 @@ const ICUTelemetryOverwatchHubPage = lazy(() => import("../pages/hospital/ICUTel
 const PathologyDigitalHub = lazy(() => import("../pages/pathology/PathologyDigitalHub"));
 const PatientEhrAnalyticsPredictivePage = lazy(() => import("../pages/patient/PatientEhrAnalyticsPredictivePage"));
 const GenomicsPrecisionHub = lazy(() => import("../pages/genomics/GenomicsPrecisionHub"));
+const PrecisionOncologyHub = lazy(() => import("../pages/oncology/PrecisionOncologyHub"));
 
 // Eleven consoles that were merged as page components and never given a registry entry, so no URL
 // reached them and every one of them rendered the 404 page. They are grouped here rather than
@@ -310,6 +311,7 @@ export const ROUTES = [
   { page: "dialysis-renal", slugs: ["dialysis-renal", "dialysis", "nephrology"], component: DialysisRenalHub, access: AUTHENTICATED },
   { page: "sterile-processing", slugs: ["sterile-processing", "cssd"], component: SterileProcessingHub, access: AUTHENTICATED },
   { page: "genomics-precision", slugs: ["genomics-precision", "precision-medicine", "genomic-medicine"], component: GenomicsPrecisionHub, access: AUTHENTICATED },
+  { page: "precision-oncology", slugs: ["precision-oncology", "molecular-oncology", "tumor-board"], component: PrecisionOncologyHub, access: AUTHENTICATED },
 
   // --- consoles restored from the orphan set ------------------------------------
   // Eleven finished page components that had no entry here at all. Each is authenticated rather
