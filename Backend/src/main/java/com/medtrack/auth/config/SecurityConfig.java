@@ -180,6 +180,14 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/auth/pam/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/auth/pam/**").hasRole("HOSPITAL")
 
+                // OAuth 2.1 Security Gateway boundaries:
+                // Token issuance, introspection, revocation and rotation change security state
+                // (and issue/revoke tokens for ANY subject), so only HOSPITAL administrators may
+                // call these routes. Read endpoints stay authenticated; per-user ownership
+                // (self vs. HOSPITAL admin) is enforced in the controller via OwnershipAccessGuard.
+                .requestMatchers(HttpMethod.GET, "/api/auth/oauth21/**").authenticated()
+                .requestMatchers("/api/auth/oauth21/**").hasRole("HOSPITAL")
+
                 // SCIM identity provisioning:
                 // POST /users/provision creates accounts and POST /users/deprovision disables
                 // them, so an anonymous caller could both mint accounts and lock out any existing
