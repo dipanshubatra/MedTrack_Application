@@ -7,6 +7,7 @@ import com.medtrack.auth.service.KafkaEventPublisher;
 import com.medtrack.dto.DataSanitizationRequest;
 import com.medtrack.dto.EquipmentDisposalRequest;
 import com.medtrack.dto.EquipmentDisposalResponse;
+import com.medtrack.dto.MaintenanceWorkOrderRequest;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentDisposalMethod;
@@ -19,8 +20,14 @@ import com.medtrack.model.MaintenanceWorkOrder;
 import com.medtrack.model.MaintenanceWorkOrderPriority;
 import com.medtrack.model.MaintenanceWorkOrderStatus;
 import com.medtrack.model.MaintenanceWorkOrderType;
+import com.medtrack.model.MaintenancePolicyRule;
+import com.medtrack.model.MaintenancePolicyStatus;
+import com.medtrack.model.MaintenanceRuleScope;
+import com.medtrack.model.RecurrenceFrequency;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.repository.MaintenancePolicyRuleRepository;
+import com.medtrack.repository.MaintenanceRuleAuditRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import com.medtrack.repository.MaintenanceWorkOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +74,9 @@ class EquipmentDisposalWorkflowTest {
     private EquipmentDisposalService disposalService;
 
     @Autowired
+    private MaintenanceWorkOrderService workOrderService;
+
+    @Autowired
     private EquipmentRepository equipmentRepository;
 
     @Autowired
@@ -74,6 +84,12 @@ class EquipmentDisposalWorkflowTest {
 
     @Autowired
     private MaintenanceWorkOrderRepository workOrderRepository;
+
+    @Autowired
+    private MaintenancePolicyRuleRepository ruleRepository;
+
+    @Autowired
+    private MaintenanceRuleAuditRepository ruleAuditRepository;
 
     @Autowired
     private MaintenanceTaskRepository taskRepository;
@@ -596,5 +612,367 @@ class EquipmentDisposalWorkflowTest {
         assertTrue(completed.getCertificateNumber().startsWith("DSP-"));
         assertEquals(EquipmentStatus.DISPOSED,
                 equipmentRepository.findById(asset.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("initiating a disposal request is refused while active work orders exist")
+    void requestDisposalIsRefusedWhenActiveWorkOrdersExist() {
+        Equipment asset = liveAsset("EQ-DISP-REQ-WO-1");
+        workOrder(asset, "WO-REQ-001", MaintenanceWorkOrderStatus.IN_PROGRESS);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.requestDisposal(
+                        asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username));
+
+        assertTrue(exception.getMessage().contains("WO-REQ-001"),
+                "The refusal message must specify the active work order code");
+    }
+
+    @Test
+    @DisplayName("initiating a disposal request is refused while scheduled maintenance tasks exist")
+    void requestDisposalIsRefusedWhenScheduledTasksExist() {
+        Equipment asset = liveAsset("EQ-DISP-REQ-TSK-1");
+        maintenanceTask(asset, "PM-REQ-001", MaintenanceStatus.SCHEDULED);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.requestDisposal(
+                        asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username));
+
+        assertTrue(exception.getMessage().contains("PM-REQ-001"),
+                "The refusal message must specify the active task code");
+    }
+
+    @Test
+    @DisplayName("work order creation is refused when equipment has a pending disposal request")
+    void workOrderCreationIsRefusedWhenEquipmentHasPendingDisposal() {
+        Equipment asset = liveAsset("EQ-DISP-WO-BLOCK-1");
+        disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+
+        MaintenanceWorkOrderRequest woReq = MaintenanceWorkOrderRequest.builder()
+                .equipmentId(asset.getId())
+                .title("New work order on pending disposal asset")
+                .description("Routine check")
+                .maintenanceType(MaintenanceWorkOrderType.CORRECTIVE)
+                .priority(MaintenanceWorkOrderPriority.HIGH)
+                .scheduledDate(LocalDate.now())
+                .dueDate(LocalDate.now().plusDays(3))
+                .build();
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> workOrderService.createWorkOrder(woReq, hospital.getId(), username));
+
+        assertTrue(exception.getMessage().contains("active disposal request"),
+                "Creation should be blocked when asset has pending disposal");
+    }
+
+    @Test
+    @DisplayName("work order creation is refused when equipment has an approved disposal request")
+    void workOrderCreationIsRefusedWhenEquipmentHasApprovedDisposal() {
+        Equipment asset = liveAsset("EQ-DISP-WO-BLOCK-2");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SALE, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        MaintenanceWorkOrderRequest woReq = MaintenanceWorkOrderRequest.builder()
+                .equipmentId(asset.getId())
+                .title("New work order on approved disposal asset")
+                .description("Pre-sale inspection")
+                .maintenanceType(MaintenanceWorkOrderType.INSPECTION)
+                .priority(MaintenanceWorkOrderPriority.MEDIUM)
+                .scheduledDate(LocalDate.now())
+                .dueDate(LocalDate.now().plusDays(2))
+                .build();
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> workOrderService.createWorkOrder(woReq, hospital.getId(), username));
+
+        assertTrue(exception.getMessage().contains("active disposal request"),
+                "Creation should be blocked when asset has approved disposal");
+    }
+
+    @Test
+    @DisplayName("rejecting a disposal request clears pending status allowing future requests")
+    void rejectDisposalClearsPendingStatusAndAllowsSubsequentDisposal() {
+        Equipment asset = liveAsset("EQ-DISP-REJ-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+
+        EquipmentDisposalResponse rejected = disposalService.rejectDisposal(
+                disposal.getId(), "Asset still needed in ICU", username);
+        assertEquals(EquipmentDisposalStatus.REJECTED, rejected.getStatus());
+
+        EquipmentDisposalResponse newDisposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.DONATION, false), username);
+        assertNotNull(newDisposal.getId());
+        assertEquals(EquipmentDisposalStatus.PENDING_APPROVAL, newDisposal.getStatus());
+    }
+
+    @Test
+    @DisplayName("cancelling a disposal request clears pending status allowing future requests")
+    void cancelDisposalClearsPendingStatusAndAllowsSubsequentDisposal() {
+        Equipment asset = liveAsset("EQ-DISP-CANCEL-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SALE, false), username);
+
+        EquipmentDisposalResponse cancelled = disposalService.cancelDisposal(disposal.getId(), username);
+        assertEquals(EquipmentDisposalStatus.CANCELLED, cancelled.getStatus());
+
+        EquipmentDisposalResponse newDisposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.RETURN_TO_VENDOR, false), username);
+        assertNotNull(newDisposal.getId());
+        assertEquals(EquipmentDisposalStatus.PENDING_APPROVAL, newDisposal.getStatus());
+    }
+
+    @Test
+    @DisplayName("disposal history returns records in descending order for hospital")
+    void disposalHistoryReturnsRecordsInDescendantOrderWithTenantIsolation() {
+        Equipment asset1 = liveAsset("EQ-DISP-HIST-1");
+        Equipment asset2 = liveAsset("EQ-DISP-HIST-2");
+
+        disposalService.requestDisposal(asset1.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.requestDisposal(asset2.getId(), request(EquipmentDisposalMethod.SALE, false), username);
+
+        List<EquipmentDisposalResponse> history = disposalService.getDisposalHistory(username);
+        assertEquals(2, history.size());
+        assertTrue(history.get(0).getRequestedAt().isAfter(history.get(1).getRequestedAt())
+                || history.get(0).getRequestedAt().isEqual(history.get(1).getRequestedAt()));
+    }
+
+    @Test
+    @DisplayName("pending disposals listing returns only pending approval items")
+    void pendingDisposalsReturnsOnlyPendingApprovalItems() {
+        Equipment asset1 = liveAsset("EQ-DISP-PEND-1");
+        Equipment asset2 = liveAsset("EQ-DISP-PEND-2");
+
+        EquipmentDisposalResponse disp1 = disposalService.requestDisposal(
+                asset1.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        EquipmentDisposalResponse disp2 = disposalService.requestDisposal(
+                asset2.getId(), request(EquipmentDisposalMethod.SALE, false), username);
+
+        disposalService.approveDisposal(disp1.getId(), username);
+
+        List<EquipmentDisposalResponse> pending = disposalService.getPendingDisposals(username);
+        assertEquals(1, pending.size());
+        assertEquals(disp2.getId(), pending.get(0).getId());
+    }
+
+    @Test
+    @DisplayName("requestDisposal throws exception when disposal method is missing")
+    void requestDisposalValidatesDisposalMethodPresence() {
+        Equipment asset = liveAsset("EQ-DISP-VAL-1");
+        EquipmentDisposalRequest invalidReq = new EquipmentDisposalRequest();
+        invalidReq.setDisposalReason("Reason without method");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.requestDisposal(asset.getId(), invalidReq, username));
+
+        assertEquals("Disposal method is required", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("getDisposalsForEquipment returns history scoped to asset and hospital")
+    void getDisposalsForEquipmentScopesToAssetAndHospital() {
+        Equipment asset1 = liveAsset("EQ-DISP-SCOPE-1");
+        Equipment asset2 = liveAsset("EQ-DISP-SCOPE-2");
+
+        EquipmentDisposalResponse disp1 = disposalService.requestDisposal(
+                asset1.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.requestDisposal(
+                asset2.getId(), request(EquipmentDisposalMethod.SALE, false), username);
+
+        List<EquipmentDisposalResponse> asset1History =
+                disposalService.getDisposalsForEquipment(asset1.getId(), username);
+
+        assertEquals(1, asset1History.size());
+        assertEquals(disp1.getId(), asset1History.get(0).getId());
+        assertEquals(asset1.getId(), asset1History.get(0).getEquipmentId());
+    }
+
+    @Test
+    @DisplayName("approveDisposal throws exception when status is not PENDING_APPROVAL")
+    void approveDisposalRejectsNonPendingDisposals() {
+        Equipment asset = liveAsset("EQ-DISP-APP-ERR-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> disposalService.approveDisposal(disposal.getId(), username));
+
+        assertTrue(exception.getMessage().contains("Disposal must be PENDING_APPROVAL to continue"));
+    }
+
+    @Test
+    @DisplayName("rejectDisposal records rejection reason and stamps audit metadata")
+    void rejectDisposalRecordsReasonAndAuditMetadata() {
+        Equipment asset = liveAsset("EQ-DISP-REJ-META-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.DONATION, false), username);
+
+        EquipmentDisposalResponse rejected = disposalService.rejectDisposal(
+                disposal.getId(), "Asset still required in Emergency ward", username);
+
+        assertEquals(EquipmentDisposalStatus.REJECTED, rejected.getStatus());
+        assertEquals("Asset still required in Emergency ward", rejected.getRejectedReason());
+        assertEquals(username, rejected.getRejectedBy());
+        assertNotNull(rejected.getRejectedAt());
+    }
+
+    @Test
+    @DisplayName("cancelDisposal stamps cancellation audit metadata")
+    void cancelDisposalStampsAuditMetadata() {
+        Equipment asset = liveAsset("EQ-DISP-CNCL-META-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SALE, false), username);
+
+        EquipmentDisposalResponse cancelled = disposalService.cancelDisposal(disposal.getId(), username);
+
+        assertEquals(EquipmentDisposalStatus.CANCELLED, cancelled.getStatus());
+        assertEquals(username, cancelled.getCancelledBy());
+        assertNotNull(cancelled.getCancelledAt());
+    }
+
+    @Test
+    @DisplayName("recordDataSanitization updates sanitization notes and actor metadata")
+    void recordDataSanitizationUpdatesDetailsAndActorMetadata() {
+        Equipment asset = liveAsset("EQ-DISP-SAN-META-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, true), username);
+
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        DataSanitizationRequest sanitizationRequest = new DataSanitizationRequest();
+        sanitizationRequest.setDetails("SSD DoD 5220.22-M 7-pass wipe performed");
+
+        EquipmentDisposalResponse sanitised = disposalService.recordDataSanitization(
+                disposal.getId(), sanitizationRequest, username);
+
+        assertTrue(sanitised.getDataSanitizationConfirmed());
+        assertEquals("SSD DoD 5220.22-M 7-pass wipe performed", sanitised.getDataSanitizationDetails());
+        assertEquals(username, sanitised.getDataSanitizedBy());
+        assertNotNull(sanitised.getDataSanitizedAt());
+    }
+
+    @Test
+    @DisplayName("workOrderService rejects work order creation for retired or disposed equipment")
+    void workOrderServiceRejectsWorkOrderCreationForDisposedEquipment() {
+        Equipment asset = liveAsset("EQ-DISP-WO-DISPOSED-1");
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        disposalService.completeDisposal(disposal.getId(), username);
+
+        MaintenanceWorkOrderRequest woReq = MaintenanceWorkOrderRequest.builder()
+                .equipmentId(asset.getId())
+                .title("Work order on disposed asset")
+                .description("Check status")
+                .maintenanceType(MaintenanceWorkOrderType.CORRECTIVE)
+                .priority(MaintenanceWorkOrderPriority.HIGH)
+                .scheduledDate(LocalDate.now())
+                .dueDate(LocalDate.now().plusDays(2))
+                .build();
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> workOrderService.createWorkOrder(woReq, hospital.getId(), username));
+
+        assertTrue(exception.getMessage().contains("disposed"),
+                "Work order creation must be rejected for disposed equipment");
+    }
+
+    @Test
+    @DisplayName("completeDisposal automatically deactivates active individual maintenance rules and logs audit trail")
+    void completeDisposal_DeactivatesAssociatedIndividualMaintenanceRulesAndLogsAudit() {
+        Equipment asset = liveAsset("EQ-RULE-DEACT-1");
+
+        MaintenancePolicyRule rule = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Calibration Rule for " + asset.getEquipmentCode())
+                .description("Automatic recurring calibration")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset.getId())
+                .priority("High")
+                .frequency(RecurrenceFrequency.MONTHLY)
+                .maintenanceType("Preventive Calibration")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+
+        disposalService.completeDisposal(disposal.getId(), username);
+
+        MaintenancePolicyRule updatedRule = ruleRepository.findById(rule.getId()).orElseThrow();
+        assertFalse(updatedRule.getActive(), "Rule must be marked inactive after equipment disposal");
+        assertEquals(MaintenancePolicyStatus.ARCHIVED, updatedRule.getStatus(), "Rule status must be ARCHIVED");
+
+        boolean auditLogged = ruleAuditRepository.findByHospitalIdAndRuleIdOrderByCreatedAtDesc(hospital.getId(), rule.getId()).stream()
+                .anyMatch(audit -> audit.getAction() == com.medtrack.model.MaintenanceRuleAuditAction.DEACTIVATED);
+        assertTrue(auditLogged, "Rule deactivation audit entry must be saved in rule audit repository");
+    }
+
+    @Test
+    @DisplayName("completeDisposal deactivates multiple individual rules bound to the same asset without affecting other assets")
+    void completeDisposal_WhenMultipleRulesExist_DeactivatesAllMatchingIndividualRules() {
+        Equipment asset1 = liveAsset("EQ-RULE-DEACT-MULTI-1");
+        Equipment asset2 = liveAsset("EQ-RULE-DEACT-MULTI-2");
+
+        MaintenancePolicyRule rule1 = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Rule 1 for Asset 1")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset1.getId())
+                .frequency(RecurrenceFrequency.MONTHLY)
+                .maintenanceType("Inspection")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        MaintenancePolicyRule rule2 = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Rule 2 for Asset 1")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset1.getId())
+                .frequency(RecurrenceFrequency.QUARTERLY)
+                .maintenanceType("Safety Test")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        MaintenancePolicyRule ruleOtherAsset = ruleRepository.save(MaintenancePolicyRule.builder()
+                .hospitalId(hospital.getId())
+                .policyCode("POL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .name("Rule for Asset 2")
+                .ruleScope(MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT)
+                .equipmentRecordId(asset2.getId())
+                .frequency(RecurrenceFrequency.MONTHLY)
+                .maintenanceType("Inspection")
+                .startDate(LocalDate.now())
+                .active(true)
+                .status(MaintenancePolicyStatus.ACTIVE)
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        EquipmentDisposalResponse disposal = disposalService.requestDisposal(
+                asset1.getId(), request(EquipmentDisposalMethod.SCRAP, false), username);
+        disposalService.approveDisposal(disposal.getId(), username);
+        disposalService.completeDisposal(disposal.getId(), username);
+
+        assertFalse(ruleRepository.findById(rule1.getId()).orElseThrow().getActive());
+        assertFalse(ruleRepository.findById(rule2.getId()).orElseThrow().getActive());
+        assertTrue(ruleRepository.findById(ruleOtherAsset.getId()).orElseThrow().getActive(),
+                "Rule for active asset 2 must remain active");
     }
 }

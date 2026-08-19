@@ -1,5 +1,5 @@
 ## Description
-Implementing [FEATURE] Zero-Knowledge Proof (ZKP) based Identity Verification for Controlled Substances. Provides robust >500 LOC backend implementation.
+Implementing [FEATURE] High-Frequency Genomic Sequence Alignment & Pattern Matching Engine. Provides robust >500 LOC backend implementation.
 
 **Fixes in `backend/`:**
 1. **Added Models and Services** 
@@ -8,7 +8,7 @@ Implementing [FEATURE] Zero-Knowledge Proof (ZKP) based Identity Verification fo
 ---
 
 ## Related Issue
-* Closes #1381
+* Closes #1383
 
 ---
 

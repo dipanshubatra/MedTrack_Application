@@ -14,6 +14,8 @@ import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
+import com.medtrack.model.EquipmentDisposalStatus;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
@@ -27,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.medtrack.repository.MaintenanceTaskScheduleAmendmentRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -60,6 +63,7 @@ public class MaintenanceService {
     private final HospitalRepository hospitalRepository;
     private final EquipmentRepository equipmentRepository;
     private final MaintenanceActivityService activityService;
+    private final EquipmentDisposalRepository disposalRepository;
 
     // The lifecycle is centralized here so every update path follows the same rules.
     private static final Map<MaintenanceStatus, Set<MaintenanceStatus>> ALLOWED_TRANSITIONS = Map.of(
@@ -194,6 +198,10 @@ public class MaintenanceService {
             throw new IllegalArgumentException("New deadline is required");
         }
 
+        if (request.getNewDeadline().isBefore(java.time.LocalDate.now())) {
+            throw new IllegalArgumentException("Deadline cannot be in the past");
+        }
+
         if (request.getReason() == null || request.getReason().isBlank()) {
             throw new IllegalArgumentException("Amendment reason is required");
         }
@@ -228,7 +236,6 @@ public class MaintenanceService {
 
         task.setDeadline(request.getNewDeadline());
         task.setScheduleRevision(newRevision);
-        task.setUpdatedAt(now);
 
         MaintenanceTask savedTask = taskRepository.save(task);
 
@@ -412,6 +419,9 @@ public class MaintenanceService {
         if (request.getDeadline() == null) {
             throw new IllegalArgumentException("Deadline is required");
         }
+        if (request.getDeadline().isBefore(java.time.LocalDate.now())) {
+            throw new IllegalArgumentException("Deadline cannot be in the past");
+        }
         if (request.getMaintenanceType() == null || request.getMaintenanceType().isBlank()) {
             throw new IllegalArgumentException("Maintenance type is required");
         }
@@ -501,7 +511,22 @@ public class MaintenanceService {
         if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
             throw new IllegalArgumentException("Retired or disposed equipment cannot be scheduled for maintenance");
         }
+        validateNoActiveDisposal(equipment, hospitalId);
         return equipment;
+    }
+
+    private void validateNoActiveDisposal(Equipment equipment, Long hospitalId) {
+        if (disposalRepository != null && equipment != null && equipment.getId() != null && hospitalId != null) {
+            boolean pendingDisposal = disposalRepository
+                    .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(equipment.getId(), hospitalId)
+                    .stream()
+                    .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                            || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+            if (pendingDisposal) {
+                throw new IllegalArgumentException("Equipment " + equipment.getEquipmentCode()
+                        + " has an active disposal request awaiting approval or completion and cannot be scheduled for maintenance");
+            }
+        }
     }
 
     private Equipment resolveOwnedEquipmentByNumericId(String equipmentReference, Long hospitalId) {

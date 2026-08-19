@@ -18,11 +18,26 @@ public class MaintenanceWorkOrderValidator {
             MaintenanceWorkOrderRequest request
     ) {
 
+        if (request == null) {
+            return;
+        }
+
         LocalDate scheduledDate =
                 request.getScheduledDate();
 
         LocalDate dueDate =
                 request.getDueDate();
+
+        validateDateBounds(scheduledDate, dueDate);
+    }
+
+    /**
+     * Validates that due date is not strictly prior to scheduled date.
+     */
+    public void validateDateBounds(
+            LocalDate scheduledDate,
+            LocalDate dueDate
+    ) {
 
         if (scheduledDate != null
                 && dueDate != null
@@ -192,5 +207,26 @@ public class MaintenanceWorkOrderValidator {
                     "Cannot create a work order for an already completed maintenance task"
             );
         }
+    }
+
+    /**
+     * Parses and validates spare parts consumed text during work order completion.
+     */
+    public java.util.List<com.medtrack.dto.SparePartDeductionItem> validateAndExtractSparePartUsage(
+            String partsUsed
+    ) {
+        if (partsUsed == null || partsUsed.isBlank()) {
+            return java.util.List.of();
+        }
+        java.util.List<com.medtrack.dto.SparePartDeductionItem> items =
+                com.medtrack.dto.SparePartDeductionItem.parsePartsUsed(partsUsed);
+        for (com.medtrack.dto.SparePartDeductionItem item : items) {
+            if (item.getQuantity() == null || item.getQuantity() <= 0) {
+                throw new IllegalArgumentException(
+                        "Deduction quantity for spare part " + item.getPartNumber() + " must be greater than zero"
+                );
+            }
+        }
+        return items;
     }
 }
