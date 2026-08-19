@@ -231,8 +231,11 @@ class EquipmentStockServiceTest {
         }
 
         @Test
-        @DisplayName("rejects a negative reorder threshold")
+        @DisplayName("rejects a negative reorder threshold (defense-in-depth)")
         void rejectsNegativeThreshold() {
+            // This test validates the service-level defense-in-depth check.
+            // The primary validation is handled by @Min(0) on the DTO field,
+            // which is enforced by @Valid in the controller before reaching the service.
             assertThrows(IllegalArgumentException.class, () ->
                     equipmentService.adjustStock(
                             EQUIPMENT_ID,
