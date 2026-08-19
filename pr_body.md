@@ -1,5 +1,5 @@
 ## Description
-Implementing [FEATURE] Real-time HL7 FHIR Interoperability Gateway & Transformation Engine. Provides robust >500 LOC backend implementation.
+Implementing [FEATURE] High-Frequency Genomic Sequence Alignment & Pattern Matching Engine. Provides robust >500 LOC backend implementation.
 
 **Fixes in `backend/`:**
 1. **Added Models and Services** 
@@ -8,7 +8,7 @@ Implementing [FEATURE] Real-time HL7 FHIR Interoperability Gateway & Transformat
 ---
 
 ## Related Issue
-* Closes #1380
+* Closes #1383
 
 ---
 

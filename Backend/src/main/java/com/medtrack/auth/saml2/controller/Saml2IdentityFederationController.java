@@ -25,7 +25,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/auth/saml2")
-@CrossOrigin(origins = "*")
 public class Saml2IdentityFederationController {
 
     private final Saml2IdentityFederationService samlService;

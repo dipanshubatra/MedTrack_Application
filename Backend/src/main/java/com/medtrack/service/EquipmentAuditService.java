@@ -145,23 +145,30 @@ public class EquipmentAuditService {
     }
 
     @Transactional(readOnly = true)
-    public String exportAuditHistoryCsv(String username) {
-        List<EquipmentAuditResponse> logs = getHospitalHistory(username);
-        StringBuilder csv = new StringBuilder();
-        csv.append("ID,Equipment ID,Username,Action,Changed Fields,Previous Value,New Value,Timestamp\n");
+    public void exportAuditHistoryCsv(String username, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        Hospital hospital = getHospitalForUser(username);
 
-        for (EquipmentAuditResponse log : logs) {
-            csv.append(log.getId()).append(",")
-                    .append(log.getEquipmentId() != null ? log.getEquipmentId() : "").append(",")
-                    .append(escapeCsv(log.getUsername())).append(",")
-                    .append(escapeCsv(log.getAction())).append(",")
-                    .append(escapeCsv(log.getChangedFields())).append(",")
-                    .append(escapeCsv(log.getPreviousValue())).append(",")
-                    .append(escapeCsv(log.getNewValue())).append(",")
-                    .append(log.getTimestamp() != null ? log.getTimestamp().format(TIMESTAMP_FORMATTER) : "")
-                    .append("\n");
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=audit-history.csv");
+
+        try (java.io.PrintWriter writer = response.getWriter();
+             java.util.stream.Stream<EquipmentAudit> auditStream = equipmentAuditRepository.streamByHospitalIdOrderByTimestampDesc(hospital.getId())) {
+            
+            writer.write("ID,Equipment ID,Username,Action,Changed Fields,Previous Value,New Value,Timestamp\n");
+
+            auditStream.forEach(audit -> {
+                EquipmentAuditResponse log = mapToResponse(audit);
+                writer.write(log.getId() + "," +
+                        (log.getEquipmentId() != null ? log.getEquipmentId() : "") + "," +
+                        escapeCsv(log.getUsername()) + "," +
+                        escapeCsv(log.getAction()) + "," +
+                        escapeCsv(log.getChangedFields()) + "," +
+                        escapeCsv(log.getPreviousValue()) + "," +
+                        escapeCsv(log.getNewValue()) + "," +
+                        (log.getTimestamp() != null ? log.getTimestamp().format(TIMESTAMP_FORMATTER) : "") + "\n");
+            });
+            writer.flush();
         }
-        return csv.toString();
     }
 
     private String escapeCsv(String value) {
