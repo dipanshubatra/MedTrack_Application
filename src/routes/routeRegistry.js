@@ -85,15 +85,19 @@ const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagi
 const SterileProcessingHub = lazy(() => import("../pages/sterile/SterileProcessingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const DialysisRenalHub = lazy(() => import("../pages/renal/DialysisRenalHub"));
+const NephrologyCrrtStationPage = lazy(() => import("../pages/renal/NephrologyCrrtStationPage"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
 const OncologyInfusionHub = lazy(() => import("../pages/oncology/OncologyInfusionHub"));
+const PrecisionOncologyMolecularHub = lazy(() => import("../pages/oncology/PrecisionOncologyMolecularHub"));
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
+const EmergencyDisasterMciCommandHub = lazy(() => import("../pages/emergency/EmergencyDisasterMciCommandHub"));
 const RegulatoryAuditHub = lazy(() => import("../pages/audit/RegulatoryAuditHub"));
 const HospitalCommandOrchestrationSuitePage = lazy(() => import("../pages/command/HospitalCommandOrchestrationSuitePage"));
 const LabAutomationHub = lazy(() => import("../pages/lab/LabAutomationHub"));
 const PediatricNeonatalIcuHubPage = lazy(() => import("../pages/pediatric/PediatricNeonatalIcuHubPage"));
+const PediatricIcuHfovCommandHub = lazy(() => import("../pages/pediatric/PediatricIcuHfovCommandHub"));
 const PharmacovigilanceHub = lazy(() => import("../pages/pharmacovigilance/PharmacovigilanceHub"));
 const MedicationSupplyColdChainHubPage = lazy(() => import("../pages/supply/MedicationSupplyColdChainHubPage"));
 const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRoboticsHub"));
@@ -310,8 +314,10 @@ export const ROUTES = [
   { page: "pathology-digital", slugs: ["pathology-digital", "pathology", "digital-pathology"], component: PathologyDigitalHub, access: AUTHENTICATED },
   { page: "patient-ehr-analytics", slugs: ["patient-ehr-analytics", "ehr-analytics"], component: PatientEhrAnalyticsPredictivePage, access: AUTHENTICATED },
   { page: "dialysis-renal", slugs: ["dialysis-renal", "dialysis", "nephrology"], component: DialysisRenalHub, access: AUTHENTICATED },
+  { page: "nephrology-crrt-dialysis", slugs: ["nephrology-crrt-dialysis", "crrt-dialysis", "crrt-station"], component: NephrologyCrrtStationPage, access: AUTHENTICATED },
   { page: "sterile-processing", slugs: ["sterile-processing", "cssd"], component: SterileProcessingHub, access: AUTHENTICATED },
   { page: "genomics-precision", slugs: ["genomics-precision", "precision-medicine", "genomic-medicine"], component: GenomicsPrecisionHub, access: AUTHENTICATED },
+  { page: "emergency-disaster-mci", slugs: ["emergency-disaster-mci", "disaster-triage", "mci-command"], component: EmergencyDisasterMciCommandHub, access: AUTHENTICATED },
 
   // --- consoles restored from the orphan set ------------------------------------
   // Eleven finished page components that had no entry here at all. Each is authenticated rather
