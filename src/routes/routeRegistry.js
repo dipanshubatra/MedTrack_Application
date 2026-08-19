@@ -61,6 +61,7 @@ const EquipmentLifecyclePredictor = lazy(() => import("../pages/hospital/Equipme
 const ProcurementRequestWizard = lazy(() => import("../pages/hospital/ProcurementRequestWizard"));
 const ApprovalInbox = lazy(() => import("../pages/hospital/ApprovalInbox"));
 const DynamicRiskDashboard = lazy(() => import("../pages/hospital/DynamicRiskDashboard"));
+const ProcurementLifecycleTimeline = lazy(() => import("../pages/hospital/ProcurementLifecycleTimeline"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -248,6 +249,7 @@ export const ROUTES = [
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
   { page: "equipment-lifecycle", slugs: ["equipment-lifecycle", "lifecycle"], component: EquipmentLifecyclePredictor, access: HOSPITAL_ONLY },
   { page: "procurement-wizard", slugs: ["procurement-wizard"], component: ProcurementRequestWizard, access: HOSPITAL_ONLY },
+  { page: "procurement-timeline", slugs: ["procurement-timeline"], component: ProcurementLifecycleTimeline, access: HOSPITAL_ONLY, param: "requestId" },
   { page: "risk-dashboard", slugs: ["risk-dashboard", "la-razt"], component: DynamicRiskDashboard, access: HOSPITAL_ONLY },
   { page: "approval-inbox", slugs: ["approval-inbox"], component: ApprovalInbox, access: HOSPITAL_ONLY },
   { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
