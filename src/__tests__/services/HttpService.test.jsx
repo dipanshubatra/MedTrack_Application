@@ -9,6 +9,8 @@ const mockAlert = vi.fn();
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
+beforeEach(() => { sessionStorage.clear(); vi.stubGlobal("alert", mockAlert); });
+afterEach(() => { vi.unstubAllGlobals(); });
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -46,6 +48,11 @@ it("attaches JWT Bearer token from sessionStorage", async () => {
     }),
   );
 
+it("attaches JWT Bearer token", async () => {
+  sessionStorage.setItem("medtrack_user", JSON.stringify({ id: "u1", token: "my-jwt" }));
+  const API = await getApi();
+  let hdrs;
+  server.use(http.get(, ({ request }) => { hdrs = request.headers; return HttpResponse.json({ ok: true }); }));
   await API.get("/api/test");
   expect(hdrs.get("Authorization")).toBe("Bearer my-jwt");
 });
