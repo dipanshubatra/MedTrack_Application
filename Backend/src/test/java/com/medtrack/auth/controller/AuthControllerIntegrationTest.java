@@ -60,6 +60,15 @@ public class AuthControllerIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
+    private com.medtrack.repository.MaintenanceTaskRepository maintenanceTaskRepository;
+
+    @Autowired
+    private com.medtrack.repository.EquipmentRepository equipmentRepository;
+
+    @Autowired
+    private com.medtrack.repository.HospitalRepository hospitalRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -72,6 +81,9 @@ public class AuthControllerIntegrationTest {
     void cleanDatabase() {
         passwordResetTokenRepository.deleteAll();
         refreshTokenRepository.deleteAll();
+        maintenanceTaskRepository.deleteAll();
+        equipmentRepository.deleteAll();
+        hospitalRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -179,7 +191,7 @@ public class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(
+                .andExpect(jsonPath("$.detail").value(
                         "HOSPITAL accounts cannot be created through public registration"));
 
         assertFalse(userRepository.existsByEmail("untrusted@medtrack.com"));
@@ -203,7 +215,7 @@ public class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(
+                .andExpect(jsonPath("$.detail").value(
                         "HOSPITAL accounts cannot be created through public registration"));
 
         assertEquals(0L, userRepository.count());

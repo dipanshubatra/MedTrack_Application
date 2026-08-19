@@ -1,14 +1,12 @@
 package com.medtrack.supplier.exception;
 
-import com.medtrack.supplier.dto.ApiErrorResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class SupplierGlobalExceptionHandlerTest {
 
@@ -21,13 +19,14 @@ class SupplierGlobalExceptionHandlerTest {
         
         IllegalArgumentException ex = new IllegalArgumentException("Invalid argument");
         
-        ResponseEntity<ApiErrorResponse> response = handler.handleIllegalArgumentException(ex, request);
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleIllegalArgumentException(ex, request);
+        ProblemDetail response = responseEntity.getBody();
         
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals("Bad Request", response.getBody().getError());
-        assertEquals("Invalid argument", response.getBody().getMessage());
-        assertEquals("/api/test", response.getBody().getPath());
+        assertEquals(HttpStatus.BAD_REQUEST.value(), response.getStatus());
+        assertEquals("Bad Request", response.getTitle());
+        assertEquals("Invalid argument", response.getDetail());
+        assertNotNull(response.getProperties());
+        assertEquals("/api/test", response.getProperties().get("path"));
     }
 
     @Test
@@ -37,11 +36,12 @@ class SupplierGlobalExceptionHandlerTest {
 
         Exception ex = new Exception("Unexpected error");
         
-        ResponseEntity<ApiErrorResponse> response = handler.handleGenericException(ex, request);
+        ResponseEntity<ProblemDetail> responseEntity = handler.handleGenericException(ex, request);
+        ProblemDetail response = responseEntity.getBody();
 
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals("Internal Server Error", response.getBody().getError());
-        assertEquals("/api/test-generic", response.getBody().getPath());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), response.getStatus());
+        assertEquals("Internal Server Error", response.getTitle());
+        assertNotNull(response.getProperties());
+        assertEquals("/api/test-generic", response.getProperties().get("path"));
     }
 }
