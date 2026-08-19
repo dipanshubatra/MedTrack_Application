@@ -188,6 +188,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/auth/oauth21/**").authenticated()
                 .requestMatchers("/api/auth/oauth21/**").hasRole("HOSPITAL")
 
+                // JWT Security Gateway boundaries:
+                // Token issuance, validation, revocation, signing-key rotation and purge all
+                // mutate security state, so only HOSPITAL administrators may call them. JWKS
+                // discovery and audit metrics are read-only for any authenticated caller.
+                .requestMatchers(HttpMethod.GET, "/api/auth/jwt/**").authenticated()
+                .requestMatchers("/api/auth/jwt/**").hasRole("HOSPITAL")
+
                 // SCIM identity provisioning:
                 // POST /users/provision creates accounts and POST /users/deprovision disables
                 // them, so an anonymous caller could both mint accounts and lock out any existing
