@@ -39,7 +39,7 @@ it("renders demo data without API calls when user has demo- prefix", async () =>
   );
 
   await waitFor(() => {
-    expect(screen.getByText(/MedTrack/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /dashboard/i })).toBeInTheDocument();
   });
 
   expect(mockGetAllEquipment).not.toHaveBeenCalled();
