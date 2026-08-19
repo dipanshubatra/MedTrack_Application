@@ -24,7 +24,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/auth/oauth21")
-@CrossOrigin(origins = "*")
 public class OAuth21TokenSecurityController {
 
     private final OAuth21TokenSecurityService oauthService;
