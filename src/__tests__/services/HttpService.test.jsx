@@ -1,15 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-
 const BASE_URL = "http://localhost:8081";
-
 const server = setupServer(
-  http.get(`${BASE_URL}/api/test`, () => HttpResponse.json({ ok: true })),
+  http.get(, () => HttpResponse.json({ ok: true })),
 );
-
 const mockAlert = vi.fn();
-
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
@@ -51,7 +47,7 @@ it("attaches JWT Bearer token from sessionStorage", async () => {
   );
 
   await API.get("/api/test");
-  expect(capturedHeaders.get("Authorization")).toBe("Bearer my-jwt-token");
+  expect(hdrs.get("Authorization")).toBe("Bearer my-jwt");
 });
 
 it("handles 401 by clearing sessionStorage, toasting and redirecting under the base path", async () => {
@@ -68,7 +64,6 @@ it("handles 401 by clearing sessionStorage, toasting and redirecting under the b
   );
 
   await expect(API.get("/api/test")).rejects.toThrow();
-
   expect(sessionStorage.getItem("medtrack_user")).toBeNull();
   expect(dispatchSpy).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -92,7 +87,6 @@ it("handles 403 with a toast and without redirect", async () => {
   );
 
   await expect(API.get("/api/test")).rejects.toThrow();
-
   expect(sessionStorage.getItem("medtrack_user")).not.toBeNull();
   expect(dispatchSpy).toHaveBeenCalledWith(
     expect.objectContaining({
