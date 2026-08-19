@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import com.medtrack.service.EquipmentCsvService;
 
 /**
  * Service layer for Equipment-related business logic.
@@ -770,7 +771,7 @@ public class EquipmentService {
                 String category = getFieldValue(fields, headers, "Category");
                 String status = getFieldValue(fields, headers, "Status");
                 String purchaseDateStr = getFieldValue(fields, headers, "Purchase Date");
-                // Both of these are in EQUIPMENT_CSV_HEADERS and were written by the export but
+                // Both of these are in EquipmentCsvService.EQUIPMENT_CSV_HEADERS and were written by the export but
                 // never read back, so a round trip silently minted a fresh equipment code and
                 // dropped the warranty date - the two columns were write-only.
                 String equipmentCode = getFieldValue(fields, headers, "Equipment Code");
@@ -1251,7 +1252,7 @@ public class EquipmentService {
      * raw values with commas, so an asset named "Ventilator, Portable" produced eight fields under
      * a seven-column header and shifted every column after it.</p>
      *
-     * <p>The column set matches {@link #EQUIPMENT_CSV_HEADERS}, which is also what the import
+     * <p>The column set matches {@link EquipmentCsvService#EQUIPMENT_CSV_HEADERS}, which is also what the import
      * accepts, so a file exported here can be fed straight back into
      * {@link #importEquipmentFromCsv}.</p>
      *
