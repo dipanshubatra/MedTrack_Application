@@ -323,6 +323,7 @@ public class OrderService {
      * on. {@link ShippingStatus} is now the single definition of what is accepted, what is stored in
      * each column, and which moves are legal.</p>
      */
+    @Transactional
     public EquipmentOrder updateOrderStatus(Long id, String status, String supplierNotes,
                                              Authentication authentication) {
         if (!isSupplier(authentication)) {
