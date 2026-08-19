@@ -261,9 +261,9 @@ public class EquipmentLifecycleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
     }
 
-    private Hospital getHospitalForUser(String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+    private Hospital getHospitalForUser(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
     }

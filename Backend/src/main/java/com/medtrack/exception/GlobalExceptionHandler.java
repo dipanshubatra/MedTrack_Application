@@ -1,5 +1,7 @@
 package com.medtrack.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -9,12 +11,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
-
 import java.util.HashMap;
 import java.util.Map;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // Handles validation violations -> 400 Bad Request
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -33,6 +36,7 @@ public class GlobalExceptionHandler {
     // Handles invalid login credentials -> 401 Unauthorized
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, String>> handleBadCredentials(BadCredentialsException ex) {
+        logger.debug("Bad credentials: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
@@ -41,6 +45,7 @@ public class GlobalExceptionHandler {
     // Handles locked account login attempts -> 401 Unauthorized
     @ExceptionHandler(LockedException.class)
     public ResponseEntity<Map<String, String>> handleLockedException(LockedException ex) {
+        logger.debug("Locked account: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
@@ -48,6 +53,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<Map<String, String>> handleEmailAlreadyExists(EmailAlreadyExistsException ex) {
+        logger.debug("Email already exists: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
@@ -55,6 +61,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleResourceNotFound(ResourceNotFoundException ex) {
+        logger.debug("Resource not found: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
@@ -62,6 +69,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidStatusTransitionException.class)
     public ResponseEntity<Map<String, String>> handleInvalidStatusTransition(InvalidStatusTransitionException ex) {
+        logger.debug("Invalid status transition: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -69,6 +77,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
+        logger.debug("Access denied: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", "Access denied");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
@@ -76,6 +85,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateTrackingNumberException.class)
     public ResponseEntity<Map<String, String>> handleDuplicateTrackingNumber(DuplicateTrackingNumberException ex) {
+        logger.debug("Duplicate tracking number: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
@@ -83,6 +93,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
+        logger.debug("Bad request: {}", ex.getMessage());
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.badRequest().body(response);
@@ -90,6 +101,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
+        logger.error("Runtime exception: {}", ex.getMessage(), ex);
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.badRequest().body(response);
@@ -97,6 +109,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGeneralException(Exception ex) {
+        logger.error("Unexpected error: {}", ex.getMessage(), ex);
         Map<String, String> response = new HashMap<>();
         response.put("message", "An unexpected error occurred");
         return ResponseEntity.internalServerError().body(response);
