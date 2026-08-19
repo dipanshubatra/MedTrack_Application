@@ -37,6 +37,9 @@ public class EquipmentCsvService {
     private final EquipmentRepository equipmentRepository;
     private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${app.equipment.export.filename:equipment.csv}")
+    private String equipmentExportFilename;
+
     /**
      * Column order for both the export and the import template.
      */
@@ -124,7 +127,7 @@ public class EquipmentCsvService {
     @Transactional(readOnly = true)
     public void exportEquipmentCsv(Long hospitalId, jakarta.servlet.http.HttpServletResponse response) throws IOException {
         response.setContentType("text/csv");
-        response.setHeader("Content-Disposition", "attachment; filename=equipment.csv");
+        response.setHeader("Content-Disposition", "attachment; filename=" + equipmentExportFilename);
 
         try (java.io.PrintWriter writer = response.getWriter();
              java.util.stream.Stream<Equipment> equipmentStream = equipmentRepository.findStreamByHospitalId(hospitalId)) {
