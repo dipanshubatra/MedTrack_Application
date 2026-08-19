@@ -416,6 +416,9 @@ public class ProcurementService {
                 && proc.getStatus() != ProcurementRequestStatus.PARTIALLY_RECEIVED) {
             throw new IllegalArgumentException("Receiving is only allowed after the request is ordered");
         }
+        if (request.getQuantityReceived() == null || request.getQuantityReceived() <= 0) {
+            throw new IllegalArgumentException("Received quantity must be greater than zero");
+        }
         int receivedSoFar = receivingRepository.findByRequestIdOrderByReceivedAtDesc(requestId).stream()
                 .mapToInt(ReceivingRecord::getQuantityReceived).sum();
         int newTotal = receivedSoFar + request.getQuantityReceived();

@@ -82,6 +82,7 @@ public class EquipmentDisposalService {
     private final MaintenanceWorkOrderRepository workOrderRepository;
     private final MaintenanceTaskRepository taskRepository;
     private final DisposalCertificatePdf certificatePdf;
+    private final PreventiveMaintenanceService preventiveMaintenanceService;
 
     /**
      * Opens a decommissioning request for one asset. The asset must still be active, and no other
@@ -108,6 +109,29 @@ public class EquipmentDisposalService {
         if (alreadyActive) {
             throw new IllegalArgumentException("This asset already has a disposal request awaiting approval");
         }
+
+        EquipmentDisposal checkDisposal = EquipmentDisposal.builder()
+                .equipment(equipment)
+                .hospital(hospital)
+                .build();
+        List<MaintenanceWorkOrder> liveWorkOrders = liveWorkOrdersFor(checkDisposal);
+        if (!liveWorkOrders.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has active maintenance work orders and cannot be submitted for disposal: "
+                            + liveWorkOrders.stream()
+                                    .map(MaintenanceWorkOrder::getWorkOrderCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
+        List<MaintenanceTask> liveTasks = liveTasksFor(checkDisposal);
+        if (!liveTasks.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "This asset still has scheduled maintenance tasks and cannot be submitted for disposal: "
+                            + liveTasks.stream()
+                                    .map(MaintenanceTask::getTaskCode)
+                                    .collect(Collectors.joining(", ")));
+        }
+
 
         EquipmentDisposal disposal = EquipmentDisposal.builder()
                 .equipment(equipment)
@@ -248,7 +272,15 @@ public class EquipmentDisposalService {
 
         Equipment equipment = disposal.getEquipment();
         equipment.setStatus(EquipmentStatus.DISPOSED);
+        equipment.setLocation(null);
+        equipment.setRoomLocation(null);
+        equipment.setWardLocation(null);
         equipmentRepository.save(equipment);
+
+        if (preventiveMaintenanceService != null && equipment.getId() != null && disposal.getHospital() != null) {
+            preventiveMaintenanceService.deactivateRulesForDecommissionedEquipment(
+                    equipment.getId(), disposal.getHospital().getId(), username);
+        }
 
         disposal.setStatus(EquipmentDisposalStatus.COMPLETED);
         disposal.setCompletedBy(username);

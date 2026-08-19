@@ -125,10 +125,6 @@ public class SecurityConfig {
                     "/api/auth/forgot-password",
                     "/api/auth/verify-otp",
                     "/api/auth/reset-password",
-                    "/api/auth/jwt/.well-known/jwks.json",
-                    "/api/auth/saml2/metadata",
-                    "/api/auth/fido2/attestation/options",
-                    "/api/auth/scim/v2/ServiceProviderConfig",
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",
@@ -226,6 +222,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -242,6 +239,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -258,6 +256,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -274,6 +273,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"
@@ -290,6 +290,7 @@ public class SecurityConfig {
                     "/api/auth/reporting/**",
                     "/api/auth/saml/**",
                     "/api/auth/sbom/**",
+                    "/api/auth/siem/**",
                     "/api/auth/soar/**",
                     "/api/auth/threat/**",
                     "/api/auth/threatintel/**"

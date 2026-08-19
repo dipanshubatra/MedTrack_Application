@@ -9,7 +9,7 @@ import {
 import {
   LayoutGrid, Users, Settings, HelpCircle, Clock3, CheckCircle2, Download,
   Box, ClipboardList, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown,
-  Bot, Bell, Search, Share2, RefreshCw, Award, Wrench, AlertTriangle, MoreHorizontal
+  Bot, Bell, Search, Share2, RefreshCw, Award, Wrench, AlertTriangle, MoreHorizontal, ShieldAlert
 } from 'lucide-react';
 import MedTrackLogo from '../../components/common/MedTrackLogo';
 
@@ -597,6 +597,11 @@ export default function Dashboard({ onNavigate }) {
             <SidebarNavButton icon={Award} label="Calibration & Compliance" onClick={() => onNavigate?.("calibration")} />
             <SidebarNavButton icon={Users} label="Staff (SCIM)" onClick={() => onNavigate?.("scim-provisioning")} />
             <SidebarNavButton icon={LineChart} label="Analytics" onClick={() => onNavigate?.("analytics")} />
+
+            <div className="my-4 border-t border-gray-100"></div>
+
+            <div className="px-3 mb-2 text-xs font-semibold text-blue-500 uppercase tracking-wider">Research</div>
+            <SidebarNavButton icon={ShieldAlert} label="Behavior Analytics Simulator" onClick={() => onNavigate?.("risk-dashboard")} />
 
             <div className="my-4 border-t border-gray-100"></div>
 
