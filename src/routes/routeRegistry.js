@@ -87,6 +87,7 @@ const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const DialysisRenalHub = lazy(() => import("../pages/renal/DialysisRenalHub"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
 const OncologyInfusionHub = lazy(() => import("../pages/oncology/OncologyInfusionHub"));
+const PrecisionOncologyMolecularHub = lazy(() => import("../pages/oncology/PrecisionOncologyMolecularHub"));
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
