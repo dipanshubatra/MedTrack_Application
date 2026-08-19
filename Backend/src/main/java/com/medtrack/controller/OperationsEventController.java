@@ -7,7 +7,12 @@ import com.medtrack.model.EventReadReceipt;
 import com.medtrack.model.OperationsEvent;
 import com.medtrack.repository.EventReadReceiptRepository;
 import com.medtrack.repository.OperationsEventRepository;
+import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.auth.model.User;
+import com.medtrack.repository.HospitalRepository;
+import com.medtrack.model.Hospital;
 import com.medtrack.service.EventPublisherService;
+import com.medtrack.exception.ResourceNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -16,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,11 +41,14 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/events")
 @RequiredArgsConstructor
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class OperationsEventController {
 
     private final OperationsEventRepository eventRepository;
     private final EventReadReceiptRepository readReceiptRepository;
     private final EventPublisherService eventPublisherService;
+    private final UserRepository userRepository;
+    private final HospitalRepository hospitalRepository;
 
     /**
      * Get paginated event history for the user's hospital.
@@ -117,7 +126,7 @@ public class OperationsEventController {
      * Mark events as read.
      */
     @PostMapping("/read")
-    public ResponseEntity<Void> markAsRead(@Valid @RequestBody EventReadRequest request, Authentication authentication) {
+    public ResponseEntity<Map<String, String>> markAsRead(@Valid @RequestBody EventReadRequest request, Authentication authentication) {
         Long userId = getUserId(authentication);
         Long hospitalId = getHospitalId(authentication);
 
@@ -138,14 +147,14 @@ public class OperationsEventController {
                 .collect(Collectors.toList());
         readReceiptRepository.saveAll(receipts);
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("message", "Events marked as read"));
     }
 
     /**
      * Mark all events as read (up to a limit).
      */
     @PostMapping("/read-all")
-    public ResponseEntity<Void> markAllAsRead(@RequestParam(defaultValue = "100") int limit, Authentication authentication) {
+    public ResponseEntity<Map<String, String>> markAllAsRead(@RequestParam(defaultValue = "100") int limit, Authentication authentication) {
         Long userId = getUserId(authentication);
         Long hospitalId = getHospitalId(authentication);
 
@@ -161,7 +170,7 @@ public class OperationsEventController {
                 .collect(Collectors.toList());
         readReceiptRepository.saveAll(receipts);
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("message", "All events marked as read"));
     }
 
     private OperationsEventResponse toResponse(OperationsEvent event) {
@@ -181,14 +190,32 @@ public class OperationsEventController {
                 .build();
     }
 
+    /**
+     * Resolves the hospital ID from the authenticated user's identity.
+     * Looks up the user by email (stored as the JWT subject), then finds the associated hospital.
+     *     * @param authentication the Spring Security authentication object
+     * @return the hospital ID
+     * @throws ResourceNotFoundException if the user or hospital cannot be resolved
+     */
     private Long getHospitalId(Authentication authentication) {
-        // In a real implementation, this would come from the user's hospital context
-        // For now, extracting from principal or using a service
-        return 1L; // Placeholder - should use HospitalAccessGuard or similar
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + email));
+        Hospital hospital = hospitalRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found for user: " + email));
+        return hospital.getId();
     }
 
+    /**
+     * Resolves the user ID from the authenticated user's identity.
+     *     * @param authentication the Spring Security authentication object
+     * @return the user ID
+     * @throws ResourceNotFoundException if the user cannot be found
+     */
     private Long getUserId(Authentication authentication) {
-        // Extract user ID from authentication
-        return 1L; // Placeholder
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + email));
+        return user.getId();
     }
 }

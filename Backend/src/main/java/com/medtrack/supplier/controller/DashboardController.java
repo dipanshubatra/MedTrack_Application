@@ -2,6 +2,7 @@ package com.medtrack.supplier.controller;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.supplier.dto.*;
 import com.medtrack.supplier.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,22 +22,27 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/supplier/dashboard")
 @RequiredArgsConstructor
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 @Tag(name = "Supplier Dashboard API", description = "Endpoints for supplier dashboard and operational insights")
 public class DashboardController {
 
     private final DashboardService dashboardService;
     private final UserRepository userRepository;
 
+    /**
+     * Resolves the supplier's user ID from the authenticated user's identity.
+     *     * @return the user ID
+     * @throws ResourceNotFoundException if the user cannot be resolved from the authentication context
+     */
     private Long resolveSupplierId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()) {
-            String username = authentication.getName();
-            Optional<User> userOpt = userRepository.findByUsername(username);
-            if (userOpt.isPresent()) {
-                return userOpt.get().getId();
-            }
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new ResourceNotFoundException("Unable to resolve supplier: no authenticated user");
         }
-        return 1L; // default fallback ID
+        String email = authentication.getName();
+        return userRepository.findByEmail(email)
+                .map(User::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("Supplier user not found: " + email));
     }
 
     @GetMapping
