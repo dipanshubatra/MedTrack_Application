@@ -6,6 +6,7 @@ import com.medtrack.auth.scim.service.ScimUserProvisioningService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -36,6 +37,7 @@ public class ScimUserProvisioningController {
     /**
      * Create / Provision New SCIM User
      */
+    @PreAuthorize("hasRole('HOSPITAL')")
     @PostMapping(value = "/Users", produces = "application/scim+json", consumes = "application/scim+json")
     public ResponseEntity<?> createScimUser(@RequestBody ScimUserDto request) {
         try {
@@ -81,6 +83,7 @@ public class ScimUserProvisioningController {
     /**
      * Update / Replace SCIM User
      */
+    @PreAuthorize("hasRole('HOSPITAL')")
     @PutMapping(value = "/Users/{scimId}", produces = "application/scim+json", consumes = "application/scim+json")
     public ResponseEntity<?> updateScimUser(@PathVariable String scimId, @RequestBody ScimUserDto request) {
         try {
@@ -98,6 +101,7 @@ public class ScimUserProvisioningController {
     /**
      * De-provision SCIM User (DELETE)
      */
+    @PreAuthorize("hasRole('HOSPITAL')")
     @DeleteMapping("/Users/{scimId}")
     public ResponseEntity<?> deleteScimUser(@PathVariable String scimId) {
         try {

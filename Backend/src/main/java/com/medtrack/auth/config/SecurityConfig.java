@@ -197,6 +197,19 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/auth/scim/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/auth/scim/**").hasRole("HOSPITAL")
 
+                // RFC 7644 SCIM 2.0 provisioning gateway (/api/scim/v2/**):
+                // Same account create/replace/deprovision and directory-enumeration surface as
+                // /api/auth/scim/**, exposed at the standards-compliant base path. Without these
+                // matchers the endpoints fell through to .anyRequest().authenticated(), letting
+                // any SUPPLIER/TECHNICIAN mint accounts, lock out users and list the directory.
+                // Reads stay authenticated; every mutating call requires a HOSPITAL admin.
+                // Method-level @PreAuthorize on ScimUserProvisioningController enforces the same
+                // boundary as defense in depth.
+                .requestMatchers(HttpMethod.GET, "/api/scim/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/scim/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/scim/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/scim/**").hasRole("HOSPITAL")
+
                 // Security Command Center:
                 // /summary aggregates the security posture of the whole deployment, and
                 // /alerts/acknowledge suppresses alerts raised by every other subsystem.
