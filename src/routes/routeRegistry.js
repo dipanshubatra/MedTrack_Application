@@ -286,6 +286,7 @@ export const ROUTES = [
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
   { page: "oncology-infusion", slugs: ["oncology-infusion", "chemotherapy-safety"], component: OncologyInfusionHub, access: AUTHENTICATED },
+  { page: "precision-oncology-molecular", slugs: ["precision-oncology-molecular", "molecular-tumor-board", "precision-oncology"], component: PrecisionOncologyMolecularHub, access: AUTHENTICATED },
   { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
