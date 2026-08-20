@@ -24,7 +24,6 @@ import java.util.NoSuchElementException;
  */
 @RestController
 @RequestMapping("/api/scim/v2")
-@CrossOrigin(origins = "*")
 public class ScimUserProvisioningController {
 
     private final ScimUserProvisioningService scimService;

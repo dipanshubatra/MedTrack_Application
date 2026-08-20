@@ -25,7 +25,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/auth/siem")
-@CrossOrigin(origins = "*")
 public class SiemController {
 
     private final SiemLogCorrelationService siemService;

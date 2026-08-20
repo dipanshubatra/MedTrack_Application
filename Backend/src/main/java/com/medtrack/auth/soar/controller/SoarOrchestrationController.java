@@ -25,7 +25,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/soar")
-@CrossOrigin(origins = "*")
 public class SoarOrchestrationController {
 
     private final SoarOrchestrationService soarService;
