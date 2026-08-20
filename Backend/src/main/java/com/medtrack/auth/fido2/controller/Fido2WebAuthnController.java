@@ -24,7 +24,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/auth/fido2")
-@CrossOrigin(origins = "*")
 public class Fido2WebAuthnController {
 
     private final Fido2WebAuthnService fidoService;

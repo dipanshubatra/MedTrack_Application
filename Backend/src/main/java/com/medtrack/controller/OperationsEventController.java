@@ -2,6 +2,7 @@ package com.medtrack.controller;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.dto.EventReadRequest;
 import com.medtrack.dto.OperationsEventResponse;
 import com.medtrack.dto.UnreadCountResponse;
@@ -50,6 +51,7 @@ public class OperationsEventController {
     private final NotificationPreferenceRepository preferenceRepository;
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
+    private final PaginationConfig paginationConfig;
 
     /**
      * Get paginated event history for the user's hospital.
@@ -62,13 +64,15 @@ public class OperationsEventController {
     public ResponseEntity<Page<OperationsEventResponse>> getEvents(
             @RequestParam(required = false) OperationsEvent.EventCategory category,
             @RequestParam(required = false) Boolean unreadOnly,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             Authentication authentication) {
 
         Long hospitalId = getHospitalId(authentication);
         Long userId = getUserId(authentication);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")));
+        int actualPage = page != null ? page : paginationConfig.getDefaultPage();
+        int actualSize = size != null ? size : paginationConfig.getDefaultPageSize();
+        Pageable pageable = PageRequest.of(actualPage, actualSize, Sort.by(Sort.Order.desc("createdAt")));
 
         Set<OperationsEvent.EventCategory> muted = category == null
                 ? preferenceRepository.mutedCategoriesFor(userId)

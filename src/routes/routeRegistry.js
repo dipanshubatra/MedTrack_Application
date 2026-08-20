@@ -61,6 +61,7 @@ const EquipmentLifecyclePredictor = lazy(() => import("../pages/hospital/Equipme
 const ProcurementRequestWizard = lazy(() => import("../pages/hospital/ProcurementRequestWizard"));
 const ApprovalInbox = lazy(() => import("../pages/hospital/ApprovalInbox"));
 const DynamicRiskDashboard = lazy(() => import("../pages/hospital/DynamicRiskDashboard"));
+const ProcurementLifecycleTimeline = lazy(() => import("../pages/hospital/ProcurementLifecycleTimeline"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -85,15 +86,19 @@ const RadiologyImagingHub = lazy(() => import("../pages/radiology/RadiologyImagi
 const SterileProcessingHub = lazy(() => import("../pages/sterile/SterileProcessingHub"));
 const IcuTelemetryHub = lazy(() => import("../pages/icu/IcuTelemetryHub"));
 const DialysisRenalHub = lazy(() => import("../pages/renal/DialysisRenalHub"));
+const NephrologyCrrtStationPage = lazy(() => import("../pages/renal/NephrologyCrrtStationPage"));
 const PharmacySupplyHub = lazy(() => import("../pages/pharmacy/PharmacySupplyHub"));
 const OncologyInfusionHub = lazy(() => import("../pages/oncology/OncologyInfusionHub"));
+const PrecisionOncologyMolecularHub = lazy(() => import("../pages/oncology/PrecisionOncologyMolecularHub"));
 const ColdChainCommandHub = lazy(() => import("../pages/coldchain/ColdChainCommandHub"));
 const ClinicalTrialHub = lazy(() => import("../pages/research/ClinicalTrialHub"));
 const EmergencyTriageHub = lazy(() => import("../pages/emergency/EmergencyTriageHub"));
+const EmergencyDisasterMciCommandHub = lazy(() => import("../pages/emergency/EmergencyDisasterMciCommandHub"));
 const RegulatoryAuditHub = lazy(() => import("../pages/audit/RegulatoryAuditHub"));
 const HospitalCommandOrchestrationSuitePage = lazy(() => import("../pages/command/HospitalCommandOrchestrationSuitePage"));
 const LabAutomationHub = lazy(() => import("../pages/lab/LabAutomationHub"));
 const PediatricNeonatalIcuHubPage = lazy(() => import("../pages/pediatric/PediatricNeonatalIcuHubPage"));
+const PediatricIcuHfovCommandHub = lazy(() => import("../pages/pediatric/PediatricIcuHfovCommandHub"));
 const PharmacovigilanceHub = lazy(() => import("../pages/pharmacovigilance/PharmacovigilanceHub"));
 const MedicationSupplyColdChainHubPage = lazy(() => import("../pages/supply/MedicationSupplyColdChainHubPage"));
 const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRoboticsHub"));
@@ -106,19 +111,12 @@ const EnterpriseZeroTrustSecurityGovernancePage = lazy(() => import("../pages/au
 const BloodBankHub = lazy(() => import("../pages/bloodbank/BloodBankHub"));
 const BloodBankTransfusionHub = lazy(() => import("../pages/bloodbank/BloodBankTransfusionHub"));
 const CardiologyCathLabHub = lazy(() => import("../pages/cardiology/CardiologyCathLabHub"));
+const CardiovascularHemodynamicsEcmoPage = lazy(() => import("../pages/cardiology/CardiovascularHemodynamicsEcmoPage"));
 const ICUTelemetryOverwatchHubPage = lazy(() => import("../pages/hospital/ICUTelemetryOverwatchHubPage"));
 const PathologyDigitalHub = lazy(() => import("../pages/pathology/PathologyDigitalHub"));
 const PatientEhrAnalyticsPredictivePage = lazy(() => import("../pages/patient/PatientEhrAnalyticsPredictivePage"));
 const GenomicsPrecisionHub = lazy(() => import("../pages/genomics/GenomicsPrecisionHub"));
-
-// Eleven consoles that were merged as page components and never given a registry entry, so no URL
-// reached them and every one of them rendered the 404 page. They are grouped here rather than
-// interleaved above because they were restored as a set, in one change, for one reason. The other
-// ten are declared once, earlier in this file, and get registry entries below, so only
-// OphthalmologyVisionHub (which lives only in this restored set) is declared here.
 const OphthalmologyVisionHub = lazy(() => import("../pages/ophthalmology/OphthalmologyVisionHub"));
-
-// --- sibling hub consoles merged into main but never registered ------------------
 const RegulatoryAuditProvenanceHub = lazy(() => import("../pages/audit/RegulatoryAuditProvenanceHub"));
 const BehavioralHealthHub = lazy(() => import("../pages/behavioral/BehavioralHealthHub"));
 const DentalOralHub = lazy(() => import("../pages/dental/DentalOralHub"));
@@ -128,7 +126,11 @@ const PopulationHealthHub = lazy(() => import("../pages/pophealth/PopulationHeal
 const RehabPtHub = lazy(() => import("../pages/rehab/RehabPtHub"));
 const EnterpriseSecurityHub = lazy(() => import("../pages/security/EnterpriseSecurityHub"));
 const TelehealthRemotePatientHub = lazy(() => import("../pages/telehealth/TelehealthRemotePatientHub"));
-const AnesthesiologyPacuHub = lazy(() => import("../pages/anesthesiology/AnesthesiologyPacuHub"));
+const MaternityObgynHub = lazy(() => import("../pages/maternity/MaternityObgynHub"));
+const NutritionDieteticsHub = lazy(() => import("../pages/nutrition/NutritionDieteticsHub"));
+const DermatologyHub = lazy(() => import("../pages/dermatology/DermatologyHub"));
+const AudiologyEntHub = lazy(() => import("../pages/ent/AudiologyEntHub"));
+const UrologyHub = lazy(() => import("../pages/urology/UrologyHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -247,6 +249,7 @@ export const ROUTES = [
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
   { page: "equipment-lifecycle", slugs: ["equipment-lifecycle", "lifecycle"], component: EquipmentLifecyclePredictor, access: HOSPITAL_ONLY },
   { page: "procurement-wizard", slugs: ["procurement-wizard"], component: ProcurementRequestWizard, access: HOSPITAL_ONLY },
+  { page: "procurement-timeline", slugs: ["procurement-timeline"], component: ProcurementLifecycleTimeline, access: HOSPITAL_ONLY, param: "requestId" },
   { page: "risk-dashboard", slugs: ["risk-dashboard", "la-razt"], component: DynamicRiskDashboard, access: HOSPITAL_ONLY },
   { page: "approval-inbox", slugs: ["approval-inbox"], component: ApprovalInbox, access: HOSPITAL_ONLY },
   { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
@@ -302,30 +305,34 @@ export const ROUTES = [
   { page: "blood-bank", slugs: ["blood-bank", "transfusion", "bloodbank"], component: BloodBankHub, access: AUTHENTICATED },
   { page: "blood-bank-transfusion", slugs: ["blood-bank-transfusion", "transfusion-medicine"], component: BloodBankTransfusionHub, access: AUTHENTICATED },
   { page: "cardiology-cathlab", slugs: ["cardiology-cathlab", "cath-lab", "cardiology"], component: CardiologyCathLabHub, access: AUTHENTICATED },
+  { page: "cardiovascular-hemodynamics-ecmo", slugs: ["cardiovascular-hemodynamics-ecmo", "hemodynamics-ecmo", "ecmo-station"], component: CardiovascularHemodynamicsEcmoPage, access: AUTHENTICATED },
   { page: "icu-telemetry-overwatch", slugs: ["icu-telemetry-overwatch", "icu-overwatch"], component: ICUTelemetryOverwatchHubPage, access: AUTHENTICATED },
   { page: "pathology-digital", slugs: ["pathology-digital", "pathology", "digital-pathology"], component: PathologyDigitalHub, access: AUTHENTICATED },
   { page: "patient-ehr-analytics", slugs: ["patient-ehr-analytics", "ehr-analytics"], component: PatientEhrAnalyticsPredictivePage, access: AUTHENTICATED },
   { page: "dialysis-renal", slugs: ["dialysis-renal", "dialysis", "nephrology"], component: DialysisRenalHub, access: AUTHENTICATED },
+  { page: "nephrology-crrt-dialysis", slugs: ["nephrology-crrt-dialysis", "crrt-dialysis", "crrt-station"], component: NephrologyCrrtStationPage, access: AUTHENTICATED },
   { page: "sterile-processing", slugs: ["sterile-processing", "cssd"], component: SterileProcessingHub, access: AUTHENTICATED },
   { page: "genomics-precision", slugs: ["genomics-precision", "precision-medicine", "genomic-medicine"], component: GenomicsPrecisionHub, access: AUTHENTICATED },
+  { page: "emergency-disaster-mci", slugs: ["emergency-disaster-mci", "disaster-triage", "mci-command"], component: EmergencyDisasterMciCommandHub, access: AUTHENTICATED },
 
   // --- consoles restored from the orphan set ------------------------------------
-  // The surviving orphan restoration. The other ten consoles in that set each have their entry
-  // above (slug collisions deduplicated), and ophthalmology is the one console that only lives in
-  // this restored set, so it keeps its entry here.
+  // Finished page components that had no entry here at all, so no URL reached them. Each is
+  // authenticated rather than role-scoped, matching every other clinical console.
   { page: "ophthalmology-vision", slugs: ["ophthalmology-vision", "ophthalmology", "eye-unit"], component: OphthalmologyVisionHub, access: AUTHENTICATED },
-
-  // --- sibling hub consoles merged into main but never registered ------------------
-  { page: "regulatory-audit-provenance", slugs: ["regulatory-audit-provenance", "provenance-ledger", "audit-provenance"], component: RegulatoryAuditProvenanceHub, access: AUTHENTICATED },
+  { page: "regulatory-audit-provenance", slugs: ["regulatory-audit-provenance", "audit-provenance", "provenance-ledger"], component: RegulatoryAuditProvenanceHub, access: AUTHENTICATED },
   { page: "behavioral-health", slugs: ["behavioral-health", "behavioral", "mental-health"], component: BehavioralHealthHub, access: AUTHENTICATED },
   { page: "dental-oral", slugs: ["dental-oral", "dental", "oral-surgery"], component: DentalOralHub, access: AUTHENTICATED },
-  { page: "patient-ehr-analytics-hub", slugs: ["patient-ehr-analytics-hub", "ehr-insights"], component: PatientEhrAnalyticsHub, access: AUTHENTICATED },
-  { page: "clinical-nlp", slugs: ["clinical-nlp", "nlp-subsystem"], component: ClinicalNlpSubsystemHub, access: AUTHENTICATED },
+  { page: "patient-ehr-analytics-hub", slugs: ["patient-ehr-analytics-hub", "ehr-hub", "ehr-analytics-hub"], component: PatientEhrAnalyticsHub, access: AUTHENTICATED },
+  { page: "clinical-nlp", slugs: ["clinical-nlp", "nlp", "nlp-subsystem"], component: ClinicalNlpSubsystemHub, access: AUTHENTICATED },
   { page: "population-health", slugs: ["population-health", "pop-health", "care-management"], component: PopulationHealthHub, access: AUTHENTICATED },
   { page: "rehab-pt", slugs: ["rehab-pt", "rehabilitation", "physical-therapy"], component: RehabPtHub, access: AUTHENTICATED },
-  { page: "enterprise-security", slugs: ["enterprise-security", "enterprise-security-hub"], component: EnterpriseSecurityHub, access: AUTHENTICATED },
-  { page: "telehealth-remote-patient", slugs: ["telehealth-remote-patient", "remote-patient"], component: TelehealthRemotePatientHub, access: AUTHENTICATED },
-  { page: "anesthesiology-pacu", slugs: ["anesthesiology-pacu", "anesthesiology", "pacu", "anesthesia"], component: AnesthesiologyPacuHub, access: AUTHENTICATED },
+  { page: "enterprise-security-hub", slugs: ["enterprise-security-hub", "enterprise-security", "security-command"], component: EnterpriseSecurityHub, access: AUTHENTICATED },
+  { page: "telehealth-remote-patient", slugs: ["telehealth-remote-patient", "remote-patient", "telehealth-patient"], component: TelehealthRemotePatientHub, access: AUTHENTICATED },
+  { page: "maternity-obgyn", slugs: ["maternity-obgyn", "ob-gyn", "maternity", "labor-delivery"], component: MaternityObgynHub, access: AUTHENTICATED },
+  { page: "nutrition-dietetics", slugs: ["nutrition-dietetics", "nutrition", "dietetics", "clinical-nutrition"], component: NutritionDieteticsHub, access: AUTHENTICATED },
+  { page: "dermatology", slugs: ["dermatology", "derm", "skin-clinic"], component: DermatologyHub, access: AUTHENTICATED },
+  { page: "audiology-ent", slugs: ["audiology-ent", "ent", "audiology", "hearing-clinic"], component: AudiologyEntHub, access: AUTHENTICATED },
+  { page: "urology", slugs: ["urology", "urology-clinic", "stone-clinic"], component: UrologyHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
@@ -341,7 +348,7 @@ export const ROUTES = [
   // operations, so they are scoped to the hospital admin role like every other console in this
   // block rather than to any signed-in user.
   { page: "backend-auth-infrastructure", slugs: ["backend-auth-infrastructure", "auth-infrastructure"], component: BackendAuthenticationSecurityInfrastructurePage, access: HOSPITAL_ONLY },
-  { page: "zerotrust-governance", slugs: ["zerotrust-governance", "zero-trust-governance", "zero-trust"], component: EnterpriseZeroTrustSecurityGovernancePage, access: HOSPITAL_ONLY },
+  { page: "zero-trust-governance", slugs: ["zero-trust-governance", "zero-trust", "zerotrust-governance"], component: EnterpriseZeroTrustSecurityGovernancePage, access: HOSPITAL_ONLY },
   { page: "authority-security", slugs: ["authority-security", "authority"], component: AuthoritySecurityPage, access: HOSPITAL_ONLY },
   { page: "sso-security", slugs: ["sso-security", "sso"], component: EnterpriseSsoPage, access: HOSPITAL_ONLY },
   { page: "rbac-security", slugs: ["rbac-security", "rbac"], component: RbacSecurityPage, access: HOSPITAL_ONLY },
