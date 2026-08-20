@@ -1,5 +1,6 @@
 package com.medtrack.controller;
 
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.dto.EquipmentStatisticsResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
 import com.medtrack.dto.StockAdjustmentRequest;
@@ -11,9 +12,9 @@ import com.medtrack.service.EquipmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -35,6 +36,7 @@ import java.util.Map;
 public class EquipmentController {
 
     private final EquipmentService equipmentService;
+    private final PaginationConfig paginationConfig;
 
     /**
      * Retrieves a paginated list of equipment records associated with the authenticated hospital.
@@ -46,8 +48,13 @@ public class EquipmentController {
     @GetMapping
     public ResponseEntity<com.medtrack.dto.PagedResponse<Equipment>> getAllEquipment(
             @RequestParam(required = false) Long locationId,
-            @PageableDefault(sort = "name") Pageable pageable,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             Principal principal) {
+
+        int actualPage = page != null ? page : paginationConfig.getDefaultPage();
+        int actualSize = size != null ? size : paginationConfig.getDefaultPageSize();
+        Pageable pageable = PageRequest.of(actualPage, actualSize, Sort.by("name"));
 
         return ResponseEntity.ok(
                 com.medtrack.dto.PagedResponse.of(
@@ -248,8 +255,12 @@ public class EquipmentController {
     @GetMapping("/archived")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Page<Equipment>> getArchivedEquipment(
-            @PageableDefault(sort = "deletedAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             Principal principal) {
+        int actualPage = page != null ? page : paginationConfig.getDefaultPage();
+        int actualSize = size != null ? size : paginationConfig.getDefaultPageSize();
+        Pageable pageable = PageRequest.of(actualPage, actualSize, Sort.by(Sort.Direction.DESC, "deletedAt"));
         return ResponseEntity.ok(equipmentService.getArchivedEquipment(principal.getName(), pageable));
     }
 
