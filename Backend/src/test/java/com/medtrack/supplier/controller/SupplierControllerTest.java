@@ -1,5 +1,6 @@
 package com.medtrack.supplier.controller;
 
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.exception.GlobalExceptionHandler;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.supplier.dto.SupplierPerformanceResponse;
@@ -50,7 +51,7 @@ public class SupplierControllerTest {
         @BeforeEach
         void setUp() {
                 supplierController = new SupplierController(supplierOrderService, supplierPerformanceService,
-                                supplierAccessGuard);
+                                supplierAccessGuard, new PaginationConfig());
                 mockMvc = MockMvcBuilders.standaloneSetup(supplierController)
                                 .setControllerAdvice(new GlobalExceptionHandler())
                                 .build();

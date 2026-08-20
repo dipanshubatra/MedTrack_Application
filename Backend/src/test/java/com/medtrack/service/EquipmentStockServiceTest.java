@@ -355,7 +355,6 @@ class EquipmentStockServiceTest {
             assertEquals(1, result.getOutOfStockItems());
             verify(equipmentStatisticsService).getLowStockSummary(hospital);
         }
-        }
     }
 
     // -----------------------------------------------------------------

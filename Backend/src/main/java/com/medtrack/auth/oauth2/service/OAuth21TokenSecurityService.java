@@ -102,6 +102,16 @@ public class OAuth21TokenSecurityService {
     }
 
     /**
+     * Fetch a single token record by its ID, used by controllers to enforce ownership
+     * (self vs HOSPITAL admin) before mutating or introspecting it.
+     */
+    @Transactional(readOnly = true)
+    public OAuth21TokenRecord findTokenById(String tokenId) {
+        return tokenRepository.findByTokenId(tokenId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid OAuth 2.1 Token ID"));
+    }
+
+    /**
      * Revoke OAuth 2.1 Token
      */
     @Transactional

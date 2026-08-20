@@ -10,6 +10,7 @@ import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.service.EquipmentService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,7 +33,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/equipment")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class EquipmentController {
 
     private final EquipmentService equipmentService;
@@ -51,8 +52,8 @@ public class EquipmentController {
     @GetMapping
     public ResponseEntity<com.medtrack.dto.PagedResponse<Equipment>> getAllEquipment(
             @RequestParam(required = false) Long locationId,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) @Min(value = 0, message = "Page number cannot be less than 0") Integer page,
+            @RequestParam(required = false) @Min(value = 1, message = "Page size must not be less than 1") Integer size,
             Principal principal) {
 
         int actualPage = page != null ? page : paginationConfig.getDefaultPage();
@@ -258,8 +259,8 @@ public class EquipmentController {
     @GetMapping("/archived")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Page<Equipment>> getArchivedEquipment(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) @Min(value = 0, message = "Page number cannot be less than 0") Integer page,
+            @RequestParam(required = false) @Min(value = 1, message = "Page size must not be less than 1") Integer size,
             Principal principal) {
         int actualPage = page != null ? page : paginationConfig.getDefaultPage();
         int actualSize = size != null ? size : paginationConfig.getDefaultPageSize();
