@@ -30,6 +30,10 @@ import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import org.springframework.validation.annotation.Validated;
+
 @RestController
 @RequestMapping("/api/equipment")
 @RequiredArgsConstructor
@@ -404,7 +408,7 @@ public class EquipmentController {
     }
     @GetMapping("/search")
     public ResponseEntity<List<Equipment>> searchEquipment(
-            @RequestParam String keyword,
+            @RequestParam @NotBlank(message = "Search keyword must not be blank") @Size(min = 2, max = 100, message = "Search keyword must be between 2 and 100 characters") String keyword,
             Principal principal) {
 
         return ResponseEntity.ok(
