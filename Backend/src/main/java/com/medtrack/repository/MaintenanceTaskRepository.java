@@ -432,6 +432,17 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("windowEnd") LocalDate windowEnd);
 
     @Query("SELECT task FROM MaintenanceTask task "
+            + "WHERE task.deadline >= :windowStart "
+            + "AND task.deadline <= :windowEnd "
+            + "AND task.assignedTechnicianRecord IS NOT NULL "
+            + "AND task.status <> com.medtrack.model.MaintenanceStatus.COMPLETED "
+            + "AND task.equipmentRecord.status NOT IN :decommissionedStatuses")
+    List<MaintenanceTask> findAlertableUpcomingTasks(
+            @Param("windowStart") LocalDate windowStart,
+            @Param("windowEnd") LocalDate windowEnd,
+            @Param("decommissionedStatuses") java.util.Collection<com.medtrack.model.EquipmentStatus> decommissionedStatuses);
+
+    @Query("SELECT task FROM MaintenanceTask task "
             + "WHERE task.hospitalId = :hospitalId "
             + "AND task.equipmentRecord.hospital.id = :hospitalId "
             + "AND task.slaState = :slaState "

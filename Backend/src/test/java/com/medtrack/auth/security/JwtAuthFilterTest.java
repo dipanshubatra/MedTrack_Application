@@ -46,7 +46,6 @@ public class JwtAuthFilterTest {
                 "medtrack-super-secret-key-change-this-in-production-1234567890");
         org.springframework.test.util.ReflectionTestUtils.setField(jwtUtil, "expirationMs", 900000L);
 
-        com.medtrack.auth.jwt.service.JwtSecurityTokenService jwtSecurityTokenService = org.mockito.Mockito.mock(com.medtrack.auth.jwt.service.JwtSecurityTokenService.class);
         jwtAuthFilter = new JwtAuthFilter(jwtUtil, authorityService, jwtSecurityTokenService);
     }
 
@@ -59,7 +58,7 @@ public class JwtAuthFilterTest {
     void doFilterInternal_AuthenticatesWhenAuthorityVersionCurrent() throws Exception {
         String token = jwtUtil.generateToken(10L, "hospital@medtrack.org", "hospital", 3L);
         when(authorityService.validateAuthorityVersion(10L, 3L)).thenReturn(true);
-        when(jwtSecurityTokenService.validateJwtToken(any())).thenReturn(new com.medtrack.auth.jwt.dto.JwtTokenValidationResponse(true, null, "hospital@medtrack.org", java.util.List.of("ROLE_HOSPITAL"), "key-1", "HS256"));
+        when(jwtSecurityTokenService.isJtiRevoked(any())).thenReturn(false);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + token);
@@ -69,6 +68,25 @@ public class JwtAuthFilterTest {
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
         assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void doFilterInternal_RejectsWhenGatewayJtiRevoked() throws Exception {
+        // A gateway-issued JWT whose jti has been revoked/expired/decommissioned must not
+        // authenticate, even though the token itself has not expired yet.
+        String token = jwtUtil.generateToken(10L, "hospital@medtrack.org", "hospital", 3L);
+        when(authorityService.validateAuthorityVersion(10L, 3L)).thenReturn(true);
+        when(jwtSecurityTokenService.isJtiRevoked(any())).thenReturn(true);
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer " + token);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain filterChain = mock(FilterChain.class);
+
+        jwtAuthFilter.doFilterInternal(request, response, filterChain);
+
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
         verify(filterChain).doFilter(request, response);
     }
 

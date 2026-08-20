@@ -98,6 +98,9 @@ class UserResolutionServiceTest {
                     null,
                     facilityLocationRepository,
                     null,
+                    null,
+                    null,
+                    null,
                     null
             );
 
@@ -122,6 +125,9 @@ class UserResolutionServiceTest {
                     null,
                     facilityLocationRepository,
                     null,
+                    null,
+                    null,
+                    null,
                     null
             );
 
@@ -138,7 +144,34 @@ class UserResolutionServiceTest {
         }
 
         @Test
-        @DisplayName("Throws ResourceNotFoundException when user is not found by username or email")
+        @DisplayName("Resolves hospital by email when username not found")
+        void resolvesByEmail() {
+            EquipmentService service = new EquipmentService(
+                    equipmentRepository,
+                    hospitalRepository,
+                    userRepository,
+                    null,
+                    facilityLocationRepository,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(sampleUser));
+            when(hospitalRepository.findByUserId(42L)).thenReturn(Optional.of(sampleHospital));
+            when(equipmentRepository.findByHospitalId(100L)).thenReturn(Collections.emptyList());
+
+            var result = service.getAllEquipment("admin");
+
+            assertThat(result).isNotNull().isEmpty();
+            verify(userRepository).findByUsername("admin");
+            verify(userRepository).findByEmail("hospital@medtrack.com");
+        }
+
+        @Test
+        @DisplayName("Throws ResourceNotFoundException when user not found")
         void throwsWhenUserNotFound() {
             EquipmentService service = new EquipmentService(
                     equipmentRepository,
@@ -146,6 +179,9 @@ class UserResolutionServiceTest {
                     userRepository,
                     null,
                     facilityLocationRepository,
+                    null,
+                    null,
+                    null,
                     null,
                     null
             );
@@ -210,7 +246,8 @@ class UserResolutionServiceTest {
                     null,
                     equipmentRepository,
                     hospitalRepository,
-                    userRepository
+                    userRepository,
+                    null
             );
 
             when(userRepository.findByUsername("hospital@medtrack.com")).thenReturn(Optional.empty());
@@ -294,7 +331,11 @@ class UserResolutionServiceTest {
                     lifecycleRepository,
                     equipmentRepository,
                     hospitalRepository,
-                    userRepository
+                    userRepository,
+                    null,
+                    null,
+                    null,
+                    null
             );
 
             when(userRepository.findByUsername("hospital@medtrack.com")).thenReturn(Optional.empty());

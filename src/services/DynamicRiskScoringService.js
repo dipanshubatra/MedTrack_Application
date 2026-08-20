@@ -1,5 +1,5 @@
 import { getClinicalCriticality } from './ClinicalCriticalityService';
-import { executeSoarPlaybook } from './SoarService';
+import { triggerPlaybook } from './SoarService';
 
 /**
  * Computational Behavioral Risk Scoring Engine (CBRSE)
@@ -55,8 +55,16 @@ export const calculateCBRS = (telemetry) => {
   if (cbrs >= 85) {
     decision = "REVOKE_SESSION";
     action = "Block & Terminate";
-    // Trigger automated SOAR response for insider threat containment
-    executeSoarPlaybook("insider_threat_containment", { deviceType, cbrs, reason: "CBRS Critical Threshold Breached" });
+    // Trigger automated SOAR response for insider threat containment. SoarService
+    // exposes this as triggerPlaybook with a { playbookId, triggerSource,
+    // affectedResource } payload (POST /api/auth/soar/execute); the previous
+    // executeSoarPlaybook(name, data) shape was dropped in a service refactor,
+    // which left this import missing and broke the production build.
+    triggerPlaybook({
+      playbookId: "insider_threat_containment",
+      triggerSource: "SIEM_ALERT",
+      affectedResource: deviceType,
+    });
   } else if (cbrs >= 60) {
     decision = "STEP_UP_AUTH";
     action = "Require MFA Challenge";

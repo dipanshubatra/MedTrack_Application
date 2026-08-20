@@ -1,5 +1,6 @@
 import React from "react";
 import SocOperationsConsolePanel from "../../components/auth/SocOperationsConsolePanel";
+import { buildHref } from "../../routes/routeRegistry";
 import { ArrowLeft, Radio, Shield } from "lucide-react";
 import "./auth.css";
 
@@ -17,7 +18,7 @@ export default function SocOperationsConsolePage({ onNavigate }) {
         <div className="flex items-center justify-between">
           <button
             type="button"
-            onClick={() => onNavigate ? onNavigate("dashboard") : (window.location.href = "/dashboard")}
+            onClick={() => onNavigate ? onNavigate("dashboard") : (window.location.href = buildHref("dashboard"))}
             className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition group"
           >
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />

@@ -3,6 +3,7 @@ package com.medtrack.service;
 import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
 import com.medtrack.dto.MaintenanceActivityPageResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
@@ -14,6 +15,8 @@ import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
+import com.medtrack.model.EquipmentDisposalStatus;
+import com.medtrack.repository.EquipmentDisposalRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
@@ -51,7 +54,6 @@ public class MaintenanceService {
     private final MaintenanceTaskScheduleAmendmentRepository
             scheduleAmendmentRepository;
     private static final int ICAL_MAX_LINE_OCTETS = 75;
-    private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 100;
     private static final DateTimeFormatter ICAL_UTC_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -61,6 +63,8 @@ public class MaintenanceService {
     private final HospitalRepository hospitalRepository;
     private final EquipmentRepository equipmentRepository;
     private final MaintenanceActivityService activityService;
+    private final EquipmentDisposalRepository disposalRepository;
+    private final PaginationConfig paginationConfig;
 
     // The lifecycle is centralized here so every update path follows the same rules.
     private static final Map<MaintenanceStatus, Set<MaintenanceStatus>> ALLOWED_TRANSITIONS = Map.of(
@@ -475,8 +479,8 @@ public class MaintenanceService {
             return Pageable.unpaged();
         }
 
-        int resolvedPage = page != null ? page : 0;
-        int resolvedSize = size != null ? size : DEFAULT_PAGE_SIZE;
+        int resolvedPage = page != null ? page : paginationConfig.getDefaultPage();
+        int resolvedSize = size != null ? size : paginationConfig.getDefaultPageSize();
         if (resolvedPage < 0) {
             throw new IllegalArgumentException("Page index cannot be negative");
         }
@@ -508,7 +512,22 @@ public class MaintenanceService {
         if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
             throw new IllegalArgumentException("Retired or disposed equipment cannot be scheduled for maintenance");
         }
+        validateNoActiveDisposal(equipment, hospitalId);
         return equipment;
+    }
+
+    private void validateNoActiveDisposal(Equipment equipment, Long hospitalId) {
+        if (disposalRepository != null && equipment != null && equipment.getId() != null && hospitalId != null) {
+            boolean pendingDisposal = disposalRepository
+                    .findByEquipmentIdAndHospitalIdOrderByRequestedAtDesc(equipment.getId(), hospitalId)
+                    .stream()
+                    .anyMatch(disposal -> disposal.getStatus() == EquipmentDisposalStatus.PENDING_APPROVAL
+                            || disposal.getStatus() == EquipmentDisposalStatus.APPROVED);
+            if (pendingDisposal) {
+                throw new IllegalArgumentException("Equipment " + equipment.getEquipmentCode()
+                        + " has an active disposal request awaiting approval or completion and cannot be scheduled for maintenance");
+            }
+        }
     }
 
     private Equipment resolveOwnedEquipmentByNumericId(String equipmentReference, Long hospitalId) {

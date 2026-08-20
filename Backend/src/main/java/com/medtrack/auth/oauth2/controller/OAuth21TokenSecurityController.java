@@ -4,9 +4,12 @@ import com.medtrack.auth.oauth2.dto.OAuth21TokenIssueRequest;
 import com.medtrack.auth.oauth2.dto.OAuth21TokenResponse;
 import com.medtrack.auth.oauth2.model.OAuth21TokenRecord;
 import com.medtrack.auth.oauth2.service.OAuth21TokenSecurityService;
+import com.medtrack.auth.security.OwnershipAccessGuard;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -21,25 +24,38 @@ import java.util.Map;
  * 3. POST /api/auth/oauth21/revoke - Revoke token and blacklist JTI
  * 4. GET /api/auth/oauth21/user-tokens - List active tokens for user
  * 5. GET /api/auth/oauth21/spec-standards - OAuth 2.1 RFC 9700 BCP Standards
+ *
+ * <p>Security model: mutating gateway routes are restricted to HOSPITAL administrators by
+ * SecurityConfig; every route additionally re-verifies ownership via {@link OwnershipAccessGuard}
+ * so a caller can only list, introspect or revoke their own tokens unless they hold the
+ * HOSPITAL administrator role.</p>
  */
 @RestController
 @RequestMapping("/api/auth/oauth21")
-@CrossOrigin(origins = "*")
 public class OAuth21TokenSecurityController {
 
     private final OAuth21TokenSecurityService oauthService;
+    private final OwnershipAccessGuard ownershipAccessGuard;
 
     @Autowired
-    public OAuth21TokenSecurityController(OAuth21TokenSecurityService oauthService) {
+    public OAuth21TokenSecurityController(OAuth21TokenSecurityService oauthService,
+                                          OwnershipAccessGuard ownershipAccessGuard) {
         this.oauthService = oauthService;
+        this.ownershipAccessGuard = ownershipAccessGuard;
     }
 
     /**
      * Issue OAuth 2.1 Access Token (Enforces PKCE S256 & DPoP Binding)
      */
     @PostMapping("/token")
-    public ResponseEntity<?> issueToken(@RequestBody OAuth21TokenIssueRequest request) {
+    public ResponseEntity<?> issueToken(@RequestBody OAuth21TokenIssueRequest request,
+                                        Authentication authentication) {
         try {
+            // Defense in depth: non-admin callers may never mint a token under another
+            // user's identity; the subject is always bound to the authenticated caller.
+            if (!ownershipAccessGuard.isHospitalAdmin(authentication)) {
+                request.setSubjectUserId(String.valueOf(ownershipAccessGuard.getCallerUserId(authentication)));
+            }
             OAuth21TokenResponse response = oauthService.issueOAuth21Token(request);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
@@ -56,8 +72,11 @@ public class OAuth21TokenSecurityController {
     @PostMapping("/introspect")
     public ResponseEntity<?> introspectToken(
             @RequestParam String tokenId,
-            @RequestHeader(value = "DPoP", required = false) String dpopHeader) {
+            @RequestHeader(value = "DPoP", required = false) String dpopHeader,
+            Authentication authentication) {
         try {
+            OAuth21TokenRecord record = oauthService.findTokenById(tokenId);
+            ownershipAccessGuard.assertSelfOrHospitalAdmin(authentication, record.getSubjectUserId());
             boolean valid = oauthService.validateDpopTokenIngress(tokenId, dpopHeader);
             Map<String, Object> result = new HashMap<>();
             result.put("active", valid);
@@ -65,6 +84,8 @@ public class OAuth21TokenSecurityController {
             result.put("dpopVerified", valid);
             result.put("compliance", "RFC 9700 OAuth 2.1 BCP");
             return ResponseEntity.ok(result);
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("active", false);
@@ -79,13 +100,18 @@ public class OAuth21TokenSecurityController {
     @PostMapping("/revoke")
     public ResponseEntity<?> revokeToken(
             @RequestParam String tokenId,
-            @RequestParam(required = false, defaultValue = "REVOKED_BY_USER") String reason) {
+            @RequestParam(required = false, defaultValue = "REVOKED_BY_USER") String reason,
+            Authentication authentication) {
         try {
+            OAuth21TokenRecord record = oauthService.findTokenById(tokenId);
+            ownershipAccessGuard.assertSelfOrHospitalAdmin(authentication, record.getSubjectUserId());
             oauthService.revokeToken(tokenId, reason);
             Map<String, String> response = new HashMap<>();
             response.put("status", "SUCCESS");
             response.put("message", "Token " + tokenId + " revoked successfully.");
             return ResponseEntity.ok(response);
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             Map<String, String> error = new HashMap<>();
             error.put("error", "revocation_failed");
@@ -96,12 +122,22 @@ public class OAuth21TokenSecurityController {
 
     /**
      * Get Active User Tokens
+     * Non-admin callers are only ever shown their own tokens; the {@code userId} request
+     * parameter is honored solely for HOSPITAL administrators.
      */
     @GetMapping("/user-tokens")
     public ResponseEntity<List<OAuth21TokenRecord>> getUserTokens(
-            @RequestParam(defaultValue = "user-medtrack-admin") String userId) {
-        List<OAuth21TokenRecord> tokens = oauthService.getActiveTokensForUser(userId);
-        return ResponseEntity.ok(tokens);
+            @RequestParam(value = "userId", required = false) String requestedUserId,
+            Authentication authentication) {
+        Long callerId = ownershipAccessGuard.getCallerUserId(authentication);
+        if (!ownershipAccessGuard.isHospitalAdmin(authentication)) {
+            if (requestedUserId != null && !requestedUserId.equals(String.valueOf(callerId))) {
+                throw new AccessDeniedException("You are not authorized to list another user's OAuth 2.1 tokens");
+            }
+            return ResponseEntity.ok(oauthService.getActiveTokensForUser(String.valueOf(callerId)));
+        }
+        String targetUserId = requestedUserId != null ? requestedUserId : String.valueOf(callerId);
+        return ResponseEntity.ok(oauthService.getActiveTokensForUser(targetUserId));
     }
 
     /**
