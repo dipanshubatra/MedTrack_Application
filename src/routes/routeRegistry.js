@@ -102,6 +102,7 @@ const PediatricIcuHfovCommandHub = lazy(() => import("../pages/pediatric/Pediatr
 const PharmacovigilanceHub = lazy(() => import("../pages/pharmacovigilance/PharmacovigilanceHub"));
 const MedicationSupplyColdChainHubPage = lazy(() => import("../pages/supply/MedicationSupplyColdChainHubPage"));
 const SurgicalRoboticsHub = lazy(() => import("../pages/surgical/SurgicalRoboticsHub"));
+const MedicationInteractionAlertEnginePage = lazy(() => import("../pages/pharmacy/MedicationInteractionAlertEnginePage"));
 const TelehealthRemoteMonitoringHubPage = lazy(() => import("../pages/telehealth/TelehealthRemoteMonitoringHubPage"));
 const GenomicClinicalTrialsHubPage = lazy(() => import("../pages/trials/GenomicClinicalTrialsHubPage"));
 const NeonatalNicuHub = lazy(() => import("../pages/neonatal/NeonatalNicuHub"));
@@ -288,6 +289,7 @@ export const ROUTES = [
   // --- radiology imaging & PACS console ----------------------------------------
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
+  { page: "medication-interactions", slugs: ["medication-interactions", "drug-interactions", "interaction-engine"], component: MedicationInteractionAlertEnginePage, access: AUTHENTICATED },
   { page: "oncology-infusion", slugs: ["oncology-infusion", "chemotherapy-safety"], component: OncologyInfusionHub, access: AUTHENTICATED },
   { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
