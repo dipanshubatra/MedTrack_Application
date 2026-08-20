@@ -24,7 +24,7 @@ public class SecurityIncident {
     private UUID incidentId;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "risk_event_id", nullable = false)
+    @JoinColumn(name = "risk_event_id")
     private RiskEvaluationEvent riskEvent;
 
     @ManyToOne(fetch = FetchType.LAZY)

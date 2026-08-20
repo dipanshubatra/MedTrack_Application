@@ -1,5 +1,6 @@
 package com.medtrack.supplier.controller;
 
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.supplier.dto.BulkStatusUpdateRequest;
 import com.medtrack.supplier.dto.SupplierPerformanceResponse;
@@ -34,6 +35,7 @@ public class SupplierController {
     private final SupplierOrderService supplierOrderService;
     private final SupplierPerformanceService supplierPerformanceService;
     private final SupplierAccessGuard supplierAccessGuard;
+    private final PaginationConfig paginationConfig;
 
     @GetMapping("/orders")
     @PreAuthorize("hasRole('SUPPLIER')")
@@ -44,8 +46,8 @@ public class SupplierController {
             @ApiResponse(responseCode = "400", description = "Invalid request arguments or filter properties")
     })
     public ResponseEntity<Page<EquipmentOrder>> getSupplierOrders(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             @RequestParam(defaultValue = "orderDate") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(required = false) String status,
@@ -69,8 +71,11 @@ public class SupplierController {
             effectiveSupplierId = supplierAccessGuard.resolveCallerId(authentication);
         }
 
+        int actualPage = page != null ? page : paginationConfig.getDefaultPage();
+        int actualSize = size != null ? size : paginationConfig.getDefaultPageSize();
+
         Page<EquipmentOrder> orders = supplierOrderService.getSupplierOrders(
-                page, size, sortBy, sortDir, status, shippingStatus, effectiveSupplierId, search,
+                actualPage, actualSize, sortBy, sortDir, status, shippingStatus, effectiveSupplierId, search,
                 deliveryStatus, isDelayed, trackingNumber, startDate, endDate);
 
                 if (orders.isEmpty()) {

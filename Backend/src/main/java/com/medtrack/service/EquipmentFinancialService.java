@@ -14,6 +14,7 @@ import com.medtrack.repository.HospitalRepository;
 import com.medtrack.util.DepreciationCalculator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -50,6 +51,7 @@ public class EquipmentFinancialService {
      * them.
      */
     @Transactional(readOnly = true)
+    @Cacheable(value = "financialDashboard", key = "#username")
     public EquipmentFinancialDashboardResponse getFinancialDashboard(String username) {
 
         Hospital hospital = getHospitalForUser(username);
