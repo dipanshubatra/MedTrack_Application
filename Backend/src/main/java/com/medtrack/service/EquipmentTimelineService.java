@@ -256,9 +256,14 @@ public class EquipmentTimelineService {
                 .build();
     }
 
-    private Hospital getHospitalForUser(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+    private Hospital getHospitalForUser(String username) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username or email is required");
+        }
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
     }
