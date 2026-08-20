@@ -39,6 +39,9 @@ public class EquipmentController {
     private final EquipmentService equipmentService;
     private final PaginationConfig paginationConfig;
 
+    @org.springframework.beans.factory.annotation.Value("${app.csv.import.max-size-bytes:10485760}")
+    private long maxCsvSizeBytes;
+
     /**
      * Retrieves a paginated list of equipment records associated with the authenticated hospital.
      *
@@ -294,6 +297,7 @@ public class EquipmentController {
     public ResponseEntity<com.medtrack.dto.EquipmentImportSummary> importEquipment(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             Principal principal) {
+        validateCsvFile(file);
         return ResponseEntity.ok(equipmentService.importEquipmentFromCsv(file, principal.getName()));
     }
 
@@ -311,7 +315,21 @@ public class EquipmentController {
     public ResponseEntity<com.medtrack.dto.EquipmentImportPreviewResponse> previewImport(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             Principal principal) {
+        validateCsvFile(file);
         return ResponseEntity.ok(equipmentService.previewEquipmentImport(file, principal.getName()));
+    }
+
+    private void validateCsvFile(org.springframework.web.multipart.MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Missing or empty CSV file");
+        }
+        String filename = file.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
+            throw new IllegalArgumentException("Invalid file extension. Only .csv files are allowed");
+        }
+        if (file.getSize() > maxCsvSizeBytes) {
+            throw new IllegalArgumentException("CSV file size exceeds the maximum allowed limit of " + maxCsvSizeBytes + " bytes");
+        }
     }
 
     /**
