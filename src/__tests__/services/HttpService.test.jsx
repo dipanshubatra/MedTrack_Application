@@ -14,6 +14,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 
 beforeEach(() => {
   sessionStorage.clear();
+  mockAlert.mockClear();
   vi.stubGlobal("alert", mockAlert);
   // pathname matters: the interceptor mirrors App.jsx's base-path handling and reads
   // window.location.pathname to decide whether the app is served from BASE_PATH. The stub used to
@@ -27,6 +28,12 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // Restore location.href
+  Object.defineProperty(window, "location", {
+    value: { ...window.location, href: originalHref },
+    writable: true,
+    configurable: true,
+  });
 });
 
 async function getInterceptorBehavior() {

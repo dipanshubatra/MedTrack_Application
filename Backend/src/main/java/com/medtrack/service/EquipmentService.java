@@ -28,9 +28,24 @@ import lombok.RequiredArgsConstructor;
 import com.medtrack.service.EquipmentCsvService;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
@@ -1262,6 +1277,11 @@ public class EquipmentService {
     @Transactional(readOnly = true)
     public void exportEquipmentCsv(String username, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         Hospital hospital = getHospitalForUser(username);
+
+        long count = equipmentRepository.countByHospitalId(hospital.getId());
+        if (count == 0) {
+            throw new ResourceNotFoundException("No equipment records found to export");
+        }
 
         response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
         response.setContentType("text/csv; charset=UTF-8");
