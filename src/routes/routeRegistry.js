@@ -126,6 +126,7 @@ const ClinicalNlpSubsystemHub = lazy(() => import("../pages/nlp/ClinicalNlpSubsy
 const PopulationHealthHub = lazy(() => import("../pages/pophealth/PopulationHealthHub"));
 const RehabPtHub = lazy(() => import("../pages/rehab/RehabPtHub"));
 const EnterpriseSecurityHub = lazy(() => import("../pages/security/EnterpriseSecurityHub"));
+const EnterpriseSecurityComplianceHub = lazy(() => import("../pages/security/EnterpriseSecurityComplianceHub"));
 const TelehealthRemotePatientHub = lazy(() => import("../pages/telehealth/TelehealthRemotePatientHub"));
 const MaternityObgynHub = lazy(() => import("../pages/maternity/MaternityObgynHub"));
 const NutritionDieteticsHub = lazy(() => import("../pages/nutrition/NutritionDieteticsHub"));
@@ -329,6 +330,7 @@ export const ROUTES = [
   { page: "population-health", slugs: ["population-health", "pop-health", "care-management"], component: PopulationHealthHub, access: AUTHENTICATED },
   { page: "rehab-pt", slugs: ["rehab-pt", "rehabilitation", "physical-therapy"], component: RehabPtHub, access: AUTHENTICATED },
   { page: "enterprise-security-hub", slugs: ["enterprise-security-hub", "enterprise-security", "security-command"], component: EnterpriseSecurityHub, access: AUTHENTICATED },
+  { page: "enterprise-security-compliance", slugs: ["enterprise-security-compliance", "sec-compliance", "zero-trust-kms"], component: EnterpriseSecurityComplianceHub, access: AUTHENTICATED },
   { page: "telehealth-remote-patient", slugs: ["telehealth-remote-patient", "remote-patient", "telehealth-patient"], component: TelehealthRemotePatientHub, access: AUTHENTICATED },
   { page: "maternity-obgyn", slugs: ["maternity-obgyn", "ob-gyn", "maternity", "labor-delivery"], component: MaternityObgynHub, access: AUTHENTICATED },
   { page: "nutrition-dietetics", slugs: ["nutrition-dietetics", "nutrition", "dietetics", "clinical-nutrition"], component: NutritionDieteticsHub, access: AUTHENTICATED },
