@@ -2,6 +2,7 @@ package com.medtrack.controller;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.dto.MaintenanceWorkOrderAssignmentRequest;
 import com.medtrack.dto.MaintenanceWorkOrderCompletionRequest;
 import com.medtrack.dto.MaintenanceWorkOrderDashboardResponse;
@@ -36,6 +37,7 @@ public class MaintenanceWorkOrderController {
     private final MaintenanceWorkOrderService workOrderService;
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
+    private final PaginationConfig paginationConfig;
 
     /**
      * Creates a new maintenance work order.
@@ -87,11 +89,14 @@ public class MaintenanceWorkOrderController {
             @RequestParam(required = false) LocalDate dueTo,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean overdue,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String direction,
             Principal principal) {
+
+        int actualPage = page != null ? page : paginationConfig.getDefaultPage();
+        int actualSize = size != null ? size : paginationConfig.getDefaultPageSize();
 
         return ResponseEntity.ok(
                 workOrderService.searchWorkOrders(
@@ -107,8 +112,8 @@ public class MaintenanceWorkOrderController {
                         dueTo,
                         search,
                         overdue,
-                        page,
-                        size,
+                        actualPage,
+                        actualSize,
                         sortBy,
                         direction
                 )

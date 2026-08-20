@@ -1,305 +1,182 @@
 package com.medtrack.nephrology.service;
 
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import java.io.Serializable;
 import java.time.Instant;
-import java.util.*;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 
 /**
- * Enterprise Nephrology Continuous Renal Replacement Therapy (CRRT) & AKI Overwatch Service.
- * 
- * Computes real-time extracorporeal kinetics:
- * - Effluent dose (mL/kg/hr) vs KDIGO targets
- * - Filtration Fraction (FF %) and plasma flow dynamics
- * - Transmembrane Pressure (TMP) & Filter Pressure Drop (Delta P) clotting hazard models
- * - Regional Citrate Anticoagulation (RCA) Total Calcium to Ionized Calcium ratio
- * - Fluid Overload Percentage (FO %) and cumulative 24h ultrafiltration balance
- * - KDIGO Acute Kidney Injury Staging (Stages 1-3)
- * 
- * Strictly adheres to:
- * - KDIGO Clinical Practice Guidelines for Acute Kidney Injury
- * - International Society of Nephrology & ADQI Extracorporeal Standards
- * - FDA 21 CFR Part 11 Electronic Records & Signatures
- * - HL7 FHIR R4 DeviceMetric and Observation standards
+ * Enterprise Nephrology CRRT & Extracorporeal Blood Purification Telemetry Service.
+ * Provides transactional calculations for KDIGO AKI Staging, Weight-based Effluent Clearance Dosing,
+ * Transmembrane Pressure (TMP) Filter Longevity Surveillance, and Regional Citrate Anticoagulation (RCA) Safety.
  */
-@Service
-@Transactional
 public class NephrologyCrrtService {
 
-    private static final Logger logger = Logger.getLogger(NephrologyCrrtService.class.getName());
+    private final Map<String, CrrtSessionRecord> sessionStore = new ConcurrentHashMap<>();
 
-    private final Map<String, CrrtProfile> crrtLedger = new ConcurrentHashMap<>();
-    private final List<CrrtAlert> alertLog = Collections.synchronizedList(new ArrayList<>());
-
-    public static class CrrtInput implements Serializable {
-        private String patientId;
-        private double weightKg;
-        private double admissionWeightKg;
-        private double hematocritPercent;      // % (Hct)
-        private double bloodFlowRate;          // mL/min (Qb)
-        private double dialysateRate;          // mL/hr (Qd)
-        private double preFilterReplacement;   // mL/hr (Qpre)
-        private double postFilterReplacement;  // mL/hr (Qpost)
-        private double netUltrafiltrationRate; // mL/hr (Net UFR)
-        private double accessPressure;         // mmHg (Pacc)
-        private double returnPressure;         // mmHg (Pret)
-        private double preFilterPressure;      // mmHg (Ppre)
-        private double effluentPressure;       // mmHg (Peff)
-        private double circuitIonizedCalcium;  // mmol/L (Post-filter iCa)
-        private double systemicIonizedCalcium; // mmol/L (Patient iCa)
-        private double totalCalcium;           // mmol/L (TotCa)
-        private double serumCreatinine;        // mg/dL
-        private double baselineCreatinine;     // mg/dL
-        private double urineOutput6hMlKgHr;    // mL/kg/hr
-        private double serumPotassium;         // mEq/L
-        private double serumBicarbonate;       // mEq/L
-        private double bloodPh;
-
-        // Getters and Setters
-        public String getPatientId() { return patientId; }
-        public void setPatientId(String patientId) { this.patientId = patientId; }
-        public double getWeightKg() { return weightKg; }
-        public void setWeightKg(double weightKg) { this.weightKg = weightKg; }
-        public double getAdmissionWeightKg() { return admissionWeightKg; }
-        public void setAdmissionWeightKg(double admissionWeightKg) { this.admissionWeightKg = admissionWeightKg; }
-        public double getHematocritPercent() { return hematocritPercent; }
-        public void setHematocritPercent(double hct) { this.hematocritPercent = hct; }
-        public double getBloodFlowRate() { return bloodFlowRate; }
-        public void setBloodFlowRate(double qb) { this.bloodFlowRate = qb; }
-        public double getDialysateRate() { return dialysateRate; }
-        public void setDialysateRate(double qd) { this.dialysateRate = qd; }
-        public double getPreFilterReplacement() { return preFilterReplacement; }
-        public void setPreFilterReplacement(double qpre) { this.preFilterReplacement = qpre; }
-        public double getPostFilterReplacement() { return postFilterReplacement; }
-        public void setPostFilterReplacement(double qpost) { this.postFilterReplacement = qpost; }
-        public double getNetUltrafiltrationRate() { return netUltrafiltrationRate; }
-        public void setNetUltrafiltrationRate(double netUfr) { this.netUltrafiltrationRate = netUfr; }
-        public double getAccessPressure() { return accessPressure; }
-        public void setAccessPressure(double pacc) { this.accessPressure = pacc; }
-        public double getReturnPressure() { return returnPressure; }
-        public void setReturnPressure(double pret) { this.returnPressure = pret; }
-        public double getPreFilterPressure() { return preFilterPressure; }
-        public void setPreFilterPressure(double ppre) { this.preFilterPressure = ppre; }
-        public double getEffluentPressure() { return effluentPressure; }
-        public void setEffluentPressure(double peff) { this.effluentPressure = peff; }
-        public double getCircuitIonizedCalcium() { return circuitIonizedCalcium; }
-        public void setCircuitIonizedCalcium(double ica) { this.circuitIonizedCalcium = ica; }
-        public double getSystemicIonizedCalcium() { return systemicIonizedCalcium; }
-        public void setSystemicIonizedCalcium(double ica) { this.systemicIonizedCalcium = ica; }
-        public double getTotalCalcium() { return totalCalcium; }
-        public void setTotalCalcium(double totCa) { this.totalCalcium = totCa; }
-        public double getSerumCreatinine() { return serumCreatinine; }
-        public void setSerumCreatinine(double cr) { this.serumCreatinine = cr; }
-        public double getBaselineCreatinine() { return baselineCreatinine; }
-        public void setBaselineCreatinine(double bcr) { this.baselineCreatinine = bcr; }
-        public double getUrineOutput6hMlKgHr() { return urineOutput6hMlKgHr; }
-        public void setUrineOutput6hMlKgHr(double uo) { this.urineOutput6hMlKgHr = uo; }
-        public double getSerumPotassium() { return serumPotassium; }
-        public void setSerumPotassium(double k) { this.serumPotassium = k; }
-        public double getSerumBicarbonate() { return serumBicarbonate; }
-        public void setSerumBicarbonate(double hco3) { this.serumBicarbonate = hco3; }
-        public double getBloodPh() { return bloodPh; }
-        public void setBloodPh(double ph) { this.bloodPh = ph; }
-    }
-
-    public static class CrrtProfile implements Serializable {
-        private String patientId;
-        private Instant timestamp;
-        private double plasmaFlowRate;         // Qp = Qb * (1 - Hct/100) * 60 (mL/hr)
-        private double totalUltrafiltrationRate; // Quf = Qpre + Qpost + NetUFR (mL/hr)
-        private double filtrationFraction;     // FF % = (Quf / (Qp + Qpre)) * 100
-        private double effluentFlowRate;       // Qd + Qpre + Qpost + NetUFR (mL/hr)
-        private double effluentDose;           // Effluent / Weight (mL/kg/hr)
-        private double transmembranePressure;  // TMP = ((Ppre + Pret)/2) - Peff (mmHg)
-        private double filterPressureDrop;     // Delta P = Ppre - Pret (mmHg)
-        private double totalToIonizedCalciumRatio; // TotCa / iCa (cutoff > 2.5 indicates citrate accumulation)
-        private double fluidOverloadPercent;   // ((Weight - AdmWeight) / AdmWeight) * 100
-        private String kdigoStage;             // KDIGO Stage 1, 2, 3
-        private String filterHealthStatus;     // NOMINAL, ELEVATED_TMP, CLOTTING_RISK, REPLACE_MEMBRANE
-        private String clinicalDirective;
-
-        // Getters and Setters
-        public String getPatientId() { return patientId; }
-        public void setPatientId(String patientId) { this.patientId = patientId; }
-        public Instant getTimestamp() { return timestamp; }
-        public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
-        public double getPlasmaFlowRate() { return plasmaFlowRate; }
-        public void setPlasmaFlowRate(double qp) { this.plasmaFlowRate = qp; }
-        public double getTotalUltrafiltrationRate() { return totalUltrafiltrationRate; }
-        public void setTotalUltrafiltrationRate(double quf) { this.totalUltrafiltrationRate = quf; }
-        public double getFiltrationFraction() { return filtrationFraction; }
-        public void setFiltrationFraction(double ff) { this.filtrationFraction = ff; }
-        public double getEffluentFlowRate() { return effluentFlowRate; }
-        public void setEffluentFlowRate(double eff) { this.effluentFlowRate = eff; }
-        public double getEffluentDose() { return effluentDose; }
-        public void setEffluentDose(double dose) { this.effluentDose = dose; }
-        public double getTransmembranePressure() { return transmembranePressure; }
-        public void setTransmembranePressure(double tmp) { this.transmembranePressure = tmp; }
-        public double getFilterPressureDrop() { return filterPressureDrop; }
-        public void setFilterPressureDrop(double dp) { this.filterPressureDrop = dp; }
-        public double getTotalToIonizedCalciumRatio() { return totalToIonizedCalciumRatio; }
-        public void setTotalToIonizedCalciumRatio(double ratio) { this.totalToIonizedCalciumRatio = ratio; }
-        public double getFluidOverloadPercent() { return fluidOverloadPercent; }
-        public void setFluidOverloadPercent(double fo) { this.fluidOverloadPercent = fo; }
-        public String getKdigoStage() { return kdigoStage; }
-        public void setKdigoStage(String kdigo) { this.kdigoStage = kdigo; }
-        public String getFilterHealthStatus() { return filterHealthStatus; }
-        public void setFilterHealthStatus(String status) { this.filterHealthStatus = status; }
-        public String getClinicalDirective() { return clinicalDirective; }
-        public void setClinicalDirective(String directive) { this.clinicalDirective = directive; }
-    }
-
-    public static class CrrtAlert implements Serializable {
-        private String alertId;
-        private String patientId;
-        private String severity;
-        private String parameter;
-        private double measuredValue;
-        private String message;
-        private Instant timestamp;
-
-        public CrrtAlert(String patientId, String severity, String parameter, double measuredValue, String message) {
-            this.alertId = UUID.randomUUID().toString();
-            this.patientId = patientId;
-            this.severity = severity;
-            this.parameter = parameter;
-            this.measuredValue = measuredValue;
-            this.message = message;
-            this.timestamp = Instant.now();
+    /**
+     * Calculates Weight-Based Effluent Dose in mL/kg/hr.
+     * KDIGO Recommendation: 20 - 25 mL/kg/hr prescribed to deliver >= 20 mL/kg/hr.
+     */
+    public double calculateEffluentDose(double dialysateRate, double replacementPre,
+                                       double replacementPost, double netUltrafiltrationRate,
+                                       double weightKg) {
+        if (weightKg <= 0) {
+            return 0.0;
         }
-
-        public String getAlertId() { return alertId; }
-        public String getPatientId() { return patientId; }
-        public String getSeverity() { return severity; }
-        public String getParameter() { return parameter; }
-        public double getMeasuredValue() { return measuredValue; }
-        public String getMessage() { return message; }
-        public Instant getTimestamp() { return timestamp; }
+        double totalEffluentPerHour = dialysateRate + replacementPre + replacementPost + netUltrafiltrationRate;
+        return Math.round((totalEffluentPerHour / weightKg) * 10.0) / 10.0;
     }
 
     /**
-     * Executes mathematical modeling of CRRT kinetics, RCA safety, and KDIGO AKI staging.
+     * Calculates Transmembrane Pressure (TMP) in mmHg across hollow-fiber dialyzer membranes.
+     * Formula: ((P_filter + P_venous) / 2) - P_effluent
+     * Threshold: TMP > 250 mmHg indicates imminent membrane clotting and pore clogging.
      */
-    public CrrtProfile calculateAndRecordCrrtKinetics(CrrtInput in) {
-        if (in.getWeightKg() <= 0 || in.getBloodFlowRate() <= 0) {
-            throw new IllegalArgumentException("Weight and blood flow rate must be positive numbers.");
-        }
-
-        CrrtProfile p = new CrrtProfile();
-        p.setPatientId(in.getPatientId());
-        p.setTimestamp(Instant.now());
-
-        // 1. Extracorporeal Flows & Filtration Fraction
-        double qp = in.getBloodFlowRate() * (1.0 - in.getHematocritPercent() / 100.0) * 60.0;
-        double quf = in.getPreFilterReplacement() + in.getPostFilterReplacement() + in.getNetUltrafiltrationRate();
-        double ff = (qp + in.getPreFilterReplacement()) > 0 
-            ? (quf / (qp + in.getPreFilterReplacement())) * 100.0 
-            : 0.0;
-        double effluentFlow = in.getDialysateRate() + in.getPreFilterReplacement() + in.getPostFilterReplacement() + in.getNetUltrafiltrationRate();
-        double effluentDose = effluentFlow / in.getWeightKg();
-
-        p.setPlasmaFlowRate(round(qp, 0));
-        p.setTotalUltrafiltrationRate(round(quf, 0));
-        p.setFiltrationFraction(round(ff, 1));
-        p.setEffluentFlowRate(round(effluentFlow, 0));
-        p.setEffluentDose(round(effluentDose, 1));
-
-        // 2. Transmembrane Pressures & Clotting Indices
-        double tmp = ((in.getPreFilterPressure() + in.getReturnPressure()) / 2.0) - in.getEffluentPressure();
-        double drop = in.getPreFilterPressure() - in.getReturnPressure();
-
-        p.setTransmembranePressure(round(tmp, 0));
-        p.setFilterPressureDrop(round(drop, 0));
-
-        // 3. Regional Citrate Anticoagulation (RCA) Safety Ratio
-        double caRatio = in.getSystemicIonizedCalcium() > 0 
-            ? in.getTotalCalcium() / in.getSystemicIonizedCalcium() 
-            : 0.0;
-        p.setTotalToIonizedCalciumRatio(round(caRatio, 2));
-
-        // 4. Fluid Overload %
-        double fo = in.getAdmissionWeightKg() > 0 
-            ? ((in.getWeightKg() - in.getAdmissionWeightKg()) / in.getAdmissionWeightKg()) * 100.0 
-            : 0.0;
-        p.setFluidOverloadPercent(round(fo, 1));
-
-        // 5. KDIGO AKI Staging Classification
-        classifyKdigoStage(p, in);
-
-        // 6. Membrane Clotting State Evaluation
-        evaluateFilterHealth(p, tmp, drop, ff);
-
-        // Store in ledger
-        crrtLedger.put(in.getPatientId(), p);
-        generateSafetyAlerts(in, p);
-
-        logger.info("Recorded CRRT Profile for Patient: " + in.getPatientId() 
-                    + " [Dose=" + p.getEffluentDose() + " mL/kg/h, TMP=" + p.getTransmembranePressure() + " mmHg, KDIGO=" + p.getKdigoStage() + "]");
-
-        return p;
+    public double calculateTransmembranePressure(double filterPressure, double venousPressure, double effluentPressure) {
+        double meanBloodPathPressure = (filterPressure + venousPressure) / 2.0;
+        return Math.max(0.0, Math.round((meanBloodPathPressure - effluentPressure) * 10.0) / 10.0);
     }
 
-    private void classifyKdigoStage(CrrtProfile p, CrrtInput in) {
-        double crRatio = in.getBaselineCreatinine() > 0 ? in.getSerumCreatinine() / in.getBaselineCreatinine() : 1.0;
-        
-        if (crRatio >= 3.0 || in.getSerumCreatinine() >= 4.0 || in.getUrineOutput6hMlKgHr() < 0.3) {
-            p.setKdigoStage("Stage 3");
-            p.setClinicalDirective("Severe AKI. Continuous renal replacement therapy indicated for metabolic/volume control.");
-        } else if (crRatio >= 2.0 || in.getUrineOutput6hMlKgHr() < 0.5) {
-            p.setKdigoStage("Stage 2");
-            p.setClinicalDirective("Moderate AKI. Optimize hemodynamics, avoid nephrotoxins, monitor CRRT indications.");
-        } else if (crRatio >= 1.5 || in.getSerumCreatinine() - in.getBaselineCreatinine() >= 0.3) {
-            p.setKdigoStage("Stage 1");
-            p.setClinicalDirective("Mild AKI. Maintain renal perfusion and monitor urine output closely.");
-        } else {
-            p.setKdigoStage("Stage 0 (Normal)");
-            p.setClinicalDirective("Normal baseline renal clearance.");
+    /**
+     * Calculates Filtration Fraction (FF) percentage.
+     * Formula: (Replacement_Pre + Net_UFR) / (BloodFlow * 60 * (1 - Hematocrit)) * 100
+     * Threshold: FF > 20-25% dramatically increases hemoconcentration and filter clotting.
+     */
+    public double calculateFiltrationFraction(double replacementPre, double netUfr,
+                                             double bloodFlowQb, double hematocrit) {
+        double plasmaFlowPerHour = bloodFlowQb * 60.0 * (1.0 - Math.min(0.60, Math.max(0.15, hematocrit)));
+        if (plasmaFlowPerHour <= 0) {
+            return 0.0;
         }
+        return Math.round((((replacementPre + netUfr) / plasmaFlowPerHour) * 100.0) * 10.0) / 10.0;
     }
 
-    private void evaluateFilterHealth(CrrtProfile p, double tmp, double drop, double ff) {
-        if (tmp > 300 || drop > 180 || ff > 30) {
-            p.setFilterHealthStatus("REPLACE_MEMBRANE");
-        } else if (tmp > 230 || drop > 130 || ff > 25) {
-            p.setFilterHealthStatus("CLOTTING_RISK");
-        } else if (tmp > 180) {
-            p.setFilterHealthStatus("ELEVATED_TMP");
-        } else {
-            p.setFilterHealthStatus("NOMINAL");
+    /**
+     * Classifies KDIGO Acute Kidney Injury (AKI) severity stage based on serum creatinine & urine output.
+     */
+    public String evaluateKdigoStage(double currentCreatinine, double baselineCreatinine, double urineOutputMlKgHr) {
+        double ratio = baselineCreatinine > 0 ? (currentCreatinine / baselineCreatinine) : 1.0;
+        if (ratio >= 3.0 || currentCreatinine >= 4.0 || urineOutputMlKgHr < 0.3) {
+            return "KDIGO_STAGE_3_CRITICAL";
+        } else if (ratio >= 2.0 || urineOutputMlKgHr < 0.5) {
+            return "KDIGO_STAGE_2_MODERATE";
+        } else if (ratio >= 1.5 || (currentCreatinine - baselineCreatinine) >= 0.3) {
+            return "KDIGO_STAGE_1_EARLY";
         }
+        return "NO_AKI_BASELINE";
     }
 
-    private void generateSafetyAlerts(CrrtInput in, CrrtProfile p) {
-        if (p.getTotalToIonizedCalciumRatio() > 2.5) {
-            alertLog.add(new CrrtAlert(in.getPatientId(), "CRITICAL", "TotCa/iCa", p.getTotalToIonizedCalciumRatio(),
-                    "Total Calcium to Ionized Calcium ratio > 2.5 indicates citrate accumulation / impaired hepatic clearance."));
+    /**
+     * Evaluates Regional Citrate Anticoagulation (RCA) Safety & Citrate Accumulation Toxicity.
+     * Citrate Toxicity: Total Calcium (mg/dL) / Systemic Ionized Calcium (mmol/L) ratio > 2.5.
+     */
+    public CitrateSafetyEvaluation evaluateCitrateSafety(double totalCalciumMgDl, double systemicIcaMmolL,
+                                                        double postFilterIcaMmolL) {
+        double ratio = systemicIcaMmolL > 0 ? (totalCalciumMgDl / systemicIcaMmolL) : 0.0;
+        boolean toxicitySuspected = ratio >= 2.5;
+        boolean circuitOptimal = postFilterIcaMmolL >= 0.25 && postFilterIcaMmolL <= 0.35;
+
+        String safetyStatus = "SAFE_THERAPEUTIC";
+        if (toxicitySuspected) {
+            safetyStatus = "CITRATE_ACCUMULATION_WARNING";
+        } else if (!circuitOptimal) {
+            safetyStatus = postFilterIcaMmolL > 0.35 ? "SUBTHERAPEUTIC_CLOT_RISK" : "EXCESS_ANTICOAGULATION";
         }
 
-        if (p.getTransmembranePressure() > 280) {
-            alertLog.add(new CrrtAlert(in.getPatientId(), "HIGH", "TMP", p.getTransmembranePressure(),
-                    "TMP > 280 mmHg indicates progressive membrane fouling/clotting. Prepare filter replacement."));
+        return new CitrateSafetyEvaluation(ratio, postFilterIcaMmolL, systemicIcaMmolL, safetyStatus, toxicitySuspected, Instant.now());
+    }
+
+    /**
+     * Records a new active CRRT session telemetry state.
+     */
+    public CrrtSessionRecord recordCrrtSession(String patientId, String crrtMode, double weightKg,
+                                             double bloodFlowQb, double dialysateQd, double repPre,
+                                             double repPost, double netUfr, double pFilter,
+                                             double pVenous, double pEffluent, double currentCr,
+                                             double baselineCr, double systemicIca, double postFilterIca) {
+        String sessionId = "CRRT-SES-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        double effluentDose = calculateEffluentDose(dialysateQd, repPre, repPost, netUfr, weightKg);
+        double tmp = calculateTransmembranePressure(pFilter, pVenous, pEffluent);
+        double ff = calculateFiltrationFraction(repPre, netUfr, bloodFlowQb, 0.30);
+        String kdigo = evaluateKdigoStage(currentCr, baselineCr, 0.2);
+
+        CrrtSessionRecord record = new CrrtSessionRecord(
+                sessionId, patientId, crrtMode, bloodFlowQb, effluentDose, tmp, ff, kdigo, Instant.now()
+        );
+
+        sessionStore.put(sessionId, record);
+        return record;
+    }
+
+    public CrrtSessionRecord getSession(String sessionId) {
+        return sessionStore.get(sessionId);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Inner Domain Models                                                */
+    /* ------------------------------------------------------------------ */
+
+    public static class CrrtSessionRecord {
+        private final String sessionId;
+        private final String patientId;
+        private final String crrtMode;
+        private final double bloodFlowQb;
+        private final double effluentDose;
+        private final double tmp;
+        private final double filtrationFraction;
+        private final String kdigoStage;
+        private final Instant timestamp;
+
+        public CrrtSessionRecord(String sessionId, String patientId, String crrtMode,
+                                double bloodFlowQb, double effluentDose, double tmp,
+                                double filtrationFraction, String kdigoStage, Instant timestamp) {
+            this.sessionId = sessionId;
+            this.patientId = patientId;
+            this.crrtMode = crrtMode;
+            this.bloodFlowQb = bloodFlowQb;
+            this.effluentDose = effluentDose;
+            this.tmp = tmp;
+            this.filtrationFraction = filtrationFraction;
+            this.kdigoStage = kdigoStage;
+            this.timestamp = timestamp;
         }
 
-        if (in.getSerumPotassium() > 6.5) {
-            alertLog.add(new CrrtAlert(in.getPatientId(), "CRITICAL", "Potassium", in.getSerumPotassium(),
-                    "Critical hyperkalemia (> 6.5 mEq/L). Increase dialysate flow rate for urgent potassium clearance."));
+        public String getSessionId() { return sessionId; }
+        public String getPatientId() { return patientId; }
+        public String getCrrtMode() { return crrtMode; }
+        public double getBloodFlowQb() { return bloodFlowQb; }
+        public double getEffluentDose() { return effluentDose; }
+        public double getTmp() { return tmp; }
+        public double getFiltrationFraction() { return filtrationFraction; }
+        public String getKdigoStage() { return kdigoStage; }
+        public Instant getTimestamp() { return timestamp; }
+    }
+
+    public static class CitrateSafetyEvaluation {
+        private final double totalToIonizedCaRatio;
+        private final double postFilterIca;
+        private final double systemicIca;
+        private final String safetyStatus;
+        private final boolean toxicitySuspected;
+        private final Instant evaluatedAt;
+
+        public CitrateSafetyEvaluation(double totalToIonizedCaRatio, double postFilterIca,
+                                      double systemicIca, String safetyStatus,
+                                      boolean toxicitySuspected, Instant evaluatedAt) {
+            this.totalToIonizedCaRatio = totalToIonizedCaRatio;
+            this.postFilterIca = postFilterIca;
+            this.systemicIca = systemicIca;
+            this.safetyStatus = safetyStatus;
+            this.toxicitySuspected = toxicitySuspected;
+            this.evaluatedAt = evaluatedAt;
         }
-    }
 
-    public Optional<CrrtProfile> getLatestProfile(String patientId) {
-        return Optional.ofNullable(crrtLedger.get(patientId));
-    }
-
-    public List<CrrtAlert> getActiveAlerts() {
-        return new ArrayList<>(alertLog);
-    }
-
-    private double round(double val, int decimals) {
-        if (Double.isNaN(val) || Double.isInfinite(val)) return 0.0;
-        double factor = Math.pow(10, decimals);
-        return Math.round(val * factor) / factor;
+        public double getTotalToIonizedCaRatio() { return totalToIonizedCaRatio; }
+        public double getPostFilterIca() { return postFilterIca; }
+        public double getSystemicIca() { return systemicIca; }
+        public String getSafetyStatus() { return safetyStatus; }
+        public boolean isToxicitySuspected() { return toxicitySuspected; }
+        public Instant getEvaluatedAt() { return evaluatedAt; }
     }
 }
