@@ -1278,6 +1278,11 @@ public class EquipmentService {
     public void exportEquipmentCsv(String username, jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         Hospital hospital = getHospitalForUser(username);
 
+        long count = equipmentRepository.countByHospitalId(hospital.getId());
+        if (count == 0) {
+            throw new ResourceNotFoundException("No equipment records found to export");
+        }
+
         response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=equipment.csv");
