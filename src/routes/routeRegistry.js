@@ -168,6 +168,7 @@ const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentRe
 const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
 const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
 const SocOperationsConsolePage = lazy(() => import("../pages/auth/SocOperationsConsolePage"));
+const EndocrinologyMetabolicHub = lazy(() => import("../pages/endocrinology/EndocrinologyMetabolicHub"));
 
 
 /**
@@ -336,6 +337,7 @@ export const ROUTES = [
   { page: "nutrition-dietetics", slugs: ["nutrition-dietetics", "nutrition", "dietetics", "clinical-nutrition"], component: NutritionDieteticsHub, access: AUTHENTICATED },
   { page: "dermatology", slugs: ["dermatology", "derm", "skin-clinic"], component: DermatologyHub, access: AUTHENTICATED },
   { page: "audiology-ent", slugs: ["audiology-ent", "ent", "audiology", "hearing-clinic"], component: AudiologyEntHub, access: AUTHENTICATED },
+  { page: "endocrinology-metabolic", slugs: ["endocrinology-metabolic", "endo-metabolic", "diabetes-thyroid"], component: EndocrinologyMetabolicHub, access: AUTHENTICATED },
   { page: "urology", slugs: ["urology", "urology-clinic", "stone-clinic"], component: UrologyHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
