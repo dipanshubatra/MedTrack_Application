@@ -3,6 +3,7 @@ package com.medtrack.auth.jwt.controller;
 import com.medtrack.auth.jwt.dto.JwtTokenIssueRequest;
 import com.medtrack.auth.jwt.dto.JwtTokenValidationResponse;
 import com.medtrack.auth.jwt.service.JwtSecurityTokenService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +37,7 @@ public class JwtSecurityTokenController {
      * Issue JWT Token
      */
     @PostMapping("/token")
-    public ResponseEntity<?> issueToken(@RequestBody JwtTokenIssueRequest request) {
+    public ResponseEntity<?> issueToken(@Valid @RequestBody JwtTokenIssueRequest request) {
         try {
             Map<String, Object> tokenResponse = jwtService.issueJwtToken(request);
             return ResponseEntity.ok(tokenResponse);
