@@ -1,6 +1,6 @@
 package com.medtrack.triage;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**

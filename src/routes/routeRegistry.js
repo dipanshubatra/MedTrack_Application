@@ -118,6 +118,7 @@ const PatientEhrAnalyticsPredictivePage = lazy(() => import("../pages/patient/Pa
 const GenomicsPrecisionHub = lazy(() => import("../pages/genomics/GenomicsPrecisionHub"));
 const OphthalmologyVisionHub = lazy(() => import("../pages/ophthalmology/OphthalmologyVisionHub"));
 const RegulatoryAuditProvenanceHub = lazy(() => import("../pages/audit/RegulatoryAuditProvenanceHub"));
+const ComplianceProvenanceLedgerHub = lazy(() => import("../pages/audit/ComplianceProvenanceLedgerHub"));
 const BehavioralHealthHub = lazy(() => import("../pages/behavioral/BehavioralHealthHub"));
 const DentalOralHub = lazy(() => import("../pages/dental/DentalOralHub"));
 const PatientEhrAnalyticsHub = lazy(() => import("../pages/ehr/PatientEhrAnalyticsHub"));
@@ -125,6 +126,7 @@ const ClinicalNlpSubsystemHub = lazy(() => import("../pages/nlp/ClinicalNlpSubsy
 const PopulationHealthHub = lazy(() => import("../pages/pophealth/PopulationHealthHub"));
 const RehabPtHub = lazy(() => import("../pages/rehab/RehabPtHub"));
 const EnterpriseSecurityHub = lazy(() => import("../pages/security/EnterpriseSecurityHub"));
+const EnterpriseSecurityComplianceHub = lazy(() => import("../pages/security/EnterpriseSecurityComplianceHub"));
 const TelehealthRemotePatientHub = lazy(() => import("../pages/telehealth/TelehealthRemotePatientHub"));
 const MaternityObgynHub = lazy(() => import("../pages/maternity/MaternityObgynHub"));
 const NutritionDieteticsHub = lazy(() => import("../pages/nutrition/NutritionDieteticsHub"));
@@ -167,6 +169,7 @@ const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentRe
 const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
 const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
 const SocOperationsConsolePage = lazy(() => import("../pages/auth/SocOperationsConsolePage"));
+const EndocrinologyMetabolicHub = lazy(() => import("../pages/endocrinology/EndocrinologyMetabolicHub"));
 
 
 /**
@@ -321,6 +324,7 @@ export const ROUTES = [
   // authenticated rather than role-scoped, matching every other clinical console.
   { page: "ophthalmology-vision", slugs: ["ophthalmology-vision", "ophthalmology", "eye-unit"], component: OphthalmologyVisionHub, access: AUTHENTICATED },
   { page: "regulatory-audit-provenance", slugs: ["regulatory-audit-provenance", "audit-provenance", "provenance-ledger"], component: RegulatoryAuditProvenanceHub, access: AUTHENTICATED },
+  { page: "compliance-provenance-ledger", slugs: ["compliance-provenance-ledger", "c2pa-hipaa", "provenance-audit"], component: ComplianceProvenanceLedgerHub, access: AUTHENTICATED },
   { page: "behavioral-health", slugs: ["behavioral-health", "behavioral", "mental-health"], component: BehavioralHealthHub, access: AUTHENTICATED },
   { page: "dental-oral", slugs: ["dental-oral", "dental", "oral-surgery"], component: DentalOralHub, access: AUTHENTICATED },
   { page: "patient-ehr-analytics-hub", slugs: ["patient-ehr-analytics-hub", "ehr-hub", "ehr-analytics-hub"], component: PatientEhrAnalyticsHub, access: AUTHENTICATED },
@@ -328,11 +332,13 @@ export const ROUTES = [
   { page: "population-health", slugs: ["population-health", "pop-health", "care-management"], component: PopulationHealthHub, access: AUTHENTICATED },
   { page: "rehab-pt", slugs: ["rehab-pt", "rehabilitation", "physical-therapy"], component: RehabPtHub, access: AUTHENTICATED },
   { page: "enterprise-security-hub", slugs: ["enterprise-security-hub", "enterprise-security", "security-command"], component: EnterpriseSecurityHub, access: AUTHENTICATED },
+  { page: "enterprise-security-compliance", slugs: ["enterprise-security-compliance", "sec-compliance", "zero-trust-kms"], component: EnterpriseSecurityComplianceHub, access: AUTHENTICATED },
   { page: "telehealth-remote-patient", slugs: ["telehealth-remote-patient", "remote-patient", "telehealth-patient"], component: TelehealthRemotePatientHub, access: AUTHENTICATED },
   { page: "maternity-obgyn", slugs: ["maternity-obgyn", "ob-gyn", "maternity", "labor-delivery"], component: MaternityObgynHub, access: AUTHENTICATED },
   { page: "nutrition-dietetics", slugs: ["nutrition-dietetics", "nutrition", "dietetics", "clinical-nutrition"], component: NutritionDieteticsHub, access: AUTHENTICATED },
   { page: "dermatology", slugs: ["dermatology", "derm", "skin-clinic"], component: DermatologyHub, access: AUTHENTICATED },
   { page: "audiology-ent", slugs: ["audiology-ent", "ent", "audiology", "hearing-clinic"], component: AudiologyEntHub, access: AUTHENTICATED },
+  { page: "endocrinology-metabolic", slugs: ["endocrinology-metabolic", "endo-metabolic", "diabetes-thyroid"], component: EndocrinologyMetabolicHub, access: AUTHENTICATED },
   { page: "urology", slugs: ["urology", "urology-clinic", "stone-clinic"], component: UrologyHub, access: AUTHENTICATED },
   { page: "picu-critical-telemetry", slugs: ["picu-critical-telemetry", "picu", "pediatric-icu-telemetry", "picu-telemetry"], component: PicuCriticalTelemetryHub, access: AUTHENTICATED },
 
