@@ -133,6 +133,7 @@ const NutritionDieteticsHub = lazy(() => import("../pages/nutrition/NutritionDie
 const DermatologyHub = lazy(() => import("../pages/dermatology/DermatologyHub"));
 const AudiologyEntHub = lazy(() => import("../pages/ent/AudiologyEntHub"));
 const UrologyHub = lazy(() => import("../pages/urology/UrologyHub"));
+const PicuCriticalTelemetryHub = lazy(() => import("../pages/picu/PicuCriticalTelemetryHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -289,6 +290,7 @@ export const ROUTES = [
   { page: "radiology-imaging", slugs: ["radiology-imaging", "pacs-hub", "imaging"], component: RadiologyImagingHub, access: AUTHENTICATED },
   { page: "pharmacy-supply", slugs: ["pharmacy-supply", "pharmacy"], component: PharmacySupplyHub, access: AUTHENTICATED },
   { page: "oncology-infusion", slugs: ["oncology-infusion", "chemotherapy-safety"], component: OncologyInfusionHub, access: AUTHENTICATED },
+  { page: "precision-oncology-molecular", slugs: ["precision-oncology-molecular", "molecular-tumor-board", "precision-oncology"], component: PrecisionOncologyMolecularHub, access: AUTHENTICATED },
   { page: "cold-chain", slugs: ["cold-chain", "coldchain", "cryo-telemetry"], component: ColdChainCommandHub, access: AUTHENTICATED },
   { page: "clinical-trial", slugs: ["clinical-trial", "clinical-research"], component: ClinicalTrialHub, access: AUTHENTICATED },
   { page: "emergency-triage", slugs: ["emergency-triage", "triage-hub"], component: EmergencyTriageHub, access: AUTHENTICATED },
@@ -339,6 +341,7 @@ export const ROUTES = [
   { page: "audiology-ent", slugs: ["audiology-ent", "ent", "audiology", "hearing-clinic"], component: AudiologyEntHub, access: AUTHENTICATED },
   { page: "endocrinology-metabolic", slugs: ["endocrinology-metabolic", "endo-metabolic", "diabetes-thyroid"], component: EndocrinologyMetabolicHub, access: AUTHENTICATED },
   { page: "urology", slugs: ["urology", "urology-clinic", "stone-clinic"], component: UrologyHub, access: AUTHENTICATED },
+  { page: "picu-critical-telemetry", slugs: ["picu-critical-telemetry", "picu", "pediatric-icu-telemetry", "picu-telemetry"], component: PicuCriticalTelemetryHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
@@ -391,6 +394,7 @@ export const ROUTES = [
   { page: "compliance-evidence", slugs: ["evidence", "compliance-evidence"], component: ComplianceEvidencePage, access: AUTHENTICATED },
   { page: "compliance-reporting", slugs: ["compliance-reporting", "reporting"], component: ComplianceReportingPage, access: AUTHENTICATED },
   { page: "soc-console", slugs: ["soc-console", "soc-command-center"], component: SocOperationsConsolePage, access: AUTHENTICATED },
+  { page: "enterprise-zero-trust-governance", slugs: ["enterprise-zero-trust-governance", "zero-trust-guard", "ztna-governance"], component: EnterpriseZeroTrustSecurityGovernancePage, access: AUTHENTICATED },
 ];
 
 
