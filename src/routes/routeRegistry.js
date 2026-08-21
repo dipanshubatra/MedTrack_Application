@@ -133,6 +133,7 @@ const NutritionDieteticsHub = lazy(() => import("../pages/nutrition/NutritionDie
 const DermatologyHub = lazy(() => import("../pages/dermatology/DermatologyHub"));
 const AudiologyEntHub = lazy(() => import("../pages/ent/AudiologyEntHub"));
 const UrologyHub = lazy(() => import("../pages/urology/UrologyHub"));
+const PicuCriticalTelemetryHub = lazy(() => import("../pages/picu/PicuCriticalTelemetryHub"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -339,6 +340,7 @@ export const ROUTES = [
   { page: "audiology-ent", slugs: ["audiology-ent", "ent", "audiology", "hearing-clinic"], component: AudiologyEntHub, access: AUTHENTICATED },
   { page: "endocrinology-metabolic", slugs: ["endocrinology-metabolic", "endo-metabolic", "diabetes-thyroid"], component: EndocrinologyMetabolicHub, access: AUTHENTICATED },
   { page: "urology", slugs: ["urology", "urology-clinic", "stone-clinic"], component: UrologyHub, access: AUTHENTICATED },
+  { page: "picu-critical-telemetry", slugs: ["picu-critical-telemetry", "picu", "pediatric-icu-telemetry", "picu-telemetry"], component: PicuCriticalTelemetryHub, access: AUTHENTICATED },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED, permission: "READ_MAINTENANCE" },
