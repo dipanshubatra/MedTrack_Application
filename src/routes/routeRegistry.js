@@ -394,6 +394,7 @@ export const ROUTES = [
   { page: "compliance-evidence", slugs: ["evidence", "compliance-evidence"], component: ComplianceEvidencePage, access: AUTHENTICATED },
   { page: "compliance-reporting", slugs: ["compliance-reporting", "reporting"], component: ComplianceReportingPage, access: AUTHENTICATED },
   { page: "soc-console", slugs: ["soc-console", "soc-command-center"], component: SocOperationsConsolePage, access: AUTHENTICATED },
+  { page: "enterprise-zero-trust-governance", slugs: ["enterprise-zero-trust-governance", "zero-trust-guard", "ztna-governance"], component: EnterpriseZeroTrustSecurityGovernancePage, access: AUTHENTICATED },
 ];
 
 
