@@ -3,6 +3,7 @@ package com.medtrack.auth.security;
 import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.config.PaginationConfig;
 import com.medtrack.controller.AnalyticsController;
 import com.medtrack.controller.OperationsEventController;
 import com.medtrack.dto.EquipmentFailureRiskDto;
@@ -131,7 +132,7 @@ class CanonicalUserIdentityResolutionTest {
 
     @Test
     void operationsEventController_ResolvesUserByUsername() {
-        OperationsEventController controller = new OperationsEventController(eventRepository, readReceiptRepository, preferenceRepository, userRepository, hospitalRepository);
+        OperationsEventController controller = new OperationsEventController(eventRepository, readReceiptRepository, preferenceRepository, userRepository, hospitalRepository, new PaginationConfig());
         when(authentication.getName()).thenReturn("john_doe");
         when(userRepository.findByUsername("john_doe")).thenReturn(Optional.of(usernameUser));
         when(hospitalRepository.findByUserId(101L)).thenReturn(Optional.of(hospital));
@@ -147,7 +148,7 @@ class CanonicalUserIdentityResolutionTest {
 
     @Test
     void operationsEventController_ResolvesUserByEmailFallback() {
-        OperationsEventController controller = new OperationsEventController(eventRepository, readReceiptRepository, preferenceRepository, userRepository, hospitalRepository);
+        OperationsEventController controller = new OperationsEventController(eventRepository, readReceiptRepository, preferenceRepository, userRepository, hospitalRepository, new PaginationConfig());
         when(authentication.getName()).thenReturn("jane.admin@hospital.org");
         when(userRepository.findByUsername("jane.admin@hospital.org")).thenReturn(Optional.empty());
         when(userRepository.findByEmail("jane.admin@hospital.org")).thenReturn(Optional.of(emailUser));
@@ -165,7 +166,7 @@ class CanonicalUserIdentityResolutionTest {
 
     @Test
     void operationsEventController_RejectsUnauthenticatedCaller() {
-        OperationsEventController controller = new OperationsEventController(eventRepository, readReceiptRepository, preferenceRepository, userRepository, hospitalRepository);
+        OperationsEventController controller = new OperationsEventController(eventRepository, readReceiptRepository, preferenceRepository, userRepository, hospitalRepository, new PaginationConfig());
         when(authentication.getName()).thenReturn(null);
 
         AccessDeniedException exception = assertThrows(AccessDeniedException.class,
