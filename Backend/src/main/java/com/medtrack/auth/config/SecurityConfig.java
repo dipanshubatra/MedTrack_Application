@@ -180,6 +180,21 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/auth/pam/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/auth/pam/**").hasRole("HOSPITAL")
 
+                // OAuth 2.1 Security Gateway boundaries:
+                // Token issuance, introspection, revocation and rotation change security state
+                // (and issue/revoke tokens for ANY subject), so only HOSPITAL administrators may
+                // call these routes. Read endpoints stay authenticated; per-user ownership
+                // (self vs. HOSPITAL admin) is enforced in the controller via OwnershipAccessGuard.
+                .requestMatchers(HttpMethod.GET, "/api/auth/oauth21/**").authenticated()
+                .requestMatchers("/api/auth/oauth21/**").hasRole("HOSPITAL")
+
+                // JWT Security Gateway boundaries:
+                // Token issuance, validation, revocation, signing-key rotation and purge all
+                // mutate security state, so only HOSPITAL administrators may call them. JWKS
+                // discovery and audit metrics are read-only for any authenticated caller.
+                .requestMatchers(HttpMethod.GET, "/api/auth/jwt/**").authenticated()
+                .requestMatchers("/api/auth/jwt/**").hasRole("HOSPITAL")
+
                 // SCIM identity provisioning:
                 // POST /users/provision creates accounts and POST /users/deprovision disables
                 // them, so an anonymous caller could both mint accounts and lock out any existing
@@ -188,6 +203,19 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/scim/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.PUT, "/api/auth/scim/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/auth/scim/**").hasRole("HOSPITAL")
+
+                // RFC 7644 SCIM 2.0 provisioning gateway (/api/scim/v2/**):
+                // Same account create/replace/deprovision and directory-enumeration surface as
+                // /api/auth/scim/**, exposed at the standards-compliant base path. Without these
+                // matchers the endpoints fell through to .anyRequest().authenticated(), letting
+                // any SUPPLIER/TECHNICIAN mint accounts, lock out users and list the directory.
+                // Reads stay authenticated; every mutating call requires a HOSPITAL admin.
+                // Method-level @PreAuthorize on ScimUserProvisioningController enforces the same
+                // boundary as defense in depth.
+                .requestMatchers(HttpMethod.GET, "/api/scim/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/scim/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/scim/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/scim/**").hasRole("HOSPITAL")
 
                 // Security Command Center:
                 // /summary aggregates the security posture of the whole deployment, and
